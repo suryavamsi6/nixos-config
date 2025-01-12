@@ -108,7 +108,7 @@
   hardware.bluetooth.enable = true; # enables support for Bluetooth
   hardware.bluetooth.powerOnBoot = true; # powers up the default Bluetooth controller on boot
   # Install firefox.
-  programs.firefox.enable = true;
+  programs.firefox.enable = false;
   services.blueman.enable = true;
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;

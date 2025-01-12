@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ inputs, config, pkgs, ... }:
 
 {
   # Home Manager needs a bit of information about you and the paths it should
@@ -19,6 +19,12 @@
   # environment.
   home.packages = with pkgs; [
     vscode
+    inputs.zen-browser.packages."${system}".default
+    lf
+    wget
+    flatpak
+    git
+    kitty
   ];
 
   # Home Manager is pretty good at managing dotfiles. The primary way to manage
