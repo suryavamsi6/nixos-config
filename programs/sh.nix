@@ -4,10 +4,8 @@
     enable = false;
   };
 
-  programs.zsh = {
+  programs.fish = {
     enable = true;
-    enableCompletion = true;
-    autosuggestion.enable = true;
   };
 
 }

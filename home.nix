@@ -3,7 +3,7 @@
 {
 
   imports = [
-    ./programs/sh.nix
+    ./programs
   ];
   # Home Manager needs a bit of information about you and the paths it should
   # manage.
@@ -28,8 +28,6 @@
     wget
     flatpak
     git
-    kitty
-  
   ];
 
   # Home Manager is pretty good at managing dotfiles. The primary way to manage
