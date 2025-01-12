@@ -1,6 +1,6 @@
 {config, lib, pkgs,...}:
 {
-    program.kitty = lib.mkForce {
+    programs.kitty = lib.mkForce {
         enable = true;
         shellIntegration.enableFishIntegration = true;
     };
