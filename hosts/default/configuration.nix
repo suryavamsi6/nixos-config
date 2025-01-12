@@ -31,7 +31,6 @@
   boot.loader.grub.useOSProber = true;
 
   programs.appimage.binfmt =  true;
-
   networking.hostName = "nixos"; # Define your hostname.
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
 
@@ -123,9 +122,13 @@
    wget
    flatpak
    git
-   kitty
    nixd
   ];
+
+  fonts.packages = with pkgs; [
+    nerd-fonts.fira-code
+  ];
+
 
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.

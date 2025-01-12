@@ -1,7 +1,15 @@
 {config, lib, pkgs,...}:
 {
-    programs.kitty = lib.mkForce {
+    programs.starship = {
         enable = true;
-        shellIntegration.enableFishIntegration = true;
+        enableFishIntegration = true;
     };
+
+     home.file.".config/kitty/kitty.conf" = {
+        force = true;
+        text = ''
+        shell fish
+        '';
+     };
+
 }

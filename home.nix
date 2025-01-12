@@ -29,6 +29,8 @@
     wget
     flatpak
     git
+    kitty
+    starship
   ];
 
   # Home Manager is pretty good at managing dotfiles. The primary way to manage
