@@ -4,10 +4,10 @@
     enable = false;
   };
 
-  program.zsh = {
+  programs.zsh = {
     enable = true;
     enableCompletion = true;
     autosuggestion.enable = true;
-  }
+  };
 
 }
