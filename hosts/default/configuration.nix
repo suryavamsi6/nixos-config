@@ -8,6 +8,7 @@
   imports =
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
+      ./../../nixOSModules/default.nix
     ];
 
     nix = {
@@ -80,7 +81,6 @@
   services.printing.enable = true;
 
   # Enable sound with pipewire.
-  hardware.pulseaudio.enable = false;
   security.rtkit.enable = true;
   services.pipewire = {
     enable = true;
@@ -127,6 +127,7 @@
    git
    nixd
    citrix_workspace
+   mcontrolcenter
   ];
 
   fonts.packages = with pkgs; [
