@@ -30,7 +30,10 @@
   boot.loader.grub.efiSupport = true;
   boot.loader.grub.useOSProber = true;
 
-  programs.appimage.binfmt =  true;
+  programs.appimage = {
+    enable = true;
+    binfmt = true;
+  };
   networking.hostName = "nixos"; # Define your hostname.
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
 
@@ -123,6 +126,7 @@
    flatpak
    git
    nixd
+   citrix_workspace
   ];
 
   fonts.packages = with pkgs; [
