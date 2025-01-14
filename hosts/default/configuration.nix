@@ -132,6 +132,8 @@
    xorg.xrdb
    polychromatic
    walker
+   overskride
+   nix-init
   ];
 
 

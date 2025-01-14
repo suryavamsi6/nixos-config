@@ -9,6 +9,8 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    hyprpanel.url = "github:Jas-SinghFSU/HyprPanel";
+    hyprpanel.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = inputs@{ self, nixpkgs, home-manager, ... }:{
@@ -28,8 +30,10 @@
             # Optionally, use home-manager.extraSpecialArgs to pass
             # arguments to home.nix
           }
+          #  {nixpkgs.overlays = [inputs.hyprpanel.overlay];}
         ];
-      };
+    };
+
     };
   };
 }
