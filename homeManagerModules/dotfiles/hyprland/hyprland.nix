@@ -1,15 +1,15 @@
 {pkgs, inputs,  ...}:
-{
+let
+    autostart = import ./autostart.nix { inherit pkgs; };
+in
+{   
     wayland.windowManager.hyprland = {
         enable = true;
         package = inputs.hyprland.packages."${pkgs.system}".hyprland;
-        settings = {
+        settings = autostart // {
 
             "$mainMod" = "SUPER";
-            exec-once = [
-                "echo \"Xft.dpi: 96\" | xrdb -merge"
-                "xprop -root -f _XWAYLAND_GLOBAL_OUTPUT_SCALE 32c -set _XWAYLAND_GLOBAL_OUTPUT_SCALE 1"
-            ];
+            
             monitor = [
                 "DP-1, highres,auto, 1"
                 "eDP-1, disable"

@@ -67,7 +67,7 @@
   # You can disable this if you're only using the Wayland session.
   services.xserver.enable = true;
   
-  services.xserver.displayManager.sddm.wayland.enable = true;
+  services.displayManager.sddm.wayland.enable = true;
 
   # Enable the KDE Plasma Desktop Environment.
   services.displayManager.sddm.enable = true;
@@ -130,8 +130,10 @@
    jetbrains.webstorm
    code-cursor
    xorg.xrdb
-   xsettingsd
+   polychromatic
+   walker
   ];
+
 
   fonts.packages = with pkgs; [
     nerd-fonts.fira-code
@@ -171,14 +173,10 @@
 	
   hardware.graphics = {
    enable = true;
+   enable32Bit = true;
   };
 
   services.xserver.videoDrivers = ["nvidia"];
-
-  hardware.opengl = {
-    enable = true;
-    driSupport32Bit = true;
-  };
 
   hardware.nvidia = {
    modesetting.enable = true;
@@ -188,5 +186,7 @@
    nvidiaSettings = true;
    package = config.boot.kernelPackages.nvidiaPackages.stable;
   };
+
+  hardware.openrazer.enable = true;
 
 }
