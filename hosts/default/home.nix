@@ -9,7 +9,6 @@
   # manage.
   home.username = "surya";
   home.homeDirectory = "/home/surya";
-
   # This value determines the Home Manager release that your configuration is
   # compatible with. This helps avoid breakage when a new Home Manager release
   # introduces backwards incompatible changes.
@@ -29,6 +28,7 @@
     flatpak
     git
     kitty
+    htop
   ];
 
   # Home Manager is pretty good at managing dotfiles. The primary way to manage

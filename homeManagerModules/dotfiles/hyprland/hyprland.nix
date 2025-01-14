@@ -6,14 +6,18 @@
         settings = {
 
             "$mainMod" = "SUPER";
-
+            exec-once = [
+                "echo \"Xft.dpi: 96\" | xrdb -merge"
+                "xprop -root -f _XWAYLAND_GLOBAL_OUTPUT_SCALE 32c -set _XWAYLAND_GLOBAL_OUTPUT_SCALE 1"
+            ];
             monitor = [
-                "DP-1, 2560x1440,auto,1"
+                "DP-1, highres,auto, 1"
                 "eDP-1, disable"
             ];
             "$terminal" = "kitty";
             "$fileManager" = "dolphin";
             "$menu" = "wofi --show drun";
+            "$browser" = "zen";
 
             env = [
                 "XCURSOR_SIZE = 24"
@@ -25,8 +29,8 @@
                 gaps_out = 20;
                 border_size = 2;
 
-                col.active_border = "rgba(33ccffee) rgba(00ff99ee) 45deg";
-                col.inactive_border = "rgba(595959aa)";
+                "col.active_border" = "rgba(33ccffee) rgba(00ff99ee) 45deg";
+                "col.inactive_border" = "rgba(595959aa)";
 
                 resize_on_border = false;
                 allow_tearing = false;
@@ -65,7 +69,7 @@
                     "quick,0.15,0,0.1,1"
                 ];
 
-                animations = [
+                animation = [
                     "global, 1, 10, default"
                     "border, 1, 5.39, easeOutQuint"
                     "windows, 1, 4.79, easeOutQuint"
@@ -129,8 +133,9 @@
             };
 
             bind = [
-                "$mainMod, Q, exec, $terminal"
+                "$mainMod, return, exec, $terminal"
                 "$mainMod, C, killactive,"
+                "$mainMod, B, exec, $browser"
                 "$mainMod, M, exit,"
                 "$mainMod, E, exec, $fileManager"
                 "$mainMod, V, togglefloating,"
