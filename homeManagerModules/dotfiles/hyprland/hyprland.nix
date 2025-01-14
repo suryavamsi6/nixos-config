@@ -2,12 +2,13 @@
 let
     autostart = import ./autostart.nix { inherit pkgs; };
     keybind = import ./keybind.nix { inherit pkgs; };
+    defaultApps = import ./defaultApps.nix { inherit pkgs; };
 in
 {   
     wayland.windowManager.hyprland = {
         enable = true;
         package = inputs.hyprland.packages."${pkgs.system}".hyprland;
-        settings = autostart // keybind //{
+        settings = autostart // keybind // defaultApps // {
 
             "$mainMod" = "SUPER";
             
@@ -15,10 +16,6 @@ in
                 "DP-1, highres,auto, 1"
                 "eDP-1, disable"
             ];
-            "$terminal" = "kitty";
-            "$fileManager" = "dolphin";
-            "$menu" = "walker";
-            "$browser" = "zen";
 
             env = [
                 "XCURSOR_SIZE = 24"
