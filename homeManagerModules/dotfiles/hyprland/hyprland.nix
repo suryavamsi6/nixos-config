@@ -16,7 +16,7 @@ in
             ];
             "$terminal" = "kitty";
             "$fileManager" = "dolphin";
-            "$menu" = "wofi --show drun";
+            "$menu" = "walker";
             "$browser" = "zen";
 
             env = [
@@ -158,7 +158,7 @@ in
                 "$mainMod, M, exit,"
                 "$mainMod, E, exec, $fileManager"
                 "$mainMod, V, togglefloating,"
-                "$mainMod, R, exec, $menu"
+                "$mainMod, space, exec, $menu"
                 "$mainMod, P, pseudo,"
                 "$mainMod, J, togglesplit,"
 
