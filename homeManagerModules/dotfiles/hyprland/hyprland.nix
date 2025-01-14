@@ -1,4 +1,4 @@
-{pkgs, ...}:
+{pkgs, inputs,  ...}:
 {
     wayland.windowManager.hyprland = {
         enable = true;
@@ -9,18 +9,18 @@
 
             monitor = [
                 "DP-1, 2560x1440,auto,1"
-                "eDP-1, 2560x1440,auto,1"
+                "eDP-1, disable"
             ];
             "$terminal" = "kitty";
             "$fileManager" = "dolphin";
             "$menu" = "wofi --show drun";
 
-            env [
+            env = [
                 "XCURSOR_SIZE = 24"
                 "HYPRCURSOR_SIZE = 24"
             ];
 
-            general {
+            general = {
                 gaps_in = 5;
                 gaps_out = 20;
                 border_size = 2;
@@ -33,19 +33,19 @@
                 layout = "dwindle";
             };  
 
-            decoration {
+            decoration = {
                 rounding = 10;
                 active_opacity = 1.0;
                 inactive_opacity = 1.0;
 
-                shadow {
+                shadow = {
                     enabled = true;
                     range = 4;
                     render_power = 3;
                     color = "rgba(1a1a1aee)";
                 };
 
-                blur {
+                blur = {
                     enabled = true;
                     size = 3;
                     passes = 1;
@@ -54,54 +54,58 @@
 
             };
 
-            animations {
+            animations = {
                 enabled = true;
 
-                bezier = "easeOutQuint,0.23,1,0.32,1";
-                bezier = "easeInOutCubic,0.65,0.05,0.36,1";
-                bezier = "linear,0,0,1,1";
-                bezier = "almostLinear,0.5,0.5,0.75,1.0";
-                bezier = "quick,0.15,0,0.1,1";
+                bezier = [
+                    "easeOutQuint,0.23,1,0.32,1"
+                    "easeInOutCubic,0.65,0.05,0.36,1"
+                    "linear,0,0,1,1"
+                    "almostLinear,0.5,0.5,0.75,1.0"
+                    "quick,0.15,0,0.1,1"
+                ];
 
-                animation = "global, 1, 10, default";
-                animation = "border, 1, 5.39, easeOutQuint";
-                animation = "windows, 1, 4.79, easeOutQuint";
-                animation = "windowsIn, 1, 4.1, easeOutQuint, popin 87%";
-                animation = "windowsOut, 1, 1.49, linear, popin 87%";
-                animation = "fadeIn, 1, 1.73, almostLinear";
-                animation = "fadeOut, 1, 1.46, almostLinear";
-                animation = "fade, 1, 3.03, quick";
-                animation = "layers, 1, 3.81, easeOutQuint";
-                animation = "layersIn, 1, 4, easeOutQuint, fade";
-                animation = "layersOut, 1, 1.5, linear, fade";
-                animation = "fadeLayersIn, 1, 1.79, almostLinear";
-                animation = "fadeLayersOut, 1, 1.39, almostLinear";
-                animation = "workspaces, 1, 1.94, almostLinear, fade";
-                animation = "workspacesIn, 1, 1.21, almostLinear, fade";
-                animation = "workspacesOut, 1, 1.94, almostLinear, fade";
+                animations = [
+                    "global, 1, 10, default"
+                    "border, 1, 5.39, easeOutQuint"
+                    "windows, 1, 4.79, easeOutQuint"
+                    "windowsIn, 1, 4.1, easeOutQuint, popin 87%"
+                    "windowsOut, 1, 1.49, linear, popin 87%"
+                    "fadeIn, 1, 1.73, almostLinear"
+                    "fadeOut, 1, 1.46, almostLinear"
+                    "fade, 1, 3.03, quick"
+                    "layers, 1, 3.81, easeOutQuint"
+                    "layersIn, 1, 4, easeOutQuint, fade"
+                    "layersOut, 1, 1.5, linear, fade"
+                    "fadeLayersIn, 1, 1.79, almostLinear"
+                    "fadeLayersOut, 1, 1.39, almostLinear"
+                    "workspaces, 1, 1.94, almostLinear, fade"
+                    "workspacesIn, 1, 1.21, almostLinear, fade"
+                    "workspacesOut, 1, 1.94, almostLinear, fade"
+                ];
 
             };
 
-            dwindle {
+            dwindle = {
                 pseudotile = true;
                 preserve_split = true;
             };
 
-            master {
-                new_status = master;
+            master = {
+                new_status = "master";
             };
 
-            misc {
+            misc = {
                 force_default_wallpaper = -1;
                 disable_hyprland_logo = false;
             };
 
-            xwayland {
+            xwayland = {
                 force_zero_scaling = true;
             };
 
-            input {
-                kb_layout = us;
+            input = {
+                kb_layout = "us";
                 kb_variant = "";
                 kb_model = "";
                 kb_options = "";
@@ -110,17 +114,17 @@
                 follow_mouse = 1;
                 sensitivity = 0;
 
-                touchpad {
+                touchpad = {
                     natural_scroll = false;
                 };
             }; 
             
-            gestures {
+            gestures = {
                 workspace_swipe = false;
             };  
 
-            device {
-                name = epic-mouse-v1;
+            device = {
+                name = "epic-mouse-v1";
                 sensitivity = -0.5;
             };
 
@@ -200,5 +204,6 @@
             ];
 
         };
-    }
+        };
 }
+
