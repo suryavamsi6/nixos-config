@@ -127,7 +127,6 @@
    nixd
    citrix_workspace
    mcontrolcenter
-   nh
    jetbrains.webstorm
    code-cursor
    xorg.xrdb
@@ -138,6 +137,10 @@
     nerd-fonts.fira-code
   ];
 
+  programs.nh = {
+    enable = true;
+    flake = "/home/$USER/dotfiles/nixos/";
+  };
 
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
