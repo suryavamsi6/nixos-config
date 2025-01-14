@@ -30,7 +30,7 @@
             # Optionally, use home-manager.extraSpecialArgs to pass
             # arguments to home.nix
           }
-          #  {nixpkgs.overlays = [inputs.hyprpanel.overlay];}
+           {nixpkgs.overlays = [inputs.hyprpanel.overlay];}
         ];
     };
 

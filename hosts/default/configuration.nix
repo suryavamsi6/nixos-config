@@ -111,8 +111,18 @@
     ];
   };
 
-  hardware.bluetooth.enable = true; # enables support for Bluetooth
-  hardware.bluetooth.powerOnBoot = true; # powers up the default Bluetooth controller on boot
+  hardware.bluetooth = {
+    enable =true;
+    powerOnBoot = true;
+    settings = {
+      General = {
+        Experimental = true;
+        ControllerMode = "bredr";
+        FastConnectable = true;
+      };
+
+    };
+  };
   # Install firefox.
   programs.firefox.enable = false;
   services.blueman.enable = true;
@@ -139,6 +149,7 @@
 
   fonts.packages = with pkgs; [
     nerd-fonts.fira-code
+    nerd-fonts.caskaydia-cove
   ];
 
   programs.nh = {
