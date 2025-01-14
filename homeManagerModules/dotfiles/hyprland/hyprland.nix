@@ -227,6 +227,14 @@ in
                 "nofocus,class:^$,title:^$,xwayland:1,floating:1,fullscreen:0,pinned:0"
             ];
 
+
+            # HDR messes up citrix displays
+            experimental = {
+                # hdr = true;
+                wide_color_gamut = true;
+                xx_color_management_v4 = true;
+            };
+
         };
         };
 }
