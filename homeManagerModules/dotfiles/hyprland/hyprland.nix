@@ -20,7 +20,7 @@ in
 
         monitor = [
           "DP-1, highres,auto, 1"
-          "eDP-1, disable"
+          "eDP-1, highres,auto, 1"
         ];
 
         env = [

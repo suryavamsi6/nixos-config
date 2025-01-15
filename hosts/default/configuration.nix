@@ -155,7 +155,7 @@
     overskride
     nix-init
     nixd
-    nodejs_23
+    kanshi
   ];
 
   nix.nixPath = [ "nixpkgs=${inputs.nixpkgs}" ];
