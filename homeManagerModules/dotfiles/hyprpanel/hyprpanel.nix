@@ -1,7 +1,7 @@
 { lib, inputs, ... }:
 {
   imports = [ inputs.hyprpanel.homeManagerModules.hyprpanel ];
-  
+
   programs.hyprpanel = {
 
     # Enable the module.
@@ -33,22 +33,27 @@
     # See 'https://hyprpanel.com/configuration/panel.html'.
     # Default: null
     layout = {
-            "bar.layouts" = {
-                "0" = {
-                    left = [ "dashboard" "workspaces" "windowtitle" "cputemp" ];
-                    middle = [ "media" ];
-                    right = [ 
-                        "netstat"
-                        "volume" 
-                        "network" 
-                        "bluetooth" 
-                        "systray" 
-                        "clock" 
-                        "notifications" 
-                    ];
-                };
-            };
+      "bar.layouts" = {
+        "0" = {
+          left = [
+            "dashboard"
+            "workspaces"
+            "windowtitle"
+            "cputemp"
+          ];
+          middle = [ "media" ];
+          right = [
+            "netstat"
+            "volume"
+            "network"
+            "bluetooth"
+            "systray"
+            "clock"
+            "notifications"
+          ];
         };
+      };
+    };
 
     # Configure and theme almost all options from the GUI.
     # Options that require '{}' or '[]' are not yet implemented,
@@ -60,7 +65,7 @@
       bar.workspaces.show_icons = false;
       bar.workspaces.showApplicationIcons = true;
       bar.workspaces.showWsIcons = true;
-      
+
       menus.clock = {
         time = {
           military = true;

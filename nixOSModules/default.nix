@@ -1,7 +1,7 @@
-{pkgs, ...}:
+{ pkgs, ... }:
 {
-    imports = [
-        ./gameModules/steam.nix
-        ./systemModules/hyprland.nix
-    ];
+  imports = [
+    ./gameModules/steam.nix
+    ./systemModules/hyprland.nix
+  ];
 }

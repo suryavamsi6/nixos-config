@@ -1,7 +1,7 @@
-{pkgs, ...}:
+{ pkgs, ... }:
 {
-    "$terminal" = "kitty";
-    "$fileManager" = "dolphin";
-    "$menu" = "walker";
-    "$browser" = "zen";
+  "$terminal" = "kitty";
+  "$fileManager" = "dolphin";
+  "$menu" = "walker";
+  "$browser" = "zen";
 }

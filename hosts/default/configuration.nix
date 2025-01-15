@@ -2,32 +2,40 @@
 # your system.  Help is available in the configuration.nix(5) man page
 # and in the NixOS manual (accessible by running ‘nixos-help’).
 
-{ config, pkgs, ... }:
+{
+  config,
+  pkgs,
+  inputs,
+  ...
+}:
 
 {
-  imports =
-    [ # Include the results of the hardware scan.
-      ./hardware-configuration.nix
-      ./../../nixOSModules/default.nix
-    ];
+  imports = [
+    # Include the results of the hardware scan.
+    ./hardware-configuration.nix
+    ./../../nixOSModules/default.nix
+  ];
 
-    nix = {
-      package = pkgs.nix;
-      settings.experimental-features = ["nix-command" "flakes"];
-      settings.auto-optimise-store = true;
-      gc = {
-        automatic = true;
-        dates = "weekly";
-        options = "--delete-older-than 7d";
-      };
+  nix = {
+    package = pkgs.nix;
+    settings.experimental-features = [
+      "nix-command"
+      "flakes"
+    ];
+    settings.auto-optimise-store = true;
+    gc = {
+      automatic = true;
+      dates = "weekly";
+      options = "--delete-older-than 7d";
     };
+  };
   # Bootloader.
-#   boot.loader.systemd-boot.enable = true;
-#   boot.loader.efi.canTouchEfiVariables = true;
+  #   boot.loader.systemd-boot.enable = true;
+  #   boot.loader.efi.canTouchEfiVariables = true;
 
   boot.loader.efi.canTouchEfiVariables = true;
   boot.loader.grub.enable = true;
-  boot.loader.grub.devices = ["nodev"];
+  boot.loader.grub.devices = [ "nodev" ];
   boot.loader.grub.efiSupport = true;
   boot.loader.grub.useOSProber = true;
 
@@ -66,7 +74,7 @@
   # Enable the X11 windowing system.
   # You can disable this if you're only using the Wayland session.
   services.xserver.enable = true;
-  
+
   services.displayManager.sddm.wayland.enable = true;
 
   # Enable the KDE Plasma Desktop Environment.
@@ -104,15 +112,18 @@
   users.users.surya = {
     isNormalUser = true;
     description = "Surya Vamsi";
-    extraGroups = [ "networkmanager" "wheel" ];
+    extraGroups = [
+      "networkmanager"
+      "wheel"
+    ];
     packages = with pkgs; [
       kdePackages.kate
-    #  thunderbird
+      #  thunderbird
     ];
   };
 
   hardware.bluetooth = {
-    enable =true;
+    enable = true;
     powerOnBoot = true;
     settings = {
       General = {
@@ -132,20 +143,22 @@
   # List packages installed in system profile. To search, run:
   # $ nix search wget
   environment.systemPackages = with pkgs; [
-   vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
-   flatpak
-   nixd
-   citrix_workspace
-   mcontrolcenter
-   jetbrains.webstorm
-   code-cursor
-   xorg.xrdb
-   polychromatic
-   walker
-   overskride
-   nix-init
+    vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
+    flatpak
+    citrix_workspace
+    mcontrolcenter
+    jetbrains.webstorm
+    code-cursor
+    xorg.xrdb
+    polychromatic
+    walker
+    overskride
+    nix-init
+    nixd
+    nodejs_23
   ];
 
+  nix.nixPath = [ "nixpkgs=${inputs.nixpkgs}" ];
 
   fonts.packages = with pkgs; [
     nerd-fonts.fira-code
@@ -183,21 +196,21 @@
   # Before changing this value read the documentation for this option
   # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
   system.stateVersion = "24.11"; # Did you read the comment?
-	
+
   hardware.graphics = {
-   enable = true;
-   enable32Bit = true;
+    enable = true;
+    enable32Bit = true;
   };
 
-  services.xserver.videoDrivers = ["nvidia"];
+  services.xserver.videoDrivers = [ "nvidia" ];
 
   hardware.nvidia = {
-   modesetting.enable = true;
-   powerManagement.enable = true;
-   powerManagement.finegrained = false;
-   open = false; 
-   nvidiaSettings = true;
-   package = config.boot.kernelPackages.nvidiaPackages.stable;
+    modesetting.enable = true;
+    powerManagement.enable = true;
+    powerManagement.finegrained = false;
+    open = false;
+    nvidiaSettings = true;
+    package = config.boot.kernelPackages.nvidiaPackages.stable;
   };
 
   hardware.openrazer.enable = true;
