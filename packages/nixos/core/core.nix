@@ -1,4 +1,23 @@
-{ pkgs, ... }:
+{
+  pkgs,
+  config,
+  lib,
+  ...
+}:
+let
+  tuigreet = "${pkgs.greetd.tuigreet}/bin/tuigreet";
+  baseSessionsDir = "${config.services.displayManager.sessionData.desktops}";
+  xSessions = "${baseSessionsDir}/share/xsessions";
+  waylandSessions = "${baseSessionsDir}/share/wayland-sessions";
+  tuigreetOptions = [
+    "--remember"
+    "--remember-session"
+    "--sessions ${waylandSessions}:${xSessions}"
+    "--time"
+    "--cmd Hyprland"
+  ];
+  flags = lib.concatStringsSep " " tuigreetOptions;
+in
 {
 
   hardware.graphics = {
@@ -33,16 +52,16 @@
     enable = true;
     settings = {
       default_session = {
-        command = "${pkgs.greetd.tuigreet}/bin/tuigreet --time --cmd sway";
+        command = "${tuigreet} ${flags}";
         user = "greeter";
       };
     };
   };
   services.xserver.enable = true;
 
-#  services.displayManager.sddm.wayland.enable = true;
+  #  services.displayManager.sddm.wayland.enable = true;
 
-#  services.displayManager.sddm.enable = true;
+  #  services.displayManager.sddm.enable = true;
   services.desktopManager.plasma6.enable = true;
 
   networking.networkmanager.enable = true;
