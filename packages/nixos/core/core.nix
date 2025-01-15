@@ -1,5 +1,6 @@
 { pkgs, ... }:
 {
+
   hardware.graphics = {
     enable = true;
     enable32Bit = true;
@@ -28,11 +29,20 @@
     pulse.enable = true;
   };
 
+  services.greetd = {
+    enable = true;
+    settings = {
+      default_session = {
+        command = "${pkgs.greetd.tuigreet}/bin/tuigreet --time --cmd sway";
+        user = "greeter";
+      };
+    };
+  };
   services.xserver.enable = true;
 
-  services.displayManager.sddm.wayland.enable = true;
+#  services.displayManager.sddm.wayland.enable = true;
 
-  services.displayManager.sddm.enable = true;
+#  services.displayManager.sddm.enable = true;
   services.desktopManager.plasma6.enable = true;
 
   networking.networkmanager.enable = true;
