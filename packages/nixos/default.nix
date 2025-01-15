@@ -5,7 +5,6 @@
     ./core/core.nix
     ./windowManager/hyprland.nix
     ./system/system.nix
-    ./windowManager/work.nix
   ];
 
   nix.nixPath = [ "nixpkgs=${inputs.nixpkgs}" ];

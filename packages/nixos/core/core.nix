@@ -38,7 +38,7 @@
   networking.networkmanager.enable = true;
 
   boot.loader.efi.canTouchEfiVariables = true;
-  boot.load.grub = {
+  boot.loader.grub = {
     enable = true;
     devices = [ "nodev" ];
     efiSupport = true;

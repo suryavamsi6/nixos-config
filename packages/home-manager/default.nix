@@ -4,6 +4,7 @@
   imports = [
     ./dev/dev.nix
     ./work/work.nix
+    ./game/game.nix
   ];
 
   home.packages = with pkgs; [

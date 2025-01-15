@@ -6,5 +6,6 @@
     "walker --gapplication-service"
     "hyprpanel"
     "kanshi"
+    "mcontrolcenter"
   ];
 }

@@ -1,6 +1,6 @@
 { pkgs, ... }:
 {
-  home-manager.packages = with pkgs; [
+  home.packages = with pkgs; [
     citrix_workspace
   ];
 }
