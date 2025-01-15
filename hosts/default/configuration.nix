@@ -5,7 +5,6 @@
 {
   config,
   pkgs,
-  inputs,
   ...
 }:
 
@@ -14,6 +13,7 @@
     # Include the results of the hardware scan.
     ./hardware-configuration.nix
     ./../../nixOSModules/default.nix
+    ./../../packages/nixos/default.nix
   ];
 
   nix = {
@@ -33,16 +33,7 @@
   #   boot.loader.systemd-boot.enable = true;
   #   boot.loader.efi.canTouchEfiVariables = true;
 
-  boot.loader.efi.canTouchEfiVariables = true;
-  boot.loader.grub.enable = true;
-  boot.loader.grub.devices = [ "nodev" ];
-  boot.loader.grub.efiSupport = true;
-  boot.loader.grub.useOSProber = true;
 
-  programs.appimage = {
-    enable = true;
-    binfmt = true;
-  };
   networking.hostName = "nixos"; # Define your hostname.
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
 
@@ -50,8 +41,7 @@
   # networking.proxy.default = "http://user:password@proxy:port/";
   # networking.proxy.noProxy = "127.0.0.1,localhost,internal.domain";
 
-  # Enable networking
-  networking.networkmanager.enable = true;
+
 
   # Set your time zone.
   time.timeZone = "Asia/Kolkata";
@@ -71,15 +61,7 @@
     LC_TIME = "en_IN";
   };
 
-  # Enable the X11 windowing system.
-  # You can disable this if you're only using the Wayland session.
-  services.xserver.enable = true;
 
-  services.displayManager.sddm.wayland.enable = true;
-
-  # Enable the KDE Plasma Desktop Environment.
-  services.displayManager.sddm.enable = true;
-  services.desktopManager.plasma6.enable = true;
 
   # Configure keymap in X11
   services.xserver.xkb = {
@@ -87,23 +69,7 @@
     variant = "";
   };
 
-  # Enable CUPS to print documents.
-  services.printing.enable = true;
 
-  # Enable sound with pipewire.
-  security.rtkit.enable = true;
-  services.pipewire = {
-    enable = true;
-    alsa.enable = true;
-    alsa.support32Bit = true;
-    pulse.enable = true;
-    # If you want to use JACK applications, uncomment this
-    #jack.enable = true;
-
-    # use the example session manager (no others are packaged yet so this is enabled by default,
-    # no need to redefine it in your config for now)
-    #media-session.enable = true;
-  };
 
   # Enable touchpad support (enabled default in most desktopManager).
   # services.xserver.libinput.enable = true;
@@ -122,53 +88,18 @@
     ];
   };
 
-  hardware.bluetooth = {
-    enable = true;
-    powerOnBoot = true;
-    settings = {
-      General = {
-        Experimental = true;
-        ControllerMode = "bredr";
-        FastConnectable = true;
-      };
 
-    };
-  };
-  # Install firefox.
-  programs.firefox.enable = false;
-  services.blueman.enable = true;
+
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;
 
   # List packages installed in system profile. To search, run:
   # $ nix search wget
-  environment.systemPackages = with pkgs; [
-    vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
-    flatpak
-    citrix_workspace
-    mcontrolcenter
-    jetbrains.webstorm
-    code-cursor
-    xorg.xrdb
-    polychromatic
-    walker
-    overskride
-    nix-init
-    nixd
-    kanshi
-  ];
 
-  nix.nixPath = [ "nixpkgs=${inputs.nixpkgs}" ];
 
-  fonts.packages = with pkgs; [
-    nerd-fonts.fira-code
-    nerd-fonts.caskaydia-cove
-  ];
 
-  programs.nh = {
-    enable = true;
-    flake = "/home/$USER/dotfiles/nixos/";
-  };
+
+
 
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
@@ -197,10 +128,7 @@
   # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
   system.stateVersion = "24.11"; # Did you read the comment?
 
-  hardware.graphics = {
-    enable = true;
-    enable32Bit = true;
-  };
+
 
   services.xserver.videoDrivers = [ "nvidia" ];
 
@@ -212,7 +140,5 @@
     nvidiaSettings = true;
     package = config.boot.kernelPackages.nvidiaPackages.stable;
   };
-
-  hardware.openrazer.enable = true;
 
 }
