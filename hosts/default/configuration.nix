@@ -5,6 +5,7 @@
 {
   config,
   pkgs,
+  lib,
   ...
 }:
 
@@ -17,7 +18,8 @@
     ./../../packages/nixos/default.nix
   ];
 
-  plasma.enable = false;
+  gnome.enable = true; #use this for now as citrix doesn't work without it TODO
+  hyprland.enable = true;
 
   nix = {
     package = pkgs.nix;
@@ -83,6 +85,7 @@
       #  thunderbird
     ];
   };
+
 
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;

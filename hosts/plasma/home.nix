@@ -16,6 +16,7 @@
 
   home.stateVersion = "24.11";
 
+  hyprland-config1.enable = false;
 
 
   programs.home-manager.enable = true;

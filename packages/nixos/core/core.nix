@@ -20,7 +20,7 @@ let
 in
 {
   options = {
-    plasma.enable = lib.mkOption {
+    gnome.enable = lib.mkOption {
       type = lib.types.bool;
       default = false;
       description = "Enable/Disable Plasma";
@@ -69,7 +69,7 @@ in
     #  services.displayManager.sddm.wayland.enable = true;
 
     #  services.displayManager.sddm.enable = true;
-    services.desktopManager.plasma6.enable = config.plasma.enable;
+    services.xserver.desktopManager.gnome.enable = config.gnome.enable;
 
     networking.networkmanager.enable = true;
 

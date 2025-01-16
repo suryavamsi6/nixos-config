@@ -16,7 +16,8 @@
     ./../../packages/nixos/default.nix
   ];
 
-  plasma.enable = true;
+  gnome.enable = true;
+  hyprland.enable = false;
 
   nix = {
     package = pkgs.nix;

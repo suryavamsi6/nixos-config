@@ -39,7 +39,7 @@
                 inherit inputs;
                 system = "x86_64-linux";
               };
-              home-manager.backupFileExtension = "bak";
+              home-manager.backupFileExtension = "backup";
               # Optionally, use home-manager.extraSpecialArgs to pass
               # arguments to home.nix
             }
@@ -70,6 +70,7 @@
             }
             { nixpkgs.overlays = [ inputs.hyprpanel.overlay ]; }
           ];
+
         };
 
       };

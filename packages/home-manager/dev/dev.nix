@@ -13,7 +13,6 @@
     code-cursor
     nix-init
     nixd
+    yazi
   ];
-
-
 }

@@ -7,5 +7,7 @@
     "hyprpanel"
     "kanshi"
     "mcontrolcenter"
+    "systemctl --user start hyprpolkitagent"
+    "hypridle"
   ];
 }
