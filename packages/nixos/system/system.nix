@@ -4,6 +4,7 @@
     mcontrolcenter
     polychromatic
     overskride
+    pavucontrol
   ];
 
   hardware.openrazer.enable = true;

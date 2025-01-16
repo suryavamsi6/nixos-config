@@ -2,7 +2,7 @@
 {
   home.packages = with pkgs; [
     vscode
-    lf
+    superfile
     wget
     git
     kitty

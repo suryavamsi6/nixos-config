@@ -5,6 +5,17 @@
     kanshi
     xorg.xrdb
     walker
+    hyprpolkitagent
+    xdg-desktop-portal-hyprland
+    hyprpaper
+    hyprcursor
+    hyprlock
+    hypridle
+    hyprutils
+    hyprlang
+    hyprland-qtutils
+    nautilus
+    nautilus-open-any-terminal
   ];
 
   programs.hyprland = {
