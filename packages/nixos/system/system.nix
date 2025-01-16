@@ -1,10 +1,10 @@
 { pkgs, ... }:
 {
   environment.systemPackages = with pkgs; [
-    mcontrolcenter
     polychromatic
     overskride
     pavucontrol
+    mcontrolcenter
   ];
 
   hardware.openrazer.enable = true;
