@@ -72,7 +72,7 @@ in
     services.xserver.desktopManager.gnome.enable = config.gnome.enable;
 
     networking.networkmanager.enable = true;
-
+    services.gnome.gnome-keyring.enable=true;
     boot.loader.efi.canTouchEfiVariables = true;
     boot.loader.grub = {
       enable = true;
