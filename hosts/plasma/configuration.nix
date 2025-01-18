@@ -36,15 +36,12 @@
   #   boot.loader.systemd-boot.enable = true;
   #   boot.loader.efi.canTouchEfiVariables = true;
 
-
   networking.hostName = "nixos"; # Define your hostname.
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
 
   # Configure network proxy if necessary
   # networking.proxy.default = "http://user:password@proxy:port/";
   # networking.proxy.noProxy = "127.0.0.1,localhost,internal.domain";
-
-
 
   # Set your time zone.
   time.timeZone = "Asia/Kolkata";
@@ -64,15 +61,11 @@
     LC_TIME = "en_IN";
   };
 
-
-
   # Configure keymap in X11
   services.xserver.xkb = {
     layout = "us";
     variant = "";
   };
-
-
 
   # Enable touchpad support (enabled default in most desktopManager).
   # services.xserver.libinput.enable = true;
@@ -84,6 +77,7 @@
     extraGroups = [
       "networkmanager"
       "wheel"
+      "openrazer"
     ];
     packages = with pkgs; [
       kdePackages.kate
@@ -91,18 +85,11 @@
     ];
   };
 
-
-
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;
 
   # List packages installed in system profile. To search, run:
   # $ nix search wget
-
-
-
-
-
 
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
@@ -130,8 +117,6 @@
   # Before changing this value read the documentation for this option
   # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
   system.stateVersion = "24.11"; # Did you read the comment?
-
-
 
   services.xserver.videoDrivers = [ "nvidia" ];
 

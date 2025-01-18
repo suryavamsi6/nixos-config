@@ -18,7 +18,7 @@
     ./../../packages/nixos/default.nix
   ];
 
-  gnome.enable = false; #use this for now as citrix doesn't work without it TODO
+  gnome.enable = false;
   hyprland.enable = true;
 
   nix = {
@@ -79,13 +79,12 @@
     extraGroups = [
       "networkmanager"
       "wheel"
+      "openrazer"
     ];
     packages = with pkgs; [
-      kdePackages.kate
       #  thunderbird
     ];
   };
-
 
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;

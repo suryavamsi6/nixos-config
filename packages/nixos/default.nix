@@ -2,10 +2,10 @@
 {
 
   imports = [
-    ./core/core.nix
     ./windowManager/hyprland.nix
     ./system/system.nix
     ./game/game.nix
+    ./core/core.nix
   ];
 
   nix.nixPath = [ "nixpkgs=${inputs.nixpkgs}" ];

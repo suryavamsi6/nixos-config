@@ -6,7 +6,6 @@
   lib,
   pkgs,
   modulesPath,
-  linuxKernel,
   ...
 }:
 
@@ -15,8 +14,6 @@
     (modulesPath + "/installer/scan/not-detected.nix")
   ];
 
-  boot.kernelPackages = pkgs.linuxPackages_zen;
-
   boot.initrd.availableKernelModules = [
     "xhci_pci"
     "nvme"
@@ -24,41 +21,82 @@
     "usb_storage"
     "sd_mod"
   ];
-
   boot.initrd.kernelModules = [ ];
-  boot.kernelModules = [
-    "kvm-intel"
-  ];
-
-  boot.extraModulePackages = [
-  ];
+  boot.kernelModules = [ "kvm-intel" ];
+  boot.extraModulePackages = [ ];
 
   fileSystems."/" = {
-    device = "/dev/disk/by-uuid/871349bf-d095-44ed-b601-066c1a6f269a";
-    fsType = "ext4";
+    device = "/dev/disk/by-uuid/0ef8ee8c-61d6-457e-bda5-13329dbcdc28";
+    fsType = "btrfs";
+    options = [
+      "subvol=@"
+      "compress=zstd"
+      "noatime"
+    ];
   };
 
-  fileSystems."/boot" = {
-    device = "/dev/disk/by-uuid/511B-90C1";
-    fsType = "vfat";
+  fileSystems."/nix" = {
+    device = "/dev/disk/by-uuid/0ef8ee8c-61d6-457e-bda5-13329dbcdc28";
+    fsType = "btrfs";
     options = [
-      "fmask=0077"
-      "dmask=0077"
+      "subvol=@nix"
+      "compress=zstd"
+      "noatime"
     ];
   };
 
   fileSystems."/home" = {
-    device = "/dev/disk/by-uuid/4eb90a3c-eab2-40e0-815a-4e8f562d2897";
-    fsType = "ext4";
+    device = "/dev/disk/by-uuid/0ef8ee8c-61d6-457e-bda5-13329dbcdc28";
+    fsType = "btrfs";
+    options = [
+      "subvol=@home"
+      "compress=zstd"
+      "noatime"
+    ];
   };
 
-  fileSystems."/home/games" = {
-    device ="/dev/disk/by-uuid/022477ba-3f08-4e19-adfe-0d27ff171734";
-    fsType = "ext4";
+  fileSystems."/var" = {
+    device = "/dev/disk/by-uuid/0ef8ee8c-61d6-457e-bda5-13329dbcdc28";
+    fsType = "btrfs";
+    options = [
+      "subvol=@var"
+      "compress=zstd"
+      "noatime"
+    ];
+  };
+
+  fileSystems."/tmp" = {
+    device = "/dev/disk/by-uuid/0ef8ee8c-61d6-457e-bda5-13329dbcdc28";
+    fsType = "btrfs";
+    options = [
+      "subvol=@tmp"
+      "compress=zstd"
+      "noatime"
+    ];
+  };
+
+  fileSystems."/srv" = {
+    device = "/dev/disk/by-uuid/0ef8ee8c-61d6-457e-bda5-13329dbcdc28";
+    fsType = "btrfs";
+    options = [
+      "subvol=@srv"
+      "compress=zstd"
+      "noatime"
+    ];
+  };
+
+  fileSystems."/boot" = {
+    device = "/dev/disk/by-uuid/1860-42D7";
+    fsType = "vfat";
+    options = [
+      "fmask=0022"
+      "dmask=0022"
+      "noatime"
+    ];
   };
 
   swapDevices = [
-    { device = "/dev/disk/by-uuid/0fedfc5c-fcab-4569-9853-0b441334de4e"; }
+    { device = "/dev/disk/by-uuid/90def66f-e910-4909-b7ec-1b4242eb7950"; }
   ];
 
   # Enables DHCP on each ethernet and wireless interface. In case of scripted networking

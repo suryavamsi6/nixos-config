@@ -23,26 +23,17 @@ in
     gnome.enable = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Enable/Disable Plasma";
+      description = "Enable/Disable Gnome";
     };
   };
   config = {
     hardware.graphics = {
       enable = true;
-      enable32Bit = true;
     };
 
     hardware.bluetooth = {
       enable = true;
       powerOnBoot = true;
-      settings = {
-        General = {
-          Experimental = true;
-          ControllerMode = "bredr";
-          FastConnectable = true;
-        };
-
-      };
     };
 
     services.printing.enable = true;
@@ -72,13 +63,13 @@ in
     services.xserver.desktopManager.gnome.enable = config.gnome.enable;
 
     networking.networkmanager.enable = true;
-    services.gnome.gnome-keyring.enable=true;
     boot.loader.efi.canTouchEfiVariables = true;
     boot.loader.grub = {
       enable = true;
       devices = [ "nodev" ];
       efiSupport = true;
       useOSProber = true;
+      theme = "${pkgs.catppuccin-grub}";
     };
 
     programs.appimage = {

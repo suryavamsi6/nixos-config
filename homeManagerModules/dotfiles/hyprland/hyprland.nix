@@ -30,7 +30,7 @@ in
           "$mainMod" = "SUPER";
 
           monitor = [
-            "DP-1, highres,auto, 1"
+            "DP-1, highres,auto, 1,bitdepth,10"
             "eDP-1, disabled"
           ];
 
@@ -91,8 +91,7 @@ in
               "gtk-layer-shell"
               "waybar"
               "lockscreen"
-              "rofi"
-              "wofi"
+              "walker"
               "launcher"
             ];
 

@@ -39,7 +39,7 @@
                 inherit inputs;
                 system = "x86_64-linux";
               };
-              home-manager.backupFileExtension = "backup3";
+              home-manager.backupFileExtension = "bak";
               # Optionally, use home-manager.extraSpecialArgs to pass
               # arguments to home.nix
             }

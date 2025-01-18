@@ -18,6 +18,5 @@
 
   hyprland-config1.enable = false;
 
-
   programs.home-manager.enable = true;
 }

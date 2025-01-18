@@ -15,4 +15,7 @@
     nixd
     yazi
   ];
+
+  programs.git.userName="suryavamsi6";
+  programs.git.userEmail="d.suryavamsi@gmail.com";
 }
