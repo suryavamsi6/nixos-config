@@ -5,6 +5,7 @@
     overskride
     pavucontrol
     mcontrolcenter
+    superfile
   ];
 
   hardware.openrazer.enable = true;

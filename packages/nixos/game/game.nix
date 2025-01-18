@@ -4,6 +4,21 @@
     discord
     geekbench
     bottles
+    gamescope
   ];
-  programs.steam.enable = true;
+
+  programs = {
+    gamemode.enable = true;
+    steam = {
+      enable = true;
+      gamescopeSession.enable = true;
+      package = pkgs.steam.override {
+        extraPkgs = (
+          pkgs: with pkgs; [
+            gamemode
+          ]
+        );
+      };
+    };
+  };
 }

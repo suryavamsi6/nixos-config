@@ -3,7 +3,7 @@
   environment.sessionVariables = {
     NIXOS_OZONE_WL = "1"; # Hint electron apps to use wayland
     WLR_NO_HARDWARE_CURSORS = "1"; # Fix cursor rendering issue on wlr nvidia.
-
+    GDK_BACKEND = "wayland";
     XDG_CURRENT_DESKTOP = "Hyprland";
     XDG_SESSION_TYPE = "wayland";
     XDG_SESSION_DESKTOP = "Hyprland";
@@ -22,12 +22,11 @@
     ELECTRON_OZONE_PLATFORM_HINT = "auto";
 
     NVD_BACKEND = "direct";
-
     GDK_SCALE = "1";
     GDK_DPI_SCALE = "1";
     QT_SCALE_FACTOR = "1";
     QT_AUTO_SCREEN_SCALE_FACTOR = "0";
-    WFICA_OPTS = "-scale 1.0"; # For Citrix
+    #    WFICA_OPTS = "-scale 1.0"; # For Citrix
   };
 
 }
