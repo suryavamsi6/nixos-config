@@ -18,7 +18,7 @@
     ./../../packages/nixos/default.nix
   ];
 
-  gnome.enable = true; #use this for now as citrix doesn't work without it TODO
+  gnome.enable = false; #use this for now as citrix doesn't work without it TODO
   hyprland.enable = true;
 
   nix = {
