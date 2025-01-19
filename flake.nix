@@ -11,6 +11,7 @@
     };
     hyprpanel.url = "github:Jas-SinghFSU/HyprPanel";
     hyprpanel.inputs.nixpkgs.follows = "nixpkgs";
+    chaotic.url = "github:chaotic-cx/nyx/nyxpkgs-unstable";
   };
 
   outputs =
@@ -18,6 +19,7 @@
       self,
       nixpkgs,
       home-manager,
+      chaotic,
       ...
     }:
     {
@@ -30,6 +32,7 @@
           };
           modules = [
             ./hosts/default/configuration.nix
+             chaotic.nixosModules.default
             home-manager.nixosModules.home-manager
             {
               home-manager.useGlobalPkgs = true;

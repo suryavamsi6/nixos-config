@@ -1,7 +1,7 @@
 { pkgs, ... }:
 {
   "$terminal" = "kitty";
-  "$fileManager" = "dolphin";
+  "$fileManager" = "cosmic-files";
   "$menu" = "walker";
   "$browser" = "zen";
 }

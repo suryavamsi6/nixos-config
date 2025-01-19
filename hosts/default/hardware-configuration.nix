@@ -14,6 +14,8 @@
     (modulesPath + "/installer/scan/not-detected.nix")
   ];
 
+  boot.kernelPackages = pkgs.linuxPackages_cachyos;
+
   boot.initrd.availableKernelModules = [
     "xhci_pci"
     "nvme"

@@ -5,7 +5,7 @@
     "$mainMod, C, killactive,"
     "$mainMod, B, exec, $browser"
     "$mainMod, M, exit,"
-    "$mainMod, E, exec, $fileManager"
+    "$mainMod, F, exec, $fileManager"
     "$mainMod, V, togglefloating,"
     "$mainMod, space, exec, $menu"
     "$mainMod, P, pseudo,"

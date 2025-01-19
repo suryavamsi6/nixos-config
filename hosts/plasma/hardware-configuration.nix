@@ -13,6 +13,7 @@
   imports = [
     (modulesPath + "/installer/scan/not-detected.nix")
   ];
+  boot.kernelPackages = pkgs.linuxPackages_zen;
 
   boot.initrd.availableKernelModules = [
     "xhci_pci"

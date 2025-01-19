@@ -7,6 +7,8 @@
     mcontrolcenter
     superfile
     toybox
+    cosmic-files
+    badwolf
   ];
 
   hardware.openrazer.enable = true;
