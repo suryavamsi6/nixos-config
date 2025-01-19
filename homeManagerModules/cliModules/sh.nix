@@ -12,7 +12,7 @@
         src = pkgs.fishPlugins.tide.src;
       }
       {
-        name = "zoxide";
+        name = "z";
         src = pkgs.fishPlugins.z.src;
       }
     ];

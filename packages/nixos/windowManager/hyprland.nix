@@ -16,6 +16,7 @@
   config = lib.mkIf config.hyprland.enable {
     environment.systemPackages = with pkgs; [
       kanshi
+      libnotify
       xorg.xrdb
       walker
       hyprpolkitagent
