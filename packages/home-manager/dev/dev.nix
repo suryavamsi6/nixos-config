@@ -14,6 +14,8 @@
     nix-init
     nixd
     yazi
+    libgtop
+    nodejs_22
   ];
 
   programs.git.userName="suryavamsi6";

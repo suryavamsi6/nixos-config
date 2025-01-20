@@ -8,5 +8,6 @@
 
   home.packages = with pkgs; [
     inputs.zen-browser.packages."${system}".default
+    inputs.ags.packages."${system}".default
   ];
 }

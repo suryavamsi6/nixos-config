@@ -52,6 +52,13 @@
             "notifications"
           ];
         };
+        "1" = {
+          left = [
+          ];
+          middle = [ ];
+          right = [
+          ];
+        };
       };
     };
 

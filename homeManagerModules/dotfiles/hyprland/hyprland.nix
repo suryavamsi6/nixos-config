@@ -19,9 +19,8 @@ in
   config = lib.mkIf config.hyprland-config1.enable {
     wayland.windowManager.hyprland = {
       enable = true;
-      package = inputs.hyprland.packages."${pkgs.system}".hyprland;
       plugins = [
-        inputs.hyprland-plugins.packages.${pkgs.stdenv.hostPlatform.system}.hyprexpo
+#       pkgs.hyprlandPlugins.hyprexpo
       ];
       settings =
         autostart
@@ -41,6 +40,10 @@ in
             "XCURSOR_SIZE = 24"
             "HYPRCURSOR_SIZE = 24"
           ];
+
+          cursor = {
+          no_hardware_cursors = true;
+          };
 
           general = {
             gaps_in = 5;
@@ -137,6 +140,19 @@ in
             workspace_swipe = false;
           };
 
+          workspace = [
+            "1, monitor:DP-1"
+            "2, monitor:DP-1"
+            "3, monitor:DP-1"
+            "4, monitor:DP-1"
+            "5, monitor:DP-1"
+            "6, monitor:DP-1"
+            "7, monitor:DP-1"
+            "8, monitor:DP-1"
+            "9, monitor:eDP-1, border:false"
+            "0, monitor:eDP-1, border:false"
+          ];
+
           device = {
             name = "epic-mouse-v1";
             sensitivity = -0.5;
@@ -148,11 +164,11 @@ in
           ];
 
           # HDR messes up citrix displays
-          experimental = {
-            hdr = true;
-            wide_color_gamut = true;
-            xx_color_management_v4 = true;
-          };
+#          experimental = {
+#            hdr = true;
+#            wide_color_gamut = true;
+#            xx_color_management_v4 = true;
+#          };
 
           plugin = {
               hyprexpo = {
