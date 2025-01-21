@@ -6,9 +6,6 @@
   programs.ags = {
     enable = true;
 
-    # symlink to ~/.config/ags
-    configDir = ../../../homeManagerModules/dotfiles/ags/my-shell;
-
     # additional packages to add to gjs's runtime
     extraPackages = with pkgs; [
       inputs.ags.packages.${system}.battery

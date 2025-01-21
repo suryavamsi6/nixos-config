@@ -9,6 +9,7 @@
     toybox
     cosmic-files
     badwolf
+    lm_sensors
   ];
 
   hardware.openrazer.enable = true;
