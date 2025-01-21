@@ -31,13 +31,13 @@
             system = "x86_64-linux";
           };
           modules = [
-            ./systems/x86_64-linux/default/configuration.nix
+            ./systems/x86_64-linux/hyprland/configuration.nix
             chaotic.nixosModules.default
             home-manager.nixosModules.home-manager
             {
               home-manager.useGlobalPkgs = true;
               home-manager.useUserPackages = true;
-              home-manager.users.surya = import ./systems/x86_64-linux/default/home.nix;
+              home-manager.users.surya = import ./systems/x86_64-linux/hyprland/home.nix;
               home-manager.extraSpecialArgs = {
                 inherit inputs;
                 system = "x86_64-linux";
