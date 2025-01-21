@@ -36,6 +36,5 @@
       xwayland.enable = true;
     };
 
-
   };
 }
