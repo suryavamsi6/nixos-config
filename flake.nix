@@ -31,13 +31,13 @@
             system = "x86_64-linux";
           };
           modules = [
-            ./hosts/x86_64-linux/default/configuration.nix
+            ./systems/x86_64-linux/default/configuration.nix
             chaotic.nixosModules.default
             home-manager.nixosModules.home-manager
             {
               home-manager.useGlobalPkgs = true;
               home-manager.useUserPackages = true;
-              home-manager.users.surya = import ./hosts/x86_64-linux/default/home.nix;
+              home-manager.users.surya = import ./systems/x86_64-linux/default/home.nix;
               home-manager.extraSpecialArgs = {
                 inherit inputs;
                 system = "x86_64-linux";
@@ -57,19 +57,17 @@
             system = "x86_64-linux";
           };
           modules = [
-            ./hosts/x86_64-linux/gnome/configuration.nix
+            ./systems/x86_64-linux/gnome/configuration.nix
             home-manager.nixosModules.home-manager
             {
               home-manager.useGlobalPkgs = true;
               home-manager.useUserPackages = true;
-              home-manager.users.surya = import ./hosts/x86_64-linux/gnome/home.nix;
+              home-manager.users.surya = import ./systems/x86_64-linux/gnome/home.nix;
               home-manager.extraSpecialArgs = {
                 inherit inputs;
                 system = "x86_64-linux";
               };
               home-manager.backupFileExtension = "bak";
-              # Optionally, use home-manager.extraSpecialArgs to pass
-              # arguments to home.nix
             }
             { nixpkgs.overlays = [ inputs.hyprpanel.overlay ]; }
           ];
