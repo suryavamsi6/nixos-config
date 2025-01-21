@@ -6,6 +6,7 @@
     ./system/system.nix
     ./game/game.nix
     ./core/core.nix
+    ./social/social.nix
   ];
 
   nix.nixPath = [ "nixpkgs=${inputs.nixpkgs}" ];
