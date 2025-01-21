@@ -8,6 +8,7 @@
     "kanshi"
     "mcontrolcenter"
     "systemctl --user start hyprpolkitagent"
+    "ags run --gtk4 yami"
     "hypridle"
   ];
 }
