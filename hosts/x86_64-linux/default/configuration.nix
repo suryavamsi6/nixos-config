@@ -9,15 +9,16 @@
 }:
 
 {
+
   imports = [
     # Include the results of the hardware scan.
     ./hardware-configuration.nix
-    ./../../nixOSModules/default.nix
-    ./../../packages/nixos/default.nix
+    ./../../../modules/nixos/default.nix
+    ./../../../packages/nixos/default.nix
   ];
 
-  gnome.enable = true;
-  hyprland.enable = false;
+  gnome.enable = false;
+  hyprland.enable = true;
 
   nix = {
     package = pkgs.nix;
@@ -25,13 +26,18 @@
       "nix-command"
       "flakes"
     ];
-    settings.auto-optimise-store = true;
+    settings = {
+      auto-optimise-store = true;
+      substituters = [ "https://hyprland.cachix.org" ];
+      trusted-public-keys = [ "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=" ];
+    };
     gc = {
       automatic = true;
       dates = "weekly";
       options = "--delete-older-than 7d";
     };
   };
+
   # Bootloader.
   #   boot.loader.systemd-boot.enable = true;
   #   boot.loader.efi.canTouchEfiVariables = true;
@@ -80,7 +86,6 @@
       "openrazer"
     ];
     packages = with pkgs; [
-      kdePackages.kate
       #  thunderbird
     ];
   };
@@ -118,7 +123,7 @@
   # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
   system.stateVersion = "24.11"; # Did you read the comment?
 
-  services.xserver.videoDrivers = [ "nvidia-open" ];
+  services.xserver.videoDrivers = [ "nvidia" ];
 
   hardware.nvidia = {
     modesetting.enable = true;

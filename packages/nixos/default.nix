@@ -2,7 +2,7 @@
 {
 
   imports = [
-    ./windowManager/hyprland.nix
+    ./windowManager/hyprland/hyprland.nix
     ./system/system.nix
     ./game/game.nix
     ./core/core.nix

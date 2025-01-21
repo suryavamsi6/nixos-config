@@ -7,8 +7,8 @@
 {
 
   imports = [
-    ./../../homeManagerModules/default.nix
-    ./../../packages/home-manager/default.nix
+    ./../../../modules/home/default.nix
+    ./../../../packages/home/default.nix
   ];
 
   home.username = "surya";

@@ -31,13 +31,13 @@
             system = "x86_64-linux";
           };
           modules = [
-            ./hosts/default/configuration.nix
+            ./hosts/x86_64-linux/default/configuration.nix
             chaotic.nixosModules.default
             home-manager.nixosModules.home-manager
             {
               home-manager.useGlobalPkgs = true;
               home-manager.useUserPackages = true;
-              home-manager.users.surya = import ./hosts/default/home.nix;
+              home-manager.users.surya = import ./hosts/x86_64-linux/default/home.nix;
               home-manager.extraSpecialArgs = {
                 inherit inputs;
                 system = "x86_64-linux";
@@ -57,12 +57,12 @@
             system = "x86_64-linux";
           };
           modules = [
-            ./hosts/gnome/configuration.nix
+            ./hosts/x86_64-linux/gnome/configuration.nix
             home-manager.nixosModules.home-manager
             {
               home-manager.useGlobalPkgs = true;
               home-manager.useUserPackages = true;
-              home-manager.users.surya = import ./hosts/gnome/home.nix;
+              home-manager.users.surya = import ./hosts/x86_64-linux/gnome/home.nix;
               home-manager.extraSpecialArgs = {
                 inherit inputs;
                 system = "x86_64-linux";

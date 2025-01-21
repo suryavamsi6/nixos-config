@@ -4,7 +4,7 @@
   imports = [
     ./dev/dev.nix
     ./work/work.nix
-    ./bar/ags.nix
+    ./ags/ags.nix
   ];
 
   home.packages = with pkgs; [
