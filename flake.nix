@@ -57,12 +57,12 @@
             system = "x86_64-linux";
           };
           modules = [
-            ./hosts/plasma/configuration.nix
+            ./hosts/gnome/configuration.nix
             home-manager.nixosModules.home-manager
             {
               home-manager.useGlobalPkgs = true;
               home-manager.useUserPackages = true;
-              home-manager.users.surya = import ./hosts/plasma/home.nix;
+              home-manager.users.surya = import ./hosts/gnome/home.nix;
               home-manager.extraSpecialArgs = {
                 inherit inputs;
                 system = "x86_64-linux";

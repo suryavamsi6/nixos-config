@@ -5,7 +5,6 @@
 {
   config,
   pkgs,
-  lib,
   ...
 }:
 
@@ -20,7 +19,7 @@
 
   gnome.enable = false;
   hyprland.enable = true;
-
+  
   nix = {
     package = pkgs.nix;
     settings.experimental-features = [
