@@ -12,6 +12,8 @@
     lm_sensors
   ];
 
+  services.upower.enable = true;
+
   hardware.openrazer.enable = true;
 
   programs.nh = {
