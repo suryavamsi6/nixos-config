@@ -2,9 +2,9 @@
 
 This repository contains my NixOS configuration files.
 
-## Post Installation
+### Pre-Requisites
 
-Make sure NixOS is already installed and Nix flakes are enabled.
+Make sure NixOS is already installed..
 
 1. **Clone the repository:**
 
@@ -51,50 +51,6 @@ Make sure NixOS is already installed and Nix flakes are enabled.
     ```
 
 6. **Reboot the system:**
-
-    Reboot your system to apply the new configuration:
-
-    ```bash
-    sudo reboot
-    ```
-
-
-
-## Pre Installation
-
-1. **Clone the repository:**
-
-    ```bash
-    git clone https://github.com/suryavamsi6/nixos-config.git
-    cd nixos-config
-    ```
-
-2. **Install NixOS:**
-
-    Follow the official NixOS installation guide using Btrfs: [NixOS Installation Guide](https://nixos.wiki/wiki/Btrfs)
-
-    Another great guide which helped me with Btrfs setup: [NixOS Btrfs Github](https://gist.github.com/giuseppe998e/629774863b149521e2efa855f7042418)
-
-
-3. **Copy configuration files:**
-
-    After following the steps and creating the volumes, copy the configuration files from this repository to the `/etc/nixos` directory:
-
-    Remember to edit the configuration.nix with your user name. 
-
-    ```bash
-    sudo cp -r * /etc/nixos/
-    ```
-
-4. **Rebuild the system:**
-
-    Install NixOS with this configuration:
-
-    ```bash
-    sudo nixos-install --no-root-passwd
-    ```
-
-5. **Reboot the system:**
 
     Reboot your system to apply the new configuration:
 
