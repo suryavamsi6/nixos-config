@@ -14,7 +14,7 @@
 
   services.upower.enable = true;
 
-  hardware.openrazer.enable = true;
+  hardware.openrazer.enable = false;
 
   programs.nh = {
     enable = true;
