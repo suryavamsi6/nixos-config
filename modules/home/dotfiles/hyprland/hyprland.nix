@@ -12,7 +12,7 @@ let
   animations = import ./config/animations.nix { inherit pkgs; };
 in
 {
-  imports  = [
+  imports = [
     ./config/script.nix
   ];
   options = {
@@ -37,7 +37,7 @@ in
 
           monitor = [
             "DP-1, highres,auto, 1,bitdepth,10"
-            "eDP-1, highres,auto,1"
+            "eDP-1, highres,2560x0,1"
           ];
 
           env = [
