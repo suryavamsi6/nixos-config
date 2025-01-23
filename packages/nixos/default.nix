@@ -1,4 +1,5 @@
 { pkgs, inputs, ... }:
+
 {
 
   imports = [
@@ -15,5 +16,6 @@
     nerd-fonts.fira-code
     nerd-fonts.caskaydia-cove
   ];
+
 
 }

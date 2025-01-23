@@ -8,6 +8,7 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    hyprland.url = "github:hyprwm/Hyprland";
     hyprpanel.url = "github:Jas-SinghFSU/HyprPanel";
     hyprpanel.inputs.nixpkgs.follows = "nixpkgs";
     ags.url = "github:aylur/ags";
@@ -46,7 +47,16 @@
               # Optionally, use home-manager.extraSpecialArgs to pass
               # arguments to home.nix
             }
-            { nixpkgs.overlays = [ inputs.hyprpanel.overlay ]; }
+            # { nixpkgs.overlays = [ inputs.hyprpanel.overlay ]; }
+            {
+              # nixpkgs.overlays = [
+              #   (final: prev: {
+              #     hyprland = prev.hyprland.override {
+              #       src = /home/surya/Dotfiles/Hyprland;
+              #     };
+              #   })
+              # ];
+            }
           ];
         };
 
