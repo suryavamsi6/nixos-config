@@ -36,8 +36,8 @@ in
           "$mainMod" = "SUPER";
 
           monitor = [
-            "DP-1, highres,auto, 1,bitdepth,10"
-            "eDP-1, highres,2560x0,1"
+            "DP-1, highres,2560x0, 1,bitdepth,10"
+            "eDP-1, highres,0x0,1"
           ];
 
           env = [
