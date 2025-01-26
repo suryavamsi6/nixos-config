@@ -5,7 +5,7 @@
       #!/bin/bash
 
       # Get current status of eDP-1
-      STATUS=$(hyprctl monitors | grep - w"eDP-1")
+      STATUS=$(hyprctl monitors | grep -w "eDP-1")
 
       if [[ -z "$STATUS" ]]; then
         # If eDP-1 is disabled, enable it

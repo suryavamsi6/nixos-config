@@ -10,6 +10,7 @@
     "$mainMod, space, exec, $menu"
     "$mainMod, P, pseudo,"
     "$mainMod, J, togglesplit,"
+    "$mainMod SHIFT, F, fullscreen"
 
     "$mainMod, left, movefocus, l"
     "$mainMod, right, movefocus, r"
