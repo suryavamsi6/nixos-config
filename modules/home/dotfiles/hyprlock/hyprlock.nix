@@ -56,7 +56,7 @@ in
       labels = [
         {
           monitor = "";
-          text = "cmd[update:1000] echo \"$(~/.config/Scripts/song-status)\"";
+          text = "cmd[update:1000] echo \"$(~/.config/scripts/song-status)\"";
           color = "rgba(242, 243, 244, 0.75)";
           font_size = 14;
           font_family = "SF Pro Text";
