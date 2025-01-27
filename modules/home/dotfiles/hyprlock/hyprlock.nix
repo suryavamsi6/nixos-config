@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ ... }:
 
 let
   wallpaper = "~/.config/wallpapers/leaf.png";
