@@ -1,10 +1,18 @@
 { config, pkgs, ... }:
 
 let
-  wallpaper = "../../wallpapers/leaf.png";
+  wallpaper = "~/.config/wallpapers/leaf.png";
   fullpfp = "${config.home.homeDirectory}/Pictures/fullpfp.png";
 in
 {
+
+  imports = [
+    ./scripts/battery-status.nix
+    ./scripts/layout-status.nix
+    ./scripts/network-status.nix
+    ./scripts/song-status.nix
+  ];
+
   programs.hyprlock = {
     enable = true;
     settings = {
@@ -14,7 +22,7 @@ in
 
       background = {
         monitor = "";
-        path = "../../wallpapers/leaf.png";
+        path = wallpaper;
         color = "rgba(25, 20, 20, 1.0)";
         blur_passes = 0;
         blur_size = 2;
@@ -54,46 +62,6 @@ in
       };
 
       label = [
-        {
-          monitor = "";
-          text = "cmd[update:1000] echo \"$(~/.config/scripts/song-status)\"";
-          color = "rgba(242, 243, 244, 0.75)";
-          font_size = 14;
-          font_family = "SF Pro Text";
-          position = "20, 512";
-          halign = "left";
-          valign = "center";
-        }
-        {
-          monitor = "";
-          text = "cmd[update:1000] echo \"$(~/.config/scripts/network-status)\"";
-          color = "rgba(242, 243, 244, 0.75)";
-          font_size = 16;
-          font_family = "SF Pro Text";
-          position = "-35, 512";
-          halign = "right";
-          valign = "center";
-        }
-        {
-          monitor = "";
-          text = "cmd[update:1000] echo \"$(~/.config/scripts/battery-status)\"";
-          color = "rgba(242, 243, 244, 0.75)";
-          font_size = 19;
-          font_family = "SF Pro Text";
-          position = "-93, 512";
-          halign = "right";
-          valign = "center";
-        }
-        {
-          monitor = "";
-          text = "cmd[update:1000] echo \"$(~/.config/scripts/layout-status)\"";
-          color = "rgba(242, 243, 244, 0.75)";
-          font_size = 15;
-          font_family = "SF Pro Text";
-          position = "-150, 512";
-          halign = "right";
-          valign = "center";
-        }
         {
           monitor = "";
           text = "cmd[update:1000] echo \"$(date +\"%A, %B %d\")\"";

@@ -29,6 +29,7 @@
       hyprlang
       hyprland-qtutils
       aquamarine
+      playerctl
     ];
 
     programs.hyprland = {
