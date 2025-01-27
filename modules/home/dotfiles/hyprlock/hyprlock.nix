@@ -53,7 +53,7 @@ in
         valign = "center";
       };
 
-      labels = [
+      label = [
         {
           monitor = "";
           text = "cmd[update:1000] echo \"$(~/.config/scripts/song-status)\"";
@@ -66,7 +66,7 @@ in
         }
         {
           monitor = "";
-          text = "cmd[update:1000] echo \"$(~/.config/Scripts/network-status)\"";
+          text = "cmd[update:1000] echo \"$(~/.config/scripts/network-status)\"";
           color = "rgba(242, 243, 244, 0.75)";
           font_size = 16;
           font_family = "SF Pro Text";
@@ -76,7 +76,7 @@ in
         }
         {
           monitor = "";
-          text = "cmd[update:1000] echo \"$(~/.config/Scripts/battery-status)\"";
+          text = "cmd[update:1000] echo \"$(~/.config/scripts/battery-status)\"";
           color = "rgba(242, 243, 244, 0.75)";
           font_size = 19;
           font_family = "SF Pro Text";
@@ -86,7 +86,7 @@ in
         }
         {
           monitor = "";
-          text = "cmd[update:1000] echo \"$(~/.config/Scripts/layout-status)\"";
+          text = "cmd[update:1000] echo \"$(~/.config/scripts/layout-status)\"";
           color = "rgba(242, 243, 244, 0.75)";
           font_size = 15;
           font_family = "SF Pro Text";
@@ -116,7 +116,7 @@ in
         }
         {
           monitor = "";
-          text = "Pratik Gayen";
+          text = "Surya";
           color = "rgba(242, 243, 244, 0.75)";
           font_size = 12;
           font_family = "SF Pro Display Bold";
@@ -126,7 +126,7 @@ in
         }
         {
           monitor = "";
-          text = "Touch ID or Enter Password";
+          text = "Enter Password";
           color = "rgba(242, 243, 244, 0.75)";
           font_size = 10;
           font_family = "SF Pro Display";
