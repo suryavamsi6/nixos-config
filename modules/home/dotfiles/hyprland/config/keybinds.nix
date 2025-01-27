@@ -4,7 +4,7 @@
     "$mainMod, return, exec, $terminal"
     "$mainMod, C, killactive,"
     "$mainMod, B, exec, $browser"
-    "$mainMod, M, exec, hyprlock,"
+    "$mainMod, M, exec, hyprlock"
     "$mainMod SHIFT, M, exit,"
     "$mainMod, F, exec, $fileManager"
     "$mainMod, V, togglefloating,"
