@@ -8,6 +8,7 @@
     ./systemModules/walker.nix
     ./dotfiles/ags/ags.nix
     ./dotfiles/hyprlock/hyprlock.nix
+    ./wallpapers/wallpaper.nix
     #    ./systemModules/kanshi.nix
   ];
 }
