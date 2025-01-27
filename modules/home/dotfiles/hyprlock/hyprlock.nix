@@ -2,16 +2,9 @@
 
 let
   wallpaper = "~/.config/wallpapers/leaf.png";
-  fullpfp = "${config.home.homeDirectory}/Pictures/fullpfp.png";
+  fullpfp = "~/.config/wallpapers/pfp.png";
 in
 {
-
-  imports = [
-    ./scripts/battery-status.nix
-    ./scripts/layout-status.nix
-    ./scripts/network-status.nix
-    ./scripts/song-status.nix
-  ];
 
   programs.hyprlock = {
     enable = true;
