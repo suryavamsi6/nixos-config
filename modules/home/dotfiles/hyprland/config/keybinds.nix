@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ ... }:
 {
   bind = [
     "$mainMod, return, exec, $terminal"

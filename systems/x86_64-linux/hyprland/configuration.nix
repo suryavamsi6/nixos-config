@@ -84,7 +84,7 @@
       "wheel"
       "openrazer"
     ];
-    packages = with pkgs; [
+    packages = [
       #  thunderbird
     ];
   };
