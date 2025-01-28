@@ -14,6 +14,7 @@
     nixd
     yazi
     treefmt
+    kitty-themes
     (vscode-with-extensions.override {
       vscodeExtensions = pkgs.vscode-utils.extensionsFromVscodeMarketplace [
         {

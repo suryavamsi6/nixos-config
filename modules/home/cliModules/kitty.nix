@@ -1,16 +1,19 @@
 {
-  config,
-  lib,
-  pkgs,
   ...
 }:
 {
 
-  home.file.".config/kitty/kitty.conf" = {
-    force = true;
-    text = ''
-      shell fish
-    '';
+  # home.file.".config/kitty/kitty.conf" = {
+  #   force = true;
+  #   text = ''
+  #     shell fish
+  #   '';
+  # };
+
+  programs.kitty = {
+    enable = true;
+    theme = "Neutron";
+    shellIntegration.enableFishIntegration = true;
   };
 
 }
