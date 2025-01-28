@@ -8,8 +8,8 @@
     source = ./pfp.png;
   };
 
-  home.file.".config/wallpapers/nier.webp" = {
-    source = ./nier.webp;
+  home.file.".config/wallpapers/car.png" = {
+    source = ./car.png;
 
   };
 }

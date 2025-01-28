@@ -3,8 +3,8 @@
   services.hyprpaper = {
     enable = true;
     settings = {
-      preload = [ "~/.config/wallpapers/nier.webp" ];
-      wallpaper = [ "~./config/wallpapers/nier.webp" ];
+      preload = [ "~/.config/wallpapers/car.png" ];
+      wallpaper = [ "~./config/wallpapers/car.png" ];
     };
   };
 }
