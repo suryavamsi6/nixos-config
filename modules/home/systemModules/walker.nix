@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ ... }:
 {
   home.file.".config/walker/config.toml" = {
     text = ''

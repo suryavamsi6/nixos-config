@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ ... }:
 {
   home.file.".config/hypr/toggle-laptop.sh" = {
     text = ''

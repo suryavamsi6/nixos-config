@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ ... }:
 {
   exec-once = [
     "echo \"Xft.dpi: 96\" | xrdb -merge"

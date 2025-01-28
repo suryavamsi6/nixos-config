@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ ... }:
 {
   "$terminal" = "kitty";
   "$fileManager" = "cosmic-files";

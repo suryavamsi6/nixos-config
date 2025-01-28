@@ -13,6 +13,7 @@
     nix-init
     nixd
     yazi
+    treefmt
     (vscode-with-extensions.override {
       vscodeExtensions = pkgs.vscode-utils.extensionsFromVscodeMarketplace [
         {

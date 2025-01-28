@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ ... }:
 {
   animations = {
     enabled = true;

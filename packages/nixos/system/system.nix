@@ -2,7 +2,6 @@
 {
   environment.systemPackages = with pkgs; [
     polychromatic
-    overskride
     pavucontrol
     mcontrolcenter
     superfile
@@ -12,6 +11,7 @@
     lm_sensors
     p7zip
     unzip
+    blueman
   ];
 
   services.upower.enable = true;

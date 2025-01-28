@@ -17,5 +17,4 @@
     nerd-fonts.caskaydia-cove
   ];
 
-
 }
