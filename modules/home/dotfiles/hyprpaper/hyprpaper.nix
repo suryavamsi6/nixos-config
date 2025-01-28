@@ -1,10 +1,10 @@
 { ... }:
 {
-  programs.hyprpaper = {
+  services.hyprpaper = {
     enable = true;
     settings = {
-      preload = "~/.config/wallpapers/nier.webp";
-      wallpaper = "~./config/wallpapers/nier.webp";
+      preload = [ "~/.config/wallpapers/nier.webp" ];
+      wallpaper = [ "~./config/wallpapers/nier.webp" ];
     };
   };
 }

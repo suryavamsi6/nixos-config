@@ -8,5 +8,6 @@
     "systemctl --user start hyprpolkitagent"
     "ags run --gtk4 .config/ags/yami.js"
     "hypridle"
+    "hyprpaper"
   ];
 }
