@@ -23,6 +23,12 @@
           version = "0.4.2";
           sha256 = "sha256-WOzHHQZlTdDoVB90GYhuEORNPLyv/lWZBNMrIzBTWW8=";
         }
+        {
+          name = "catppuccin-vsc";
+          publisher = "Catppuccin";
+          version = "3.16.0";
+          sha256 = "sha256-eZwi5qONiH+XVZj7u2cjJm+Liv1q07AEd8d4nXEQgLw=";
+        }
       ];
     })
   ];

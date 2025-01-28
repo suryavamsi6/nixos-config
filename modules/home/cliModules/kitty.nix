@@ -3,16 +3,9 @@
 }:
 {
 
-  # home.file.".config/kitty/kitty.conf" = {
-  #   force = true;
-  #   text = ''
-  #     shell fish
-  #   '';
-  # };
-
   programs.kitty = {
     enable = true;
-    theme = "Neutron";
+    theme = "Catppuccin-Mocha";
     shellIntegration.enableFishIntegration = true;
   };
 
