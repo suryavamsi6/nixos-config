@@ -7,4 +7,9 @@
   home.file.".config/wallpapers/pfp.png" = {
     source = ./pfp.png;
   };
+
+  home.file.".config/wallpapers/nier.webp" = {
+    source = ./nier.webp;
+
+  };
 }

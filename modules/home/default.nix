@@ -9,6 +9,7 @@
     ./dotfiles/ags/ags.nix
     ./dotfiles/hyprlock/hyprlock.nix
     ./wallpapers/wallpaper.nix
+    ./dotfiles/hyprpaper/hyprpaper.nix
     #    ./systemModules/kanshi.nix
   ];
 }

@@ -23,13 +23,11 @@
       xdg-desktop-portal-hyprland
       hyprpaper
       hyprcursor
-      hyprlock
       hypridle
       hyprutils
       hyprlang
       hyprland-qtutils
       aquamarine
-      playerctl
     ];
 
     programs.hyprland = {

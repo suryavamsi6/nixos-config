@@ -10,6 +10,8 @@
     cosmic-files
     badwolf
     lm_sensors
+    p7zip
+    unzip
   ];
 
   services.upower.enable = true;
