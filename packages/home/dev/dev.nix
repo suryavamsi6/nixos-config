@@ -29,6 +29,12 @@
           version = "3.16.0";
           sha256 = "sha256-eZwi5qONiH+XVZj7u2cjJm+Liv1q07AEd8d4nXEQgLw=";
         }
+        {
+          name = "catppuccin-vsc-icons";
+          publisher = "Catppuccin";
+          version = "1.17.0";
+          sha256 = "sha256-CSAIDlZNrelBf891ztK4n9IaRdtXqpeXnI00hG0/nfA=";
+        }
       ];
     })
   ];
@@ -61,6 +67,9 @@
               },
             },
           },
+          "workbench.colorTheme": "Catppuccin Mocha",
+          "workbench.iconTheme": "catppuccin-mocha",
+
       }
     '';
   };
