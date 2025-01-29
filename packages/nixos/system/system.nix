@@ -12,6 +12,8 @@
     p7zip
     unzip
     blueman
+    cheese
+    cameractrls-gtk4  
   ];
 
   services.upower.enable = true;

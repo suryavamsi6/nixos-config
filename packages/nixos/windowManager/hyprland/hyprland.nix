@@ -28,6 +28,13 @@
       hyprlang
       hyprland-qtutils
       aquamarine
+      gst_all_1.gstreamer
+      gst_all_1.gst-vaapi
+      gst_all_1.gst-plugins-ugly
+      gst_all_1.gst-plugins-good
+      gst_all_1.gst-plugins-bad
+      gst_all_1.gst-plugins-base
+      libva
     ];
 
     programs.hyprland = {
@@ -39,6 +46,7 @@
       portalPackage =
         inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland;
     };
+
 
   };
 }
