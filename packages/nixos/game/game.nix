@@ -2,6 +2,8 @@
 {
   environment.systemPackages = with pkgs; [
     gamescope
+    protonup
+    mangohud
   ];
 
   programs = {
