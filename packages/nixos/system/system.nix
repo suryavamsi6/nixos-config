@@ -7,13 +7,13 @@
     superfile
     toybox
     cosmic-files
-    badwolf
+    librewolf
     lm_sensors
     p7zip
     unzip
     blueman
     cheese
-    cameractrls-gtk4  
+    cameractrls-gtk4
   ];
 
   services.upower.enable = true;
