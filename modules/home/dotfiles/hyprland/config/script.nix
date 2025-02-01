@@ -10,9 +10,11 @@
       if [[ -z "$STATUS" ]]; then
         # If eDP-1 is disabled, enable it
         hyprctl keyword monitor "eDP-1,2560x1440@165,0x0,1"
+        hyprctl keyword monitor "DP-1,2560x1440@144,2560x0,1"
       else
         # If eDP-1 is enabled, disable it
         hyprctl keyword monitor "eDP-1,disable"
+        hyprctl keyword monitor "DP-1,2560x1440@144,0x0,1"
       fi
     '';
   };
