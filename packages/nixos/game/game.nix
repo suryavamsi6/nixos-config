@@ -4,6 +4,7 @@
     gamescope
     protonup
     mangohud
+    trigger-control
   ];
 
   programs = {

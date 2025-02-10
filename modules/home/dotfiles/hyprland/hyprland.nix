@@ -167,11 +167,11 @@ in
           ];
 
           # HDR messes up citrix displays
-          # experimental = {
-          #   hdr = true;
-          #   wide_color_gamut = true;
-          #   xx_color_management_v4 = true;
-          # };
+          experimental = {
+            # hdr = true;
+            # wide_color_gamut = true;
+            xx_color_management_v4 = true;
+          };
 
           plugin = {
             hyprexpo = {
