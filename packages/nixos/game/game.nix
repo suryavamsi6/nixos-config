@@ -5,6 +5,10 @@
     protonup
     mangohud
     trigger-control
+    wine
+    heroic
+    bottles
+    qbittorrent
   ];
 
   programs = {
