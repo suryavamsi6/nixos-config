@@ -36,6 +36,12 @@
           version = "1.17.0";
           sha256 = "sha256-CSAIDlZNrelBf891ztK4n9IaRdtXqpeXnI00hG0/nfA=";
         }
+        {
+          name = "geminicodeassist";
+          publisher = "Google";
+          version = "2.27.4";
+          sha256 = "sha256-RHePV7ziovUSyxIIjVSKCXxVBRfJ6vvbO6t7S2B/P7U=";
+        }
       ];
     })
   ];
