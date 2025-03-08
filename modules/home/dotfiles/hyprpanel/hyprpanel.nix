@@ -40,6 +40,7 @@
             "workspaces"
             "windowtitle"
             "cputemp"
+            
           ];
           middle = [ "media" ];
           right = [
