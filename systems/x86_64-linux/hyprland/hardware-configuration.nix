@@ -14,7 +14,7 @@
     (modulesPath + "/installer/scan/not-detected.nix")
   ];
 
-  boot.kernelPackages = pkgs.linuxPackages_cachyos;
+  boot.kernelPackages = pkgs.linuxPackages;
 
   boot.initrd.availableKernelModules = [
     "xhci_pci"
@@ -26,7 +26,6 @@
   boot.initrd.kernelModules = [ ];
   boot.kernelModules = [ "kvm-intel" ];
   boot.extraModulePackages = [ ];
-
   fileSystems."/" = {
     device = "/dev/disk/by-uuid/0ef8ee8c-61d6-457e-bda5-13329dbcdc28";
     fsType = "btrfs";

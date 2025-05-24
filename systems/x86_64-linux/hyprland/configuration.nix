@@ -37,6 +37,50 @@
     };
   };
 
+  services.samba = {
+    enable = true;
+    # package = pkgs.samba4Full; # Consider using samba4Full for more features if needed
+    securityType = "user"; # Each user has to authenticate with a password
+
+    # Optional: Define a workgroup if needed, default is WORKGROUP
+    # extraConfig = ''
+    #   workgroup = YOUR_WORKGROUP
+    # '';
+
+    shares = {
+      # This is a name for your share, e.g., "pibackups"
+      # The Raspberry Pi will connect to this share name.
+      "pibackups" = {
+        path = "/home/surya/Backup_Pi"; # Path to the directory you want to share
+        browseable = "yes";
+        "read only" = "no";
+        "guest ok" = "no"; # Disallow guest access, require authentication
+        "valid users" = "surya"; # Specify which NixOS user(s) can access this share
+                                       # You can list multiple users: "user1 user2"
+        # Or use a group:
+        # "valid users" = "@yourgroup";
+        "create mask" = "0664"; # File permissions for new files
+        "directory mask" = "0775"; # Directory permissions for new directories
+      };
+
+      # You can add more shares here if needed
+      # "another_share" = {
+      #   path = "/path/to/another/directory";
+      #   # ... other options ...
+      # };
+    };
+
+    # If you have a firewall enabled in NixOS (networking.firewall.enable = true;),
+    # you might need to open the Samba ports.
+    # The `services.samba.openFirewall = true;` option should handle this.
+    openFirewall = true;
+  };
+
+  # If you want to make your NixOS machine discoverable by name (NetBIOS)
+  # for easier access from some clients (like Windows, or your Pi if it has Avahi/WS-Discovery):
+  services.samba-wsdd.enable = true; # For WS-Discovery (newer Windows, some Linux)
+  # services.nmbd.enable = true; # For NetBIOS Name Service (older, but sometimes still useful; part of `services.samba` typically)
+
   # Bootloader.
   #   boot.loader.systemd-boot.enable = true;
   #   boot.loader.efi.canTouchEfiVariables = true;
@@ -83,6 +127,7 @@
       "networkmanager"
       "wheel"
       "openrazer"
+      "disk"
     ];
     packages = [
       #  thunderbird

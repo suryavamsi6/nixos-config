@@ -9,13 +9,14 @@
     nixfmt-rfc-style
     vim
     jetbrains.webstorm
-    code-cursor
+    windsurf
     nix-init
     nixd
     yazi
     treefmt
     kitty-themes
     tmux
+    chntpw
     (vscode-with-extensions.override {
       vscodeExtensions = pkgs.vscode-utils.extensionsFromVscodeMarketplace [
         {
@@ -41,6 +42,12 @@
           publisher = "Google";
           version = "2.27.4";
           sha256 = "sha256-RHePV7ziovUSyxIIjVSKCXxVBRfJ6vvbO6t7S2B/P7U=";
+        }
+        {
+          name  = "remote-ssh";
+          publisher = "ms-vscode-remote";
+          version = "0.121.2025050915";
+          sha256 = "sha256-lDt3ADiiIc7pHhytbxIBXkEoBmCOf36z2TPMhYOzyA0=";
         }
       ];
     })

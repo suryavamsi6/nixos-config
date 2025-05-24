@@ -7,13 +7,17 @@
     superfile
     toybox
     cosmic-files
-    librewolf
     lm_sensors
     p7zip
     unzip
     blueman
     cheese
     cameractrls-gtk4
+    nodejs
+    jetbrains.idea-ultimate
+    glance
+    floorp
+    rpi-imager
   ];
 
   services.upower.enable = true;
