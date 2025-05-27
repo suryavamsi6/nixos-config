@@ -45,6 +45,8 @@
     "$mainMod SHIFT, 9, movetoworkspace, 9"
     "$mainMod SHIFT, 0, movetoworkspace, 10"
 
+    "$mainMod SHIFT, Print, exec, hyprshot -m window"
+    "$mainMod, Print, exec, hyprshot -m region"
     # Toggle laptop and external monitor
     "$mainMod , F1, exec, bash ~/.config/hypr/toggle-laptop.sh"
     "$mainMod , F2, exec, bash ~/.config/hypr/toggle-monitor.sh"

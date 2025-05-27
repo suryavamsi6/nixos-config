@@ -26,8 +26,10 @@
       hypridle
       hyprutils
       hyprlang
+      hyprshot
       hyprland-qtutils
       aquamarine
+      swaynotificationcenter
       gst_all_1.gstreamer
       gst_all_1.gst-vaapi
       gst_all_1.gst-plugins-ugly
@@ -46,7 +48,6 @@
       portalPackage =
         inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland;
     };
-
 
   };
 }
