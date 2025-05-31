@@ -11,6 +11,7 @@
     ./wallpapers/wallpaper.nix
     ./dotfiles/hyprpaper/hyprpaper.nix
     ./dotfiles/swaync/swaync.nix
+    # ./dotfiles/mako/mako.nix
     # ./dotfiles/waybar/waybar.nix
     #    ./systemModules/kanshi.nix
   ];
