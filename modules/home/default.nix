@@ -10,7 +10,8 @@
     ./dotfiles/hyprlock/hyprlock.nix
     ./wallpapers/wallpaper.nix
     ./dotfiles/hyprpaper/hyprpaper.nix
-    ./dotfiles/waybar/waybar.nix
+    ./dotfiles/swaync/swaync.nix
+    # ./dotfiles/waybar/waybar.nix
     #    ./systemModules/kanshi.nix
   ];
 }

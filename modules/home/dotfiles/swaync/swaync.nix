@@ -1,0 +1,118 @@
+{pkgs, ...}:
+{
+  services.swaync = {
+    enable = true;
+    settings = {
+      positionX = "right";
+      positionY = "top";
+      control-center-margin-top = 10;
+      control-center-margin-bottom = 10;
+      control-center-margin-left = 10;
+      control-center-margin-right = 10;
+      notification-icon-size = 32;
+      notification-body-image-height = 200;
+      notification-body-image-width = 200;
+      control-center-width = 350;
+      notification-window-width = 350;
+      keyboard-shortcuts = true;
+      widgets = [ "dnd" "notifications" "mpris" ];
+      widget-config = {
+        title = {
+          text = "󰂚  Notifications";
+          clear-all-button = true;
+          button-text = "󰎟 ";
+        };
+        dnd = {
+          text = "Do Not Disturb";
+        };
+        label = {
+          max-lines = 1;
+          text = "Notification Center";
+        };
+        mpris = {
+          image-size = 96;
+          image-radius = 12;
+        };
+        volume = {
+          label = "󰕾 ";
+        };
+        backlight = {
+          label = "󰃟 ";
+        };
+      };
+    };
+
+    style = ''
+      @import url("/home/user/.cache/wal/colors-css");
+      * {
+        color: @foreground;
+      }
+
+      .blank-window {
+        background: transparent;
+      }
+
+      .notification-action,
+      .notification-default-action,
+      .control-center {
+        border-radius: 0.75em;
+        border: 2px solid alpha(@color11, 0.3);
+        background: alpha(black, 0.5);
+      }
+
+      .notification {
+        box-shadow: 2px 2px 3px 0px rgba(0,0,0,0.5);
+      }
+
+      .notification-content {
+        margin: 5px;
+      }
+
+      .control-center .notification-row {
+        background: alpha(black, 0.2);
+      }
+
+      .widget-dnd {
+        font-weight: bold;
+        margin: 1em;
+      }
+
+      .widget-dnd>switch {
+        border: 1px solid alpha(@color11, 0.3);
+        border-radius: 0.75em;
+        background: alpha(black, 0.5);
+        padding: 1px;
+      }
+
+      .widget-dnd> switch slider {
+        border: 1px solid alpha(@color11, 0.3);
+        border-radius: 0.75em;
+        background: rgb(15, 15, 15);
+        box-shadow: none;
+      }
+
+      .widget-mpris {
+        border-radius: 0.75em;
+        background: alpha(black, 0.5);
+        margin: 1em;
+      }
+
+      .widget-buttons-grid {
+        margin: 1em;
+        background: alpha(black, 0.5);
+      }
+
+      .widget-buttons-grid>flowbox>flowboxchild>button {
+        box-shadow: none;
+        color: @foreground;
+        font-style: normal;
+        border: 1px solid alpha(@color11, 0.3);
+        background: @background;
+      }
+
+      .widget-buttons-grid>flowbox>flowboxchild>button:hover {
+        background: black;
+      }
+    '';
+  };
+}
