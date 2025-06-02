@@ -18,10 +18,10 @@
     "$mainMod, up, movefocus, u"
     "$mainMod, down, movefocus, d"
 
-    "$mainMod SHIFT, l, swapwindow, l"
-    "$mainMod SHIFT, r, swapwindow, r"
-    "$mainMod SHIFT, u, swapwindow, u"
-    "$mainMod SHIFT, d, swapwindow, d"
+    "$mainMod SHIFT, left, swapwindow, l"
+    "$mainMod SHIFT, right, swapwindow, r"
+    "$mainMod SHIFT, up, swapwindow, u"
+    "$mainMod SHIFT, down, swapwindow, d"
 
     "$mainMod, 1, workspace, 1"
     "$mainMod, 2, workspace, 2"

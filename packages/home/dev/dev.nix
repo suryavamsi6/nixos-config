@@ -44,7 +44,7 @@
           sha256 = "sha256-RHePV7ziovUSyxIIjVSKCXxVBRfJ6vvbO6t7S2B/P7U=";
         }
         {
-          name  = "remote-ssh";
+          name = "remote-ssh";
           publisher = "ms-vscode-remote";
           version = "0.121.2025050915";
           sha256 = "sha256-lDt3ADiiIc7pHhytbxIBXkEoBmCOf36z2TPMhYOzyA0=";

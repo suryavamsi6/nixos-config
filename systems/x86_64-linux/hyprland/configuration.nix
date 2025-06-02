@@ -168,7 +168,9 @@
   system.stateVersion = "24.11"; # Did you read the comment?
 
   services.xserver.videoDrivers = [ "nvidia" ];
-
+  environment.systemPackages = [ pkgs.lan-mouse_git ];
+  #chaotic.mesa-git.enable = true;
+  
   hardware.nvidia = {
     modesetting.enable = true;
     powerManagement.enable = true;
