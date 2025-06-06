@@ -16,6 +16,7 @@
     treefmt
     kitty-themes
     tmux
+    appflowy
     chntpw
     (vscode-with-extensions.override {
       vscodeExtensions = pkgs.vscode-utils.extensionsFromVscodeMarketplace [
