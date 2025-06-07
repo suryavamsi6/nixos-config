@@ -14,6 +14,7 @@
     ./hardware-configuration.nix
     ./../../../modules/nixos/default.nix
     ./../../../packages/nixos/default.nix
+    ./lanzaboote.nix
   ];
 
   gnome.enable = false;
@@ -56,7 +57,7 @@
         "read only" = "no";
         "guest ok" = "no"; # Disallow guest access, require authentication
         "valid users" = "surya"; # Specify which NixOS user(s) can access this share
-                                       # You can list multiple users: "user1 user2"
+        # You can list multiple users: "user1 user2"
         # Or use a group:
         # "valid users" = "@yourgroup";
         "create mask" = "0664"; # File permissions for new files
@@ -170,7 +171,7 @@
   services.xserver.videoDrivers = [ "nvidia" ];
   environment.systemPackages = [ pkgs.lan-mouse_git ];
   #chaotic.mesa-git.enable = true;
-  
+
   hardware.nvidia = {
     modesetting.enable = true;
     powerManagement.enable = true;
