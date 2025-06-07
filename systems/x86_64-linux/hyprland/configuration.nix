@@ -14,7 +14,6 @@
     ./hardware-configuration.nix
     ./../../../modules/nixos/default.nix
     ./../../../packages/nixos/default.nix
-    ./lanzaboote.nix
   ];
 
   gnome.enable = false;

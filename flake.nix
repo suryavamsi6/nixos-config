@@ -8,6 +8,11 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    lanzaboote = {
+      url = "github:nix-community/lanzaboote/v0.4.2";
+      # Optional but recommended to limit the size of your system closure.
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     hyprland.url = "github:hyprwm/Hyprland";
     hyprpanel.url = "github:Jas-SinghFSU/HyprPanel";
     hyprpanel.inputs.nixpkgs.follows = "nixpkgs";
@@ -21,6 +26,7 @@
       nixpkgs,
       home-manager,
       chaotic,
+      lanzaboote,
       ...
     }:
     {
@@ -47,16 +53,26 @@
               # Optionally, use home-manager.extraSpecialArgs to pass
               # arguments to home.nix
             }
-            # { nixpkgs.overlays = [ inputs.hyprpanel.overlay ]; }
-            {
-              # nixpkgs.overlays = [
-              #   (final: prev: {
-              #     hyprland = prev.hyprland.override {
-              #       src = /home/surya/Dotfiles/Hyprland;
-              #     };
-              #   })
-              # ];
-            }
+
+            lanzaboote.nixosModules.lanzaboote
+            ({ pkgs, lib, ... }: {
+
+            environment.systemPackages = [
+              # For debugging and troubleshooting Secure Boot.
+              pkgs.sbctl
+            ];
+
+            # Lanzaboote currently replaces the systemd-boot module.
+            # This setting is usually set to true in configuration.nix
+            # generated at installation time. So we force it to false
+            # for now.
+            boot.loader.systemd-boot.enable = lib.mkForce false;
+
+            boot.lanzaboote = {
+              enable = true;
+              pkiBundle = "/var/lib/sbctl";
+            };
+          })
           ];
         };
 
