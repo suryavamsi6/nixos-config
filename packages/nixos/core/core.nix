@@ -64,13 +64,17 @@ in
 
     networking.networkmanager.enable = true;
     boot.loader.efi.canTouchEfiVariables = true;
-    boot.loader.grub = {
+    boot.loader.systemd-boot = {
       enable = true;
-      devices = [ "nodev" ];
-      efiSupport = true;
-      useOSProber = true;
-      theme = "${pkgs.catppuccin-grub}";
+      configurationLimit = 1;
     };
+    # boot.loader.grub = {
+    #   enable = true;
+    #   devices = [ "nodev" ];
+    #   efiSupport = true;
+    #   useOSProber = true;
+    #   theme = "${pkgs.catppuccin-grub}";
+    # };
 
     programs.appimage = {
       enable = true;
