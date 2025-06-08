@@ -68,13 +68,13 @@ in
       enable = true;
       configurationLimit = 1;
     };
-    # boot.loader.grub = {
-    #   enable = true;
-    #   devices = [ "nodev" ];
-    #   efiSupport = true;
-    #   useOSProber = true;
-    #   theme = "${pkgs.catppuccin-grub}";
-    # };
+    boot.loader.grub = {
+      enable = true;
+      devices = [ "nodev" ];
+      efiSupport = true;
+      useOSProber = true;
+      theme = "${pkgs.catppuccin-grub}";
+    };
 
     programs.appimage = {
       enable = true;

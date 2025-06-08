@@ -1,7 +1,7 @@
 { ... }:
 {
   "$terminal" = "kitty";
-  "$fileManager" = "cosmic-files";
+  "$fileManager" = "nautilus";
   "$menu" = "walker";
   "$browser" = "zen";
 }

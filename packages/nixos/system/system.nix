@@ -6,7 +6,8 @@
     mcontrolcenter
     superfile
     toybox
-    cosmic-files
+    nautilus
+    nautilus-open-any-terminal
     lm_sensors
     p7zip
     unzip
