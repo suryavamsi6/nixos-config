@@ -35,8 +35,7 @@ in
           "$mainMod" = "SUPER";
 
           monitor = [
-            "DP-1, highres,2560x0, 1,bitdepth,10"
-            "eDP-1, highres,0x0,1"
+            "DP-1, highres,0x0, 1,bitdepth,10"
           ];
 
           env = [
@@ -142,19 +141,6 @@ in
           gestures = {
             workspace_swipe = false;
           };
-
-          workspace = [
-            "1, monitor:DP-1"
-            "2, monitor:DP-1"
-            "3, monitor:DP-1"
-            "4, monitor:DP-1"
-            "5, monitor:DP-1"
-            "6, monitor:DP-1"
-            "7, monitor:DP-1"
-            "8, monitor:DP-1"
-            "9, monitor:eDP-1, border:false"
-            "0, monitor:eDP-1, border:false"
-          ];
 
           device = {
             name = "epic-mouse-v1";

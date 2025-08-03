@@ -9,6 +9,7 @@
     heroic
     bottles
     qbittorrent
+    openrgb
   ];
 
   programs = {

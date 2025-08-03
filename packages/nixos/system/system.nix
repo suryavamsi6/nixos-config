@@ -3,7 +3,7 @@
   environment.systemPackages = with pkgs; [
     polychromatic
     pavucontrol
-    mcontrolcenter
+    openrgb
     superfile
     toybox
     nautilus
@@ -18,7 +18,6 @@
     jetbrains.idea-ultimate
     glance
     floorp
-    rpi-imager
     sbctl
     niv
   ];

@@ -94,7 +94,9 @@
 
   # Set your time zone.
   time.timeZone = "Asia/Kolkata";
-
+  nixpkgs.config.permittedInsecurePackages = [
+    "libxml2-2.13.8"
+  ];
   # Select internationalisation properties.
   i18n.defaultLocale = "en_IN";
 
