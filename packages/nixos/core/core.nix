@@ -67,6 +67,7 @@ in
     boot.loader.systemd-boot = {
       enable = true;
       configurationLimit = 1;
+      consoleMode = "max";
     };
     # boot.loader.grub = {
     #   enable = true;

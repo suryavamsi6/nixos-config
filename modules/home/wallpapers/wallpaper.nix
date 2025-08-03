@@ -15,8 +15,7 @@
   home.file.".config/wallpapers/car.png" = {
     source = ./car.png;
   };
-
-  home.file.".config/wallpapers/the_valley.png" = {
-    source = ./the_valley.png;
+  home.file.".config/wallpapers/IUBepkp.jpeg" = {
+    source = ./IUBepkp.jpeg;
   };
 }
