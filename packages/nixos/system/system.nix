@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ pkgs, inputs, ... }:
 {
   environment.systemPackages = with pkgs; [
     polychromatic
@@ -15,17 +15,17 @@
     cheese
     cameractrls-gtk4
     nodejs
-    jetbrains.idea-ultimate
     glance
     floorp
     sbctl
     niv
+    inputs.quickshell.packages."${system}".default
   ];
 
   services.upower.enable = true;
 
   hardware.openrazer.enable = false;
-
+  qt.enable = true;
   programs.nh = {
     enable = true;
     flake = "/home/$USER/Dotfiles/nixos-config";

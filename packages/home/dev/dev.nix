@@ -8,7 +8,6 @@
     htop
     nixfmt-rfc-style
     vim
-    jetbrains.webstorm
     windsurf
     nix-init
     nixd

@@ -6,6 +6,14 @@
     zen-browser = {
       url = "github:0xc000022070/zen-browser-flake";
     };
+    quickshell = {
+      # add ?ref=<tag> to track a tag
+      url = "git+https://git.outfoxxed.me/outfoxxed/quickshell";
+
+      # THIS IS IMPORTANT
+      # Mismatched system dependencies will lead to crashes and other issues.
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -55,7 +63,6 @@
               # Optionally, use home-manager.extraSpecialArgs to pass
               # arguments to home.nix
             }
-
             lanzaboote.nixosModules.lanzaboote
             (
               { pkgs, lib, ... }:

@@ -40,14 +40,15 @@
   services.samba = {
     enable = true;
     # package = pkgs.samba4Full; # Consider using samba4Full for more features if needed
-    securityType = "user"; # Each user has to authenticate with a password
+     # Each user has to authenticate with a password
 
     # Optional: Define a workgroup if needed, default is WORKGROUP
     # extraConfig = ''
     #   workgroup = YOUR_WORKGROUP
     # '';
 
-    shares = {
+    settings = {
+      global.security = "user";
       # This is a name for your share, e.g., "pibackups"
       # The Raspberry Pi will connect to this share name.
       "pibackups" = {
@@ -96,6 +97,7 @@
   time.timeZone = "Asia/Kolkata";
   nixpkgs.config.permittedInsecurePackages = [
     "libxml2-2.13.8"
+    "libsoup-2.74.3"
   ];
   # Select internationalisation properties.
   i18n.defaultLocale = "en_IN";
@@ -194,12 +196,13 @@
     # HandleSuspendKey = "ignore";
     # HandleHibernateKey = "ignore";
   };
-  hardware.opengl = {
-    package = pkgs.mesa.drivers;
+
+  hardware.graphics = {
+    package = pkgs.mesa;
 
     # if you also want 32-bit support (e.g for Steam)
-    driSupport32Bit = true;
-    package32 = pkgs.pkgsi686Linux.mesa.drivers;
+    enable32Bit = true;
+    package32 = pkgs.pkgsi686Linux.mesa;
   };
 
 }

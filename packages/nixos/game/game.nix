@@ -10,6 +10,7 @@
     bottles
     qbittorrent
     openrgb
+    mangojuice
   ];
 
   programs = {

@@ -4,9 +4,9 @@
     enable = true;
     settings = {
       preload = [
-        "~/.config/wallpapers/car.png"
+        "~/.config/wallpapers/the_valley.png"
       ];
-      wallpaper = [ ", ~/.config/wallpapers/car.png" ];
+      wallpaper = [ ", ~/.config/wallpapers/the_valley.png" ];
     };
   };
 }

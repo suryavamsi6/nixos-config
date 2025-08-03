@@ -60,7 +60,7 @@ in
     #  services.displayManager.sddm.wayland.enable = true;
 
     #  services.displayManager.sddm.enable = true;
-    services.xserver.desktopManager.gnome.enable = config.gnome.enable;
+    services.desktopManager.gnome.enable = config.gnome.enable;
 
     networking.networkmanager.enable = true;
     boot.loader.efi.canTouchEfiVariables = true;

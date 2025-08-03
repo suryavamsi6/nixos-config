@@ -35,7 +35,7 @@ in
           "$mainMod" = "SUPER";
 
           monitor = [
-            "DP-1, highres,0x0, 1,bitdepth,10"
+            "HDMI-A-2, highres,3440x1440@175, 1,bitdepth,10,cm,hdr,sdrbrightness, 1.2, sdrsaturation, 0.98"
           ];
 
           env = [
