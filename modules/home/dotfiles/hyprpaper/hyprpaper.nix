@@ -4,9 +4,9 @@
     enable = true;
     settings = {
       preload = [
-        "~/.config/wallpapers/the_valley.png"
+        "~/.config/wallpapers/IUBepkp.jpeg"
       ];
-      wallpaper = [ ", ~/.config/wallpapers/the_valley.png" ];
+      wallpaper = [ ", ~/.config/wallpapers/IUBepkp.jpeg "];
     };
   };
 }

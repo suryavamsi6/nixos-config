@@ -26,6 +26,10 @@
     hyprland.url = "github:hyprwm/Hyprland";
     hyprpanel.url = "github:Jas-SinghFSU/HyprPanel";
     hyprpanel.inputs.nixpkgs.follows = "nixpkgs";
+    hy3 = {
+      url = "github:outfoxxed/hy3";
+      inputs.hyprland.follows = "hyprland";
+    };
     ags.url = "github:aylur/ags";
     chaotic.url = "github:chaotic-cx/nyx/nyxpkgs-unstable";
   };
@@ -37,6 +41,8 @@
       home-manager,
       chaotic,
       lanzaboote,
+      hy3,
+      hyprland,
       ...
     }:
     {
@@ -60,8 +66,6 @@
                 system = "x86_64-linux";
               };
               home-manager.backupFileExtension = "bak";
-              # Optionally, use home-manager.extraSpecialArgs to pass
-              # arguments to home.nix
             }
             lanzaboote.nixosModules.lanzaboote
             (

@@ -12,7 +12,7 @@
     "$mainMod, P, pseudo,"
     "$mainMod, J, togglesplit,"
     "$mainMod SHIFT, F, fullscreen"
-
+    "$mainMod, g, hyprexpo:expo, toggle"
     "$mainMod, left, movefocus, l"
     "$mainMod, right, movefocus, r"
     "$mainMod, up, movefocus, u"

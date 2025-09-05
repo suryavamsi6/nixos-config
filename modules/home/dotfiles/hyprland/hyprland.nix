@@ -2,6 +2,7 @@
   pkgs,
   lib,
   config,
+  inputs,
   ...
 }:
 let
@@ -22,9 +23,9 @@ in
 
     wayland.windowManager.hyprland = {
       enable = true;
-      plugins = [
-        #       pkgs.hyprlandPlugins.hyprexpo
-      ];
+      extraConfig = ''
+       plugin = ${pkgs.hyprlandPlugins.hyprexpo}/lib/libhyprexpo.so
+      '';
       settings =
         autostart
         // keybind
@@ -57,7 +58,7 @@ in
 
             resize_on_border = false;
             allow_tearing = false;
-            layout = "dwindle";
+            layout = "master";
           };
 
           decoration = {
@@ -105,13 +106,15 @@ in
 
           };
 
-          dwindle = {
-            pseudotile = true;
-            preserve_split = true;
-          };
+          # dwindle = {
+          #   pseudotile = true;
+          #   preserve_split = true;
+          # };
 
           master = {
             new_status = "master";
+            orientation = "center";
+            mfact = 0.34;
           };
 
           misc = {
