@@ -5,7 +5,7 @@
   ...
 }:
 let
-  tuigreet = "${pkgs.greetd.tuigreet}/bin/tuigreet";
+  tuigreet = "${pkgs.tuigreet}/bin/tuigreet";
   baseSessionsDir = "${config.services.displayManager.sessionData.desktops}";
   xSessions = "${baseSessionsDir}/share/xsessions";
   waylandSessions = "${baseSessionsDir}/share/wayland-sessions";

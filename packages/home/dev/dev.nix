@@ -6,7 +6,7 @@
     git
     kitty
     htop
-    nixfmt-rfc-style
+    nixfmt
     vim
     antigravity
     nix-init
@@ -53,8 +53,8 @@
     })
   ];
 
-  programs.git.userName = "suryavamsi6";
-  programs.git.userEmail = "d.suryavamsi@gmail.com";
+  programs.git.settings.user.name = "suryavamsi6";
+  programs.git.settings.user.email = "d.suryavamsi@gmail.com";
 
   home.file.".config/Code/User/settings.json" = {
     text = ''

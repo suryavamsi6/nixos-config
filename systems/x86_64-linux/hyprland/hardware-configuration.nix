@@ -8,45 +8,40 @@
     [ (modulesPath + "/installer/scan/not-detected.nix")
     ];
 
-  boot.kernelParams = [ "video=3440x1440@175" ];
   boot.initrd.availableKernelModules = [ "nvme" "xhci_pci" "ahci" "usb_storage" "usbhid" "sd_mod" ];
   boot.initrd.kernelModules = [ ];
   boot.kernelModules = [ "kvm-amd" ];
   boot.extraModulePackages = [ ];
 
   fileSystems."/" =
-    { device = "/dev/disk/by-uuid/c3574133-0e99-4332-9da1-1d904b4bde18";
+    { device = "/dev/disk/by-uuid/a9bd7459-3b7f-484d-ac84-059612491c5d";
       fsType = "btrfs";
-      options = [ "subvol=root" ];
+      options = [ "subvol=@" ];
     };
 
   fileSystems."/home" =
-    { device = "/dev/disk/by-uuid/c3574133-0e99-4332-9da1-1d904b4bde18";
+    { device = "/dev/disk/by-uuid/a9bd7459-3b7f-484d-ac84-059612491c5d";
       fsType = "btrfs";
-      options = [ "subvol=home" ];
+      options = [ "subvol=@home" ];
     };
 
   fileSystems."/nix" =
-    { device = "/dev/disk/by-uuid/c3574133-0e99-4332-9da1-1d904b4bde18";
+    { device = "/dev/disk/by-uuid/a9bd7459-3b7f-484d-ac84-059612491c5d";
       fsType = "btrfs";
-      options = [ "subvol=nix" ];
+      options = [ "subvol=@nix" ];
     };
 
-  fileSystems."/boot" =
-    { device = "/dev/disk/by-uuid/12CE-A600";
-      fsType = "vfat";
-      options = [ "fmask=0022" "dmask=0022" ];
+  fileSystems."/var/log" =
+    { device = "/dev/disk/by-uuid/a9bd7459-3b7f-484d-ac84-059612491c5d";
+      fsType = "btrfs";
+      options = [ "subvol=@log" ];
     };
 
-  swapDevices = [ { device = "/swap/swapfile"; } ];
-
-  # Enables DHCP on each ethernet and wireless interface. In case of scripted networking
-  # (the default) this is the recommended approach. When using systemd-networkd it's
-  # still possible to use this option, but it's recommended to use it in conjunction
-  # with explicit per-interface declarations with `networking.interfaces.<interface>.useDHCP`.
-  networking.useDHCP = lib.mkDefault true;
-  # networking.interfaces.enp14s0.useDHCP = lib.mkDefault true;
-  # networking.interfaces.wlp15s0.useDHCP = lib.mkDefault true;
+  fileSystems."/swap" =
+    { device = "/dev/disk/by-uuid/a9bd7459-3b7f-484d-ac84-059612491c5d";
+      fsType = "btrfs";
+      options = [ "subvol=@swap" ];
+    };
 
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
   hardware.cpu.amd.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;

@@ -187,9 +187,9 @@
   services.logind = {
     # This tells systemd-logind to ignore the lid switch when the laptop is on battery or external power.
     # "ignore" means it won't trigger suspend, hibernate, or lock.
-    lidSwitch = "ignore";
-    lidSwitchExternalPower = "ignore"; # For when on AC power
-    lidSwitchDocked = "ignore"; # For when docked (if applicable)
+    settings.Login.HandleLidSwitch = "ignore";
+    settings.Login.HandleLidSwitchExternalPower = "ignore"; # For when on AC power
+    settings.Login.HandleLidSwitchDocked = "ignore"; # For when docked (if applicable)
 
     # You might also want to ignore other power-related keys if you don't want them to trigger actions
     # HandlePowerKey = "ignore";
