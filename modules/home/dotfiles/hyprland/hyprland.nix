@@ -134,26 +134,14 @@ in
             };
           };
 
-          gestures = {
-            workspace_swipe = false;
-          };
-
           device = {
             name = "epic-mouse-v1";
             sensitivity = -0.5;
           };
 
-          windowrulev2 = [
-            "suppressevent maximize, class:.*"
-            "nofocus,class:^$,title:^$,xwayland:1,floating:1,fullscreen:0,pinned:0"
+          windowrule = [
+            "suppress_event maximize"
           ];
-
-          # HDR messes up citrix displays
-          experimental = {
-            # hdr = true;
-            # wide_color_gamut = true;
-            xx_color_management_v4 = true;
-          };
 
           plugin = {
             hyprexpo = {
