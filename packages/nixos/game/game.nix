@@ -2,7 +2,7 @@
 {
   environment.systemPackages = with pkgs; [
     gamescope
-    protonup
+    protonup-ng
     mangohud
     trigger-control
     wine

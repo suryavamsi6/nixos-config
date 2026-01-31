@@ -8,7 +8,7 @@
     htop
     nixfmt-rfc-style
     vim
-    windsurf
+    antigravity
     nix-init
     nixd
     yazi

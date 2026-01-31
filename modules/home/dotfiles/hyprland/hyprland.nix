@@ -96,13 +96,6 @@ in
             # blurls = gtk-layer-shell
             # blurls = waybar
             # blurls = lockscreen
-            blurls = [
-              "gtk-layer-shell"
-              "waybar"
-              "lockscreen"
-              "walker"
-              "launcher"
-            ];
 
           };
 

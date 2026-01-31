@@ -16,7 +16,6 @@
     cameractrls-gtk4
     nodejs
     glance
-    floorp
     sbctl
     niv
     inputs.quickshell.packages."${system}".default

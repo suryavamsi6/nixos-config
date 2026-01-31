@@ -2,7 +2,7 @@
 {
   home.packages = with pkgs; [
     ntfs3g
-    citrix_workspace
+    #citrix_workspace
     zoom-us
   ];
 
