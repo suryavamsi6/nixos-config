@@ -40,7 +40,7 @@
   networking.hostName = "macbook-air";
 
   # Timezone
-  time.timeZone = "Asia/Kolkata";
+  time.timeZone = "Asia/Calcutta";
 
   # System-level packages (minimal)
   environment.systemPackages = with pkgs; [
@@ -49,8 +49,7 @@
 
   # Fonts
   fonts.packages = with pkgs; [
-    nerd-fonts.fira-code
-    nerd-fonts.caskaydia-cove
+    nerd-fonts.jetbrains-mono
   ];
 
   # Shell - enable fish system-wide

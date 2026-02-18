@@ -12,11 +12,35 @@
 
   programs.home-manager.enable = true;
 
-  # Home packages - add your packages here
+  # Fish shell with nix-darwin PATH integration
+  programs.fish = {
+    enable = true;
+    interactiveShellInit = ''
+      # Disable default greeting
+      set -g fish_greeting
+    '';
+    shellAbbrs = {
+      rebuild = "sudo darwin-rebuild switch --flake ~/Dotfiles/nixos-config#macbook-air";
+    };
+    shellInit = ''
+      # Add nix-darwin and nix profile paths
+      fish_add_path --move --path /run/current-system/sw/bin
+      fish_add_path --move --path /nix/var/nix/profiles/default/bin
+    '';
+  };
+
+  # Starship prompt
+  programs.starship = {
+    enable = true;
+    enableFishIntegration = true;
+  };
+
+  programs.nh = {
+    enable = true;
+    flake = "/Users/suryavamsi/Dotfiles/nixos-config";
+  };
+
+  # Home packages
   home.packages = with pkgs; [
-    # CLI tools
-    # git
-    # htop
-    # tmux
   ];
 }

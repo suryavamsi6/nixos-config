@@ -37,12 +37,24 @@
     trackpad = {
       Clicking = true; # Tap to click
       TrackpadRightClick = true; # Two-finger right click
-      TrackpadThreeFingerDrag = true;
+      TrackpadThreeFingerDrag = true; # Three-finger drag, workspaces move to four-finger swipe
     };
 
     # Login window
     loginwindow = {
       GuestEnabled = false;
+    };
+
+    # Three-finger drag via Accessibility (required on modern macOS)
+    CustomUserPreferences = {
+      "com.apple.AppleMultitouchTrackpad" = {
+        TrackpadThreeFingerDrag = true;
+        Dragging = true;
+      };
+      "com.apple.driver.AppleBluetoothMultitouch.trackpad" = {
+        TrackpadThreeFingerDrag = true;
+        Dragging = true;
+      };
     };
   };
 }
