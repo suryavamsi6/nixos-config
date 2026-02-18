@@ -1,6 +1,10 @@
 # NixOS-Config
 
-This repository contains my NixOS configuration files.
+This repository contains my NixOS and macOS (nix-darwin) configuration files.
+
+---
+
+## NixOS (Linux)
 
 ### Pre-Requisites
 
@@ -57,3 +61,35 @@ Make sure NixOS is already installed..
     ```bash
     sudo reboot
     ```
+
+---
+
+## macOS (nix-darwin) — MacBook M4 Air
+
+### Pre-Requisites
+
+1. **Install Nix:**
+
+    ```bash
+    curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
+    ```
+
+2. **Clone the repository:**
+
+    ```bash
+    git clone https://github.com/suryavamsi6/nixos-config.git
+    cd nixos-config
+    ```
+
+3. **First-time bootstrap** (builds and installs nix-darwin):
+
+    ```bash
+    nix run nix-darwin -- switch --flake .#macbook-air
+    ```
+
+4. **Subsequent rebuilds:**
+
+    ```bash
+    darwin-rebuild switch --flake .#macbook-air
+    ```
+

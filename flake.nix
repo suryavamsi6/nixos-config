@@ -32,6 +32,10 @@
     };
     ags.url = "github:aylur/ags";
     chaotic.url = "github:chaotic-cx/nyx/nyxpkgs-unstable";
+    nix-darwin = {
+      url = "github:LnL7/nix-darwin";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -43,6 +47,7 @@
       lanzaboote,
       hy3,
       hyprland,
+      nix-darwin,
       ...
     }:
     {
@@ -114,6 +119,30 @@
 
         };
 
+      };
+
+      darwinConfigurations = {
+        macbook-air = nix-darwin.lib.darwinSystem {
+          system = "aarch64-darwin";
+          specialArgs = {
+            inherit inputs;
+            system = "aarch64-darwin";
+          };
+          modules = [
+            ./systems/aarch64-darwin/configuration.nix
+            home-manager.darwinModules.home-manager
+            {
+              home-manager.useGlobalPkgs = true;
+              home-manager.useUserPackages = true;
+              home-manager.users.suryavamsi = import ./systems/aarch64-darwin/home.nix;
+              home-manager.extraSpecialArgs = {
+                inherit inputs;
+                system = "aarch64-darwin";
+              };
+              home-manager.backupFileExtension = "bak";
+            }
+          ];
+        };
       };
     };
 }
