@@ -40,6 +40,13 @@
     flake = "/Users/suryavamsi/Dotfiles/nixos-config";
   };
 
+  # Git
+  programs.git = {
+    enable = true;
+    userName = "Surya Vamsi";
+    userEmail = "d.suryavamsi@gmail.com";
+  };
+
   # Home packages
   home.packages = with pkgs; [
   ];
