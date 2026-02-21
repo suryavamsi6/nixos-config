@@ -3,6 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    flake-parts.url = "github:hercules-ci/flake-parts";
     zen-browser = {
       url = "github:0xc000022070/zen-browser-flake";
     };
@@ -38,111 +39,9 @@
     };
   };
 
-  outputs =
-    inputs@{
-      self,
-      nixpkgs,
-      home-manager,
-      chaotic,
-      lanzaboote,
-      hy3,
-      hyprland,
-      nix-darwin,
-      ...
-    }:
-    {
-      nixosConfigurations = {
-        nixos = nixpkgs.lib.nixosSystem {
-          system = "x86_64-linux";
-          specialArgs = {
-            inherit inputs;
-            system = "x86_64-linux";
-          };
-          modules = [
-            ./systems/x86_64-linux/hyprland/configuration.nix
-            chaotic.nixosModules.default
-            home-manager.nixosModules.home-manager
-            {
-              home-manager.useGlobalPkgs = true;
-              home-manager.useUserPackages = true;
-              home-manager.users.surya = import ./systems/x86_64-linux/hyprland/home.nix;
-              home-manager.extraSpecialArgs = {
-                inherit inputs;
-                system = "x86_64-linux";
-              };
-              home-manager.backupFileExtension = "bak";
-            }
-#            lanzaboote.nixosModules.lanzaboote
- #           (
- #             { pkgs, lib, ... }:
- #             {
-#
- #               environment.systemPackages = [
-  #                # For debugging and troubleshooting Secure Boot.
-   #               pkgs.sbctl
-    #            ];
-#
- #             # generated at installation time. So we force it to false
-    #            # for now.
-     #           boot.loader.systemd-boot.enable = lib.mkForce false;
-#
- #               boot.lanzaboote = {
-  #                enable = true;
-   #               pkiBundle = "/var/lib/sbctl";
-    #            };
-     #         }
-      #      )
-          ];
-        };
-
-        plasma = nixpkgs.lib.nixosSystem {
-          system = "x86_64-linux";
-          specialArgs = {
-            inherit inputs;
-            system = "x86_64-linux";
-          };
-          modules = [
-            ./systems/x86_64-linux/gnome/configuration.nix
-            home-manager.nixosModules.home-manager
-            {
-              home-manager.useGlobalPkgs = true;
-              home-manager.useUserPackages = true;
-              home-manager.users.surya = import ./systems/x86_64-linux/gnome/home.nix;
-              home-manager.extraSpecialArgs = {
-                inherit inputs;
-                system = "x86_64-linux";
-              };
-              home-manager.backupFileExtension = "bak";
-            }
-            { nixpkgs.overlays = [ inputs.hyprpanel.overlay ]; }
-          ];
-
-        };
-
-      };
-
-      darwinConfigurations = {
-        macbook-air = nix-darwin.lib.darwinSystem {
-          system = "aarch64-darwin";
-          specialArgs = {
-            inherit inputs;
-            system = "aarch64-darwin";
-          };
-          modules = [
-            ./systems/aarch64-darwin/configuration.nix
-            home-manager.darwinModules.home-manager
-            {
-              home-manager.useGlobalPkgs = true;
-              home-manager.useUserPackages = true;
-              home-manager.users.suryavamsi = import ./systems/aarch64-darwin/home.nix;
-              home-manager.extraSpecialArgs = {
-                inherit inputs;
-                system = "aarch64-darwin";
-              };
-              home-manager.backupFileExtension = "bak";
-            }
-          ];
-        };
-      };
+  outputs = inputs:
+    inputs.flake-parts.lib.mkFlake { inherit inputs; } {
+      systems = [ "x86_64-linux" "aarch64-darwin" ];
+      imports = [ ./modules ];
     };
 }

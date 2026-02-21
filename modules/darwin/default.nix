@@ -1,7 +1,9 @@
+# Auto-imports all darwin modules
 { ... }:
 {
   imports = [
-    ./systemModules/defaults.nix
-    ./systemModules/security.nix
+    ./defaults.nix
+    ./security.nix
+    ./homebrew.nix
   ];
 }
