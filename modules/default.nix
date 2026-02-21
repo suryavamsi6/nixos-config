@@ -16,5 +16,6 @@
     ./audio
     ./boot
     ./environment
+    ./locale
   ];
 }
