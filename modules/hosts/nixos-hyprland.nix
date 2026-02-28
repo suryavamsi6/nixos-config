@@ -42,7 +42,7 @@
           "libxml2-2.13.8"
           "libsoup-2.74.3"
         ];
-
+        services.flatpak.enable = true;
         services.logind = {
           settings.Login.HandleLidSwitch = "ignore";
           settings.Login.HandleLidSwitchExternalPower = "ignore";
@@ -80,7 +80,7 @@
           programs.home-manager.enable = true;
 
           home.packages = with inputs.nixpkgs.legacyPackages.x86_64-linux; [
-            inputs.zen-browser.packages."x86_64-linux".twilight-official
+            inputs.zen-browser.packages."x86_64-linux".twilight
           ];
         };
       }

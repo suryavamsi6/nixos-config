@@ -16,13 +16,16 @@
         p7zip
         unzip
         blueman
+        floorp-bin
         cheese
         cameractrls-gtk4
         nodejs
         glance
         sbctl
+        flatpak-builder
         niv
         inputs.quickshell.packages."${system}".default
+        elephant
       ];
 
       nix.nixPath = [ "nixpkgs=${inputs.nixpkgs}" ];

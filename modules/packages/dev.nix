@@ -20,6 +20,7 @@
         kitty-themes
         tmux
         appflowy
+        dig
         chntpw
         (vscode-with-extensions.override {
           vscodeExtensions = pkgs.vscode-utils.extensionsFromVscodeMarketplace [
