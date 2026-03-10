@@ -19,11 +19,7 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    lanzaboote = {
-      url = "github:nix-community/lanzaboote/v0.4.2";
-      # Optional but recommended to limit the size of your system closure.
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+
     hyprland.url = "github:hyprwm/Hyprland";
     hyprpanel.url = "github:Jas-SinghFSU/HyprPanel";
     hyprpanel.inputs.nixpkgs.follows = "nixpkgs";
