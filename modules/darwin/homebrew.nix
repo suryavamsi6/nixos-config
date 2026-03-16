@@ -11,10 +11,8 @@
           cleanup = "zap";
         };
         casks = [
-          # Add macOS GUI apps here, e.g.:
-          # "rectangle"
-          # "alt-tab"
-          # "firefox"
+          "1password"
+          "visual-studio-code"
         ];
       };
     };
