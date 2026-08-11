@@ -9,13 +9,15 @@
     type = lib.types.deferredModule;
     default = { ... }: {
       boot.loader.limine.enable = true;
-      boot.loader.limine.secureBoot.enable = true;
+      boot.loader.limine.secureBoot.enable = false;
       boot.loader.efi.canTouchEfiVariables = true;
       boot.loader.efi.efiSysMountPoint = "/boot";
+      # Limine 12+: UEFI Windows must use protocol `efi` (not `chainload`)
+      # and path `boot():/...` (one slash after the colon).
       boot.loader.limine.extraEntries = ''
         /Windows Boot Manager
-          protocol: chainload
-          path: boot():///EFI/Microsoft/Boot/bootmgfw.efi
+          protocol: efi
+          path: boot():/EFI/Microsoft/Boot/bootmgfw.efi
       '';
     };
   };

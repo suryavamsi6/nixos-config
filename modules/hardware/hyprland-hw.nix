@@ -26,38 +26,38 @@
 
       # Btrfs root UUID — REPLACE after install
       fileSystems."/" =
-        { device = "/dev/disk/by-uuid/a9bd7459-3b7f-484d-ac84-059612491c5d";
+        { device = "/dev/disk/by-uuid/afb75d75-0f41-42ba-93b1-63ddaa0705b0";
           fsType = "btrfs";
           options = [ "subvol=@" "compress=zstd" "noatime" ];
         };
 
       fileSystems."/home" =
-        { device = "/dev/disk/by-uuid/a9bd7459-3b7f-484d-ac84-059612491c5d";
+        { device = "/dev/disk/by-uuid/afb75d75-0f41-42ba-93b1-63ddaa0705b0";
           fsType = "btrfs";
           options = [ "subvol=@home" "compress=zstd" "noatime" ];
         };
 
       fileSystems."/nix" =
-        { device = "/dev/disk/by-uuid/a9bd7459-3b7f-484d-ac84-059612491c5d";
+        { device = "/dev/disk/by-uuid/afb75d75-0f41-42ba-93b1-63ddaa0705b0";
           fsType = "btrfs";
           options = [ "subvol=@nix" "compress=zstd" "noatime" ];
         };
 
       fileSystems."/var/log" =
-        { device = "/dev/disk/by-uuid/a9bd7459-3b7f-484d-ac84-059612491c5d";
+        { device = "/dev/disk/by-uuid/afb75d75-0f41-42ba-93b1-63ddaa0705b0";
           fsType = "btrfs";
           options = [ "subvol=@log" "compress=zstd" "noatime" ];
         };
 
       fileSystems."/swap" =
-        { device = "/dev/disk/by-uuid/a9bd7459-3b7f-484d-ac84-059612491c5d";
+        { device = "/dev/disk/by-uuid/afb75d75-0f41-42ba-93b1-63ddaa0705b0";
           fsType = "btrfs";
           options = [ "subvol=@swap" "noatime" ];
         };
 
       # Shared Windows EFI System Partition — REPLACE FAT UUID after install
       fileSystems."/boot" =
-        { device = "/dev/disk/by-uuid/XXXX-XXXX";
+        { device = "/dev/disk/by-uuid/1A4F-0EB0";
           fsType = "vfat";
           options = [ "fmask=0022" "dmask=0022" ];
         };
