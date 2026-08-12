@@ -3,7 +3,7 @@
 {
   imports = [
     ./swaync.nix
-    ./walker.nix
+    ./hyprlauncher.nix
     ./ags.nix
     ./wallpapers.nix
     ./gtk-theme.nix

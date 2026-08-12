@@ -66,7 +66,7 @@
             homeManager.hyprlock
             homeManager.hyprpaper
             homeManager.swaync
-            homeManager.walker
+            homeManager.hyprlauncher
             homeManager.ags
             homeManager.wallpapers
             homeManager.gtkTheme

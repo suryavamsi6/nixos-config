@@ -10,7 +10,7 @@
         environment.systemPackages = with pkgs; [
           libnotify
           xrdb
-          walker
+          hyprlauncher
           hyprpolkitagent
           xdg-desktop-portal-hyprland
           hyprpaper

@@ -28,7 +28,7 @@ hl.animation({ leaf = "windowsIn", enabled = true, speed = 5.2, spring = "macosI
 hl.animation({ leaf = "windowsOut", enabled = true, speed = 4.4, spring = "macosOut", style = "popin 90%" })
 hl.animation({ leaf = "windowsMove", enabled = true, speed = 5.0, spring = "macosMove" })
 
--- Layers (ags / walker / notifications) — soft sheet-style pop
+-- Layers (ags / hyprlauncher / notifications) — soft sheet-style pop
 hl.animation({ leaf = "layers", enabled = true, speed = 4.8, spring = "macosLayer", style = "popin 92%" })
 hl.animation({ leaf = "layersIn", enabled = true, speed = 4.6, spring = "macosLayer", style = "popin 92%" })
 hl.animation({ leaf = "layersOut", enabled = true, speed = 3.6, bezier = "easeOutCubic", style = "fade" })

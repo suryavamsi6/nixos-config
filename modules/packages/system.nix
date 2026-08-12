@@ -25,7 +25,6 @@
         flatpak-builder
         niv
         inputs.quickshell.packages.${pkgs.stdenv.hostPlatform.system}.default
-        elephant
       ];
 
       nix.nixPath = [ "nixpkgs=${inputs.nixpkgs}" ];

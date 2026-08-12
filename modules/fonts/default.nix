@@ -5,8 +5,10 @@
     type = lib.types.deferredModule;
     default = { pkgs, ... }: {
       fonts.packages = with pkgs; [
+        inter
         nerd-fonts.fira-code
         nerd-fonts.caskaydia-cove
+        nerd-fonts.jetbrains-mono
       ];
     };
   };

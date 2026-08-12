@@ -984,20 +984,12 @@ var LogoButton = () => {
   if (GLib2.get_os_info("ID") == "arch") {
     icon = Icons.arch;
   }
-  function openWofi() {
+  function openLauncher() {
     try {
-      const [pkillSuccess, pkillStdout, pkillStderr, pkillStatus] = GLib2.spawn_command_line_sync("pkill walker");
-      if (!pkillSuccess) {
+      const [ok, stdout, stderr, status] = GLib2.spawn_command_line_sync("hyprlauncher");
+      if (!ok) {
         throw new Error(
-          `pkill command failed with status ${pkillStatus}: ${pkillStderr}`
-        );
-      }
-      const [wofiSuccess, wofiStdout, wofiStderr, wofiStatus] = GLib2.spawn_command_line_sync(
-        "walker"
-      );
-      if (!wofiSuccess) {
-        throw new Error(
-          `tofi command failed with status ${wofiStatus}: ${wofiStderr}`
+          `hyprlauncher failed with status ${status}: ${stderr}`
         );
       }
     } catch (error) {
@@ -1007,7 +999,7 @@ var LogoButton = () => {
   return /* @__PURE__ */ jsx2(
     "button",
     {
-      onClicked: openWofi,
+      onClicked: openLauncher,
       cssClasses: ["workspace-buttons", "logo-button"],
       children: icon ? icon : /* @__PURE__ */ jsx2("image", { iconName })
     }
