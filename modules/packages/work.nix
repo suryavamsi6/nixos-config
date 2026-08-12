@@ -7,6 +7,7 @@
       home.packages = with pkgs; [
         ntfs3g
         zoom-us
+        citrix-workspace
       ];
     };
   };

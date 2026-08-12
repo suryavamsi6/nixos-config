@@ -24,7 +24,7 @@
         sbctl
         flatpak-builder
         niv
-        inputs.quickshell.packages."${system}".default
+        inputs.quickshell.packages.${pkgs.stdenv.hostPlatform.system}.default
         elephant
       ];
 
@@ -34,6 +34,14 @@
 
       hardware.openrazer.enable = false;
       qt.enable = true;
+
+      # 1Password (system module required for polkit + browser integration)
+      programs._1password.enable = true;
+      programs._1password-gui = {
+        enable = true;
+        polkitPolicyOwners = [ "surya" ];
+      };
+
       programs.nh = {
         enable = true;
         flake = "/home/$USER/Dotfiles/nixos-config";

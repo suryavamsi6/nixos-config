@@ -9,7 +9,7 @@
       {
         environment.systemPackages = with pkgs; [
           libnotify
-          xorg.xrdb
+          xrdb
           walker
           hyprpolkitagent
           xdg-desktop-portal-hyprland

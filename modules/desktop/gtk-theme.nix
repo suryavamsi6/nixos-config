@@ -4,9 +4,10 @@
   options.flake.modules.homeManager.gtkTheme = lib.mkOption {
     type = lib.types.deferredModule;
     default =
-      { pkgs, ... }:
+      { config, pkgs, ... }:
       {
         home.pointerCursor = {
+          enable = true;
           gtk.enable = true;
           package = pkgs.bibata-cursors;
           name = "Bibata-Modern-Classic";
@@ -27,6 +28,9 @@
             package = pkgs.orchis-theme;
             name = "Orchis-Dark";
           };
+
+          # Keep gtk4 theme in sync (new HM default is null since 26.05)
+          gtk4.theme = config.gtk.theme;
 
           iconTheme = {
             package = pkgs.adwaita-icon-theme;

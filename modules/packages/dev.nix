@@ -14,7 +14,7 @@
           htop
           nixfmt
           vim
-          antigravity
+          antigravity-ide
           nix-init
           nixd
           yazi
