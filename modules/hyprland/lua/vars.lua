@@ -3,8 +3,7 @@ local M = {}
 
 M.mainMod = "SUPER"
 M.terminal = "kitty"
-M.fileManager = "nautilus"
-M.menu = "hyprlauncher"
+M.fileManager = "thunar"
 M.browser = "zen-twilight"
 
 return M

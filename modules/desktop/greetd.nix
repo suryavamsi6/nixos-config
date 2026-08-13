@@ -14,7 +14,7 @@
         "--remember-session"
         "--sessions ${waylandSessions}:${xSessions}"
         "--time"
-        "--cmd Hyprland"
+        "--cmd start-hyprland"
       ];
       flags = lib.concatStringsSep " " tuigreetOptions;
     in

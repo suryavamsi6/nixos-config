@@ -47,8 +47,10 @@
 
       programs.kitty = {
         enable = true;
-        themeFile = "Catppuccin-Mocha";
         shellIntegration.enableFishIntegration = true;
+        extraConfig = ''
+          include /tmp/kitty-matugen-colors.conf
+        '';
       };
 
       programs.starship = {

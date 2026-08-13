@@ -29,6 +29,10 @@
     };
     ags.url = "github:aylur/ags";
     chaotic.url = "github:chaotic-cx/nyx/nyxpkgs-unstable";
+    serpantinum = {
+      url = "github:ilyamiro/serpantinum";
+      flake = false;
+    };
     nix-darwin = {
       url = "github:LnL7/nix-darwin";
       inputs.nixpkgs.follows = "nixpkgs";

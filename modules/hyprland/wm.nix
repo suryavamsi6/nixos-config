@@ -10,17 +10,18 @@
         environment.systemPackages = with pkgs; [
           libnotify
           xrdb
-          hyprlauncher
           hyprpolkitagent
           xdg-desktop-portal-hyprland
-          hyprpaper
+          xdg-desktop-portal-gtk
           hyprcursor
           hypridle
           hyprutils
           hyprlang
           hyprshot
           hyprland-qtutils
+          hyprshutdown
           aquamarine
+          wl-clipboard
           gst_all_1.gstreamer
           gst_all_1.gst-plugins-ugly
           gst_all_1.gst-plugins-good
@@ -36,6 +37,9 @@
           portalPackage =
             inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland;
         };
+
+        # PAM for hyprlock (HM only installs the binary)
+        programs.hyprlock.enable = true;
       };
   };
 
@@ -51,6 +55,33 @@
 
         # Polkit GUI auth prompts (sudo/pkexec from desktop apps)
         services.hyprpolkitagent.enable = true;
+
+        services.hypridle = {
+          enable = true;
+          settings = {
+            general = {
+              lock_cmd = "bash ~/.config/hypr/scripts/lock.sh";
+              before_sleep_cmd = "loginctl lock-session";
+              after_sleep_cmd = "hyprctl dispatch dpms on";
+            };
+            listener = [
+              {
+                timeout = 120;
+                on-timeout = "brightnessctl -s set 10%";
+                on-resume = "brightnessctl -r";
+              }
+              {
+                timeout = 180;
+                on-timeout = "loginctl lock-session";
+              }
+              {
+                timeout = 360;
+                on-timeout = "hyprctl dispatch dpms off";
+                on-resume = "hyprctl dispatch dpms on";
+              }
+            ];
+          };
+        };
 
         wayland.windowManager.hyprland = {
           enable = true;

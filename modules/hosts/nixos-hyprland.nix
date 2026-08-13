@@ -63,13 +63,8 @@
           imports = with config.flake.modules; [
             homeManager.shell
             homeManager.hyprland
-            homeManager.hyprlock
-            homeManager.hyprpaper
-            homeManager.swaync
-            homeManager.hyprlauncher
-            homeManager.ags
+            homeManager.serpantinum
             homeManager.wallpapers
-            homeManager.gtkTheme
             homeManager.dev
             homeManager.work
           ];

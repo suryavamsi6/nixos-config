@@ -773,7 +773,24 @@
         "nix-darwin": "nix-darwin",
         "nixpkgs": "nixpkgs_4",
         "quickshell": "quickshell",
+        "serpantinum": "serpantinum",
         "zen-browser": "zen-browser"
+      }
+    },
+    "serpantinum": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1786211157,
+        "narHash": "sha256-dnPSMHeRnIef1k05msB7gRHapYjSWMLeu/qdaFK3F9o=",
+        "owner": "ilyamiro",
+        "repo": "serpantinum",
+        "rev": "5d4451f7ab55ddaced9ba350b6dba5dd2932aeb1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ilyamiro",
+        "repo": "serpantinum",
+        "type": "github"
       }
     },
     "systems": {

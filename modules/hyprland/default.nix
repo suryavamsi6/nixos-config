@@ -3,7 +3,6 @@
 {
   imports = [
     ./wm.nix
-    ./hyprlock.nix
     ./hyprpaper.nix
   ];
 }

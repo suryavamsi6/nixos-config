@@ -3,7 +3,32 @@
 {
   options.flake.modules.nixos.system = lib.mkOption {
     type = lib.types.deferredModule;
-    default = { pkgs, inputs, ... }: {
+    default = { pkgs, inputs, ... }:
+    let
+      qsPkg = inputs.quickshell.packages.${pkgs.stdenv.hostPlatform.system}.default;
+      qtQml = pkg: "${pkg}/lib/qt-6/qml";
+      qmlPaths = pkgs.lib.concatStringsSep ":" [
+        (qtQml pkgs.kdePackages.qt5compat)
+        (qtQml pkgs.kdePackages.qtmultimedia)
+        (qtQml pkgs.kdePackages.qtwebsockets)
+        (qtQml pkgs.kdePackages.qtwebengine)
+      ];
+      # Serpantinum QML needs Qt5Compat, Multimedia, WebSockets, WebEngine
+      qsWrapped = pkgs.runCommand "quickshell-with-qml" {
+        nativeBuildInputs = [ pkgs.makeWrapper ];
+        meta.mainProgram = "qs";
+      } ''
+        mkdir -p $out/bin
+        for bin in qs quickshell; do
+          if [ -e "${qsPkg}/bin/$bin" ]; then
+            makeWrapper "${qsPkg}/bin/$bin" "$out/bin/$bin" \
+              --prefix NIXPKGS_QT6_QML_IMPORT_PATH : "${qmlPaths}" \
+              --prefix QML2_IMPORT_PATH : "${qmlPaths}"
+          fi
+        done
+      '';
+    in
+    {
       environment.systemPackages = with pkgs; [
         polychromatic
         pavucontrol
@@ -24,7 +49,7 @@
         sbctl
         flatpak-builder
         niv
-        inputs.quickshell.packages.${pkgs.stdenv.hostPlatform.system}.default
+        qsWrapped
       ];
 
       nix.nixPath = [ "nixpkgs=${inputs.nixpkgs}" ];
