@@ -31,6 +31,22 @@
         };
       };
       nixpkgs.config.allowUnfree = true;
+
+      # googlefonts/nanoemoji retagged v0.16.0; nixpkgs hash is stale and
+      # blocks jetbrains-mono -> system fonts -> Steam FHS.
+      nixpkgs.overlays = [
+        (final: prev: {
+          pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
+            (pyfinal: pyprev: {
+              nanoemoji = pyprev.nanoemoji.overrideAttrs (old: {
+                src = old.src.override {
+                  hash = "sha256-FysyKC01XBnRiur5RR9fcsTxQqE8x0JJHSoe3q6JtKc=";
+                };
+              });
+            })
+          ];
+        })
+      ];
     };
   };
 

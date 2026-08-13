@@ -47,8 +47,6 @@
         nodejs
         glance
         sbctl
-        flatpak-builder
-        niv
         qsWrapped
       ];
 

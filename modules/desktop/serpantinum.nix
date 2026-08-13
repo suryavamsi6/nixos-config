@@ -72,10 +72,219 @@
           wait
         '';
 
+        patchTopBar = pkgs.writeText "patch-serpantinum-topbar.py" ''
+          from pathlib import Path
+          import sys
+
+          p = Path(sys.argv[1])
+          t = p.read_text()
+
+          replacements = [
+              (
+                  'opacity: barWindow.showEthernet ? (barWindow.ethStatus === "Connected" ? 1.0 : 0.0) : (barWindow.isWifiOn ? 1.0 : 0.0)',
+                  'opacity: barWindow.isWifiOn ? 1.0 : 0.0',
+              ),
+              (
+                  'text: barWindow.showEthernet ? "󰈀" : barWindow.wifiIcon;',
+                  'text: barWindow.wifiIcon;',
+              ),
+              (
+                  'color: barWindow.showEthernet ? (barWindow.ethStatus === "Connected" ? mocha.base : mocha.subtext0) : (barWindow.isWifiOn ? mocha.base : mocha.subtext0)',
+                  'color: barWindow.isWifiOn ? mocha.base : mocha.subtext0',
+              ),
+              (
+                  'text: barWindow.showEthernet ? barWindow.ethStatus : ((barWindow.isWifiOn ? (barWindow.wifiSsid !== "" ? barWindow.wifiSsid : "On") : "Off"))',
+                  'text: barWindow.isWifiOn ? ((barWindow.wifiSsid !== "" && barWindow.wifiSsid !== "Ethernet") ? barWindow.wifiSsid : "On") : "Off"',
+              ),
+              (
+                  'color: barWindow.showEthernet ? (barWindow.ethStatus === "Connected" ? mocha.base : mocha.text) : (barWindow.isWifiOn ? mocha.base : mocha.text);',
+                  'color: barWindow.isWifiOn ? mocha.base : mocha.text;',
+              ),
+              (
+                  'property real targetWidth: barWindow.isDesktop ? 0 : btLayoutRow.implicitWidth + barWindow.s(24)',
+                  'property real targetWidth: btLayoutRow.implicitWidth + barWindow.s(24)',
+              ),
+          ]
+          for old, new in replacements:
+              if old not in t:
+                  raise SystemExit(f"TopBar patch missing string:\n{old}")
+              t = t.replace(old, new, 1)
+
+          import re
+          bt_pat = r'text: barWindow\.btDevice\n\s+visible: text !== "";[ ]*'
+          bt_new = 'text: !barWindow.isBtOn ? "Off" : ((barWindow.btDevice !== "" && barWindow.btDevice !== "Disconnected" && barWindow.btDevice !== "Off") ? barWindow.btDevice : "On")\n                                        visible: true;'
+          t, n = re.subn(bt_pat, bt_new, t, count=1)
+          if n != 1:
+              raise SystemExit("TopBar patch missing bluetooth label")
+
+          eth = """                            Rectangle {
+                                id: ethPill
+                                property bool isHovered: ethMouse.containsMouse
+                                radius: barWindow.s(10); height: sysLayout.pillHeight;
+                                color: isHovered ? Qt.rgba(mocha.surface1.r, mocha.surface1.g, mocha.surface1.b, 0.6) : Qt.rgba(mocha.surface0.r, mocha.surface0.g, mocha.surface0.b, 0.4)
+                                clip: true
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: barWindow.s(10)
+                                    opacity: barWindow.ethStatus === "Connected" ? 1.0 : 0.0
+                                    Behavior on opacity { NumberAnimation { duration: 300 } }
+                                    gradient: Gradient {
+                                        orientation: Gradient.Horizontal
+                                        GradientStop { position: 0.0; color: mocha.blue }
+                                        GradientStop { position: 1.0; color: Qt.lighter(mocha.blue, 1.3) }
+                                    }
+                                }
+                                property real targetWidth: ethLayoutRow.implicitWidth + barWindow.s(24)
+                                width: targetWidth
+                                Behavior on width { NumberAnimation { duration: 500; easing.type: Easing.OutQuint } }
+                                scale: isHovered ? 1.05 : 1.0
+                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutExpo } }
+                                Behavior on color { ColorAnimation { duration: 200 } }
+                                property bool initAnimTrigger: false
+                                Timer { running: rightContent.showLayout && !parent.initAnimTrigger; interval: 40; onTriggered: parent.initAnimTrigger = true }
+                                opacity: initAnimTrigger ? 1 : 0
+                                transform: Translate { y: parent.initAnimTrigger ? 0 : barWindow.s(15); Behavior on y { NumberAnimation { duration: 500; easing.type: Easing.OutBack } } }
+                                Behavior on opacity { NumberAnimation { duration: 400; easing.type: Easing.OutCubic } }
+                                Row {
+                                    id: ethLayoutRow
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: barWindow.s(12)
+                                    spacing: barWindow.s(8)
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "󰈀"
+                                        font.family: "Iosevka Nerd Font"; font.pixelSize: barWindow.s(16)
+                                        color: barWindow.ethStatus === "Connected" ? mocha.base : mocha.subtext0
+                                    }
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: barWindow.ethStatus === "Connected" ? "Eth" : "Off"
+                                        font.family: "JetBrains Mono"; font.pixelSize: barWindow.s(13); font.weight: Font.Black
+                                        color: barWindow.ethStatus === "Connected" ? mocha.base : mocha.text
+                                    }
+                                }
+                                MouseArea { id: ethMouse; hoverEnabled: true; anchors.fill: parent; onClicked: Quickshell.execDetached(["bash", "-c", "~/.config/hypr/scripts/qs_manager.sh toggle network eth"]) }
+                            }
+
+          """
+          marker = "                            Rectangle {\n                                id: wifiPill"
+          if marker not in t:
+              raise SystemExit("TopBar patch missing wifiPill marker")
+          t = t.replace(marker, eth + marker, 1)
+          p.write_text(t)
+        '';
+
+        # Upstream only scans /usr and ~/.nix-profile. Home Manager with
+        # useUserPackages puts .desktop files in /etc/profiles/per-user/$USER.
+        appFetcher = pkgs.writeText "app_fetcher.py" ''
+          #!/usr/bin/env python3
+          import glob
+          import json
+          import os
+
+          def add_dir(dirs, seen, path):
+              if not path:
+                  return
+              key = os.path.normpath(path)
+              if key in seen:
+                  return
+              seen.add(key)
+              dirs.append(path)
+
+          def desktop_dirs():
+              dirs = []
+              seen = set()
+              home = os.path.expanduser("~")
+              user = os.environ.get("USER") or os.path.basename(home)
+
+              data_home = os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local/share")
+              add_dir(dirs, seen, os.path.join(data_home, "applications"))
+
+              data_dirs = os.environ.get("XDG_DATA_DIRS", "")
+              if data_dirs:
+                  for part in data_dirs.split(":"):
+                      if part:
+                          add_dir(dirs, seen, os.path.join(part, "applications"))
+
+              for extra in (
+                  os.path.join(home, ".nix-profile/share/applications"),
+                  "/etc/profiles/per-user/" + user + "/share/applications",
+                  "/run/current-system/sw/share/applications",
+                  "/var/lib/flatpak/exports/share/applications",
+                  os.path.join(home, ".local/share/flatpak/exports/share/applications"),
+                  "/var/lib/snapd/desktop/applications",
+              ):
+                  add_dir(dirs, seen, extra)
+              return dirs
+
+          def parse_desktop(path):
+              app = {"name": "", "exec": "", "icon": ""}
+              in_entry = False
+              no_display = False
+              hidden = False
+              entry_type = "Application"
+
+              with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                  for raw in fh:
+                      line = raw.strip()
+                      if line == "[Desktop Entry]":
+                          in_entry = True
+                          continue
+                      if line.startswith("[") and line.endswith("]"):
+                          in_entry = False
+                          continue
+                      if not in_entry or "=" not in line:
+                          continue
+                      key, value = line.split("=", 1)
+                      if key == "Name" and not app["name"]:
+                          app["name"] = value
+                      elif key == "Exec" and not app["exec"]:
+                          app["exec"] = value.split(" %")[0].split(" @@")[0].strip()
+                      elif key == "Icon" and not app["icon"]:
+                          app["icon"] = value
+                      elif key == "Type":
+                          entry_type = value
+                      elif key == "NoDisplay" and value.lower() in ("true", "1"):
+                          no_display = True
+                      elif key == "Hidden" and value.lower() in ("true", "1"):
+                          hidden = True
+
+              if no_display or hidden or entry_type != "Application":
+                  return None
+              if not app["name"] or not app["exec"]:
+                  return None
+              return app
+
+          def fetch_apps():
+              apps = {}
+              for d in desktop_dirs():
+                  if not os.path.isdir(d):
+                      continue
+                  for f in glob.glob(os.path.join(d, "**/*.desktop"), recursive=True):
+                      desktop_id = os.path.basename(f)
+                      if desktop_id in apps:
+                          continue
+                      try:
+                          app = parse_desktop(f)
+                      except OSError:
+                          continue
+                      if app:
+                          apps[desktop_id] = app
+
+              res = list(apps.values())
+              res.sort(key=lambda x: x["name"].lower())
+              print(json.dumps(res))
+
+          if __name__ == "__main__":
+              fetch_apps()
+        '';
+
         hyprScripts = pkgs.runCommand "serpantinum-hypr-scripts" { } ''
           mkdir -p $out
           cp -a ${dots}/config/sessions/hyprland/scripts/. $out/
           chmod -R u+w $out
+          cp ${appFetcher} $out/quickshell/applauncher/app_fetcher.py
 
           find $out -type f \( -name '*.sh' -o -name '*.py' -o -name '*.qml' -o -name '*.js' \) -print0 \
             | xargs -0 sed -i \
@@ -122,15 +331,11 @@ if [ ! -f "$ENV_FILE" ]; then
     ENV_FILE="$(dirname "$0")/.env"
 fi'
 
-          substituteInPlace $out/quickshell/calendar/weather.sh \
-            --replace-fail 'if [ -f "$ENV_FILE" ]; then
-    export $(grep -v '\''^#'\'' "$ENV_FILE" | xargs)
-fi' \
-                           'if [ -f "$ENV_FILE" ] && grep -qE '\''^[[:space:]]*OPENWEATHER_'\'' "$ENV_FILE"; then
-    set -a
-    source "$ENV_FILE" >/dev/null
-    set +a
-fi'
+          # Avoid embedding quote-hash patterns that terminate Nix indented strings.
+          sed -i \
+            -e 's!if \[ -f "$ENV_FILE" \]; then!if [ -f "$ENV_FILE" ] \&\& grep -qE "^[[:space:]]*OPENWEATHER_" "$ENV_FILE"; then!' \
+            -e 's!export $(grep -v .^#. "$ENV_FILE" | xargs)!set -a; source "$ENV_FILE" >/dev/null; set +a!' \
+            $out/quickshell/calendar/weather.sh
 
           substituteInPlace $out/quickshell/TopBar.qml \
             --replace-fail 'echo "$(~/.config/hypr/scripts/quickshell/calendar/weather.sh --current-icon)"
@@ -156,6 +361,30 @@ fi'
                 touch "$json_file"
                 get_data &
             fi'
+
+          substituteInPlace $out/quickshell/watchers/network_fetch.sh \
+            --replace-fail '    # Scenario 1: Ethernet is actively providing internet
+    if [ "$iface_type" = "ethernet" ]; then
+        status="enabled"
+        ssid="Ethernet"
+        icon="󰈀"
+        eth_status="Connected"
+        
+    # Scenario 2: Wi-Fi is actively providing internet
+    elif [ "$iface_type" = "wifi" ]; then' \
+                           '    if [ "$iface_type" = "ethernet" ]; then
+        eth_status="Connected"
+    fi
+
+    # Wi-Fi is reported independently so the bar can show both pills.
+    if [ "$iface_type" = "wifi" ]; then'
+
+          ${pkgs.python3}/bin/python3 ${patchTopBar} $out/quickshell/TopBar.qml
+
+          substituteInPlace $out/quickshell/settings/SettingsPopup.qml \
+            --replace-fail 'Workspaces (SUPER + 1-9)' 'Workspaces (SUPER + 1-0, SHIFT moves)' \
+            --replace-fail 'model: 9' 'model: 10' \
+            --replace-fail 'property int wsNum: index + 1' 'property int wsNum: index === 9 ? 0 : index + 1'
 
           cp ${matugenReload} $out/quickshell/wallpaper/matugen_reload.sh
 
@@ -249,7 +478,74 @@ fi'
 
         gtkCssImport = ''@import url("file://${config.home.homeDirectory}/.cache/matugen/colors-gtk.css");'';
 
-        seedSettings = builtins.toJSON { uiScale = 1.0; };
+        mkBind = mods: key: dispatcher: command: {
+          type = "bind";
+          inherit mods key dispatcher command;
+        };
+
+        keybindsForSettings =
+          [
+            (mkBind "SUPER" "SPACE" "exec" "toggle applauncher")
+            (mkBind "SUPER" "R" "exec" "toggle settings")
+            (mkBind "SUPER" "Q" "exec" "kitty")
+            (mkBind "SUPER" "RETURN" "exec" "kitty")
+            (mkBind "SUPER" "E" "exec" "thunar")
+            (mkBind "SUPER" "B" "exec" "zen-twilight")
+            (mkBind "SUPER" "P" "exec" "hyprpicker -a")
+            (mkBind "SUPER" "X" "killactive" "close window")
+            (mkBind "SUPER" "C" "killactive" "close window")
+            (mkBind "SUPER" "F" "togglefloating" "")
+            (mkBind "SUPER + ALT" "F" "exec" "float 900x600 centered")
+            (mkBind "SUPER" "M" "fullscreen" "")
+            (mkBind "SUPER" "DOWN" "layout" "togglesplit")
+            (mkBind "SUPER" "UP" "layout" "togglesplit")
+            (mkBind "SUPER" "G" "togglegroup" "")
+            (mkBind "SUPER" "L" "exec" "float 1440x1080")
+            (mkBind "SUPER + CTRL" "left" "changegroupactive" "prev")
+            (mkBind "SUPER + CTRL" "right" "changegroupactive" "next")
+            (mkBind "SUPER + ALT" "F4" "exit" "")
+            (mkBind "ALT" "F4" "killactive" "close window")
+            (mkBind "SUPER" "left" "movefocus" "l")
+            (mkBind "SUPER" "right" "movefocus" "r")
+            (mkBind "SUPER + SHIFT" "up" "movefocus" "u")
+            (mkBind "SUPER + SHIFT" "down" "movefocus" "d")
+            (mkBind "SUPER + SHIFT" "left" "swapwindow" "l")
+            (mkBind "SUPER + SHIFT" "right" "swapwindow" "r")
+            (mkBind "SUPER" "H" "togglespecialworkspace" "magic")
+            (mkBind "SUPER + SHIFT" "H" "movetoworkspace" "special:magic")
+          ]
+          ++ lib.concatMap (
+            i:
+            let
+              key = toString (lib.mod i 10);
+            in
+            [
+              (mkBind "SUPER" key "workspace" (toString i))
+              (mkBind "SUPER + SHIFT" key "movetoworkspace" (toString i))
+            ]
+          ) (lib.range 1 10)
+          ++ [
+            (mkBind "SUPER + SHIFT" "S" "exec" "hyprshot region snip")
+            (mkBind "" "Print" "exec" "screenshot overlay")
+            (mkBind "SUPER" "Print" "exec" "screenshot full")
+            (mkBind "SUPER + SHIFT" "Print" "exec" "screenshot full + edit")
+            (mkBind "SUPER" "O" "exec" "screenshot edit")
+            (mkBind "SUPER + SHIFT" "L" "exec" "lock")
+            (mkBind "SUPER" "D" "exec" "toggle clipboard")
+            (mkBind "SUPER" "W" "exec" "toggle wallpaper")
+            (mkBind "SUPER" "N" "exec" "toggle network")
+            (mkBind "SUPER" "V" "exec" "toggle volume")
+            (mkBind "SUPER" "S" "exec" "toggle calendar")
+            (mkBind "SUPER + SHIFT" "T" "exec" "toggle focustime")
+            (mkBind "SUPER" "F1" "exec" "toggle-laptop.sh")
+            (mkBind "SUPER" "F2" "exec" "toggle-monitor.sh")
+          ];
+
+        seedSettings = builtins.toJSON {
+          uiScale = 1.0;
+          keybinds = keybindsForSettings;
+        };
+        keybindsJson = builtins.toJSON keybindsForSettings;
 
         seedMatugen = pkgs.writeShellScript "serpantinum-seed-matugen" ''
           set -euo pipefail
@@ -466,6 +762,10 @@ fi'
           }
 
           seed_if_needed "$HOME/.config/hypr/settings.json" ${lib.escapeShellArg seedSettings}
+          ${pkgs.jq}/bin/jq --argjson kb ${lib.escapeShellArg keybindsJson} \
+            '.keybinds = $kb' "$HOME/.config/hypr/settings.json" > "$HOME/.config/hypr/settings.json.tmp" \
+            && mv "$HOME/.config/hypr/settings.json.tmp" "$HOME/.config/hypr/settings.json"
+          chmod u+w "$HOME/.config/hypr/settings.json"
           seed_if_needed "$HOME/.config/hypr/colors.lua" ${lib.escapeShellArg ''
             return {
               active_border = "rgba(89b4faee)",

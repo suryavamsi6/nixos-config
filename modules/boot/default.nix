@@ -10,17 +10,18 @@
     default = { ... }: {
       boot.loader.limine.enable = true;
       boot.loader.limine.secureBoot.enable = false;
-      boot.loader.limine.maxGenerations = 5;
+      # Kernels live on the 2G NixOS ESP (nvme1n1p2, label NIXBOOT), not the
+      # 100M Windows ESP. ~43M per generation.
+      boot.loader.limine.maxGenerations = 10;
       boot.loader.efi.canTouchEfiVariables = true;
       boot.loader.efi.efiSysMountPoint = "/boot";
 
-      # Windows after NixOS gens (extraEntries appends). NixOS stays default.
-      # Limine 12+: UEFI Windows must use protocol `efi` (not `chainload`)
-      # and path `boot():/...` (one slash after the colon).
+      # Windows ESP is a different partition; boot(): would point at NIXBOOT.
+      # Limine 12+: protocol `efi` and guid(PARTUUID):/path (one slash after :).
       boot.loader.limine.extraEntries = ''
         /Windows 11
           protocol: efi
-          path: boot():/EFI/Microsoft/Boot/bootmgfw.efi
+          path: guid(e60abccf-1a4b-4973-a37c-e20b992a9bc3):/EFI/Microsoft/Boot/bootmgfw.efi
       '';
     };
   };

@@ -8,7 +8,8 @@
 #   nixos-generate-config --root /mnt --show-hardware-config
 #
 # Expected layout (matches this module):
-#   - shared Windows EFI (vfat) mounted at /boot
+#   - NixOS ESP (vfat, label NIXBOOT) at /boot on nvme1n1
+#   - Windows ESP left on nvme0n1p1; Limine chainloads it by GPT GUID
 #   - one btrfs partition with subvols: @ @home @nix @log @swap
 { lib, ... }:
 {
@@ -55,11 +56,14 @@
           options = [ "subvol=@swap" "noatime" ];
         };
 
-      # Shared Windows EFI System Partition — REPLACE FAT UUID after install
+      # NixOS EFI System Partition (2G on the Samsung SSD). Created by
+      # shrinking the btrfs partition from the end; do not reuse the 100M
+      # Windows ESP — Limine copies kernels here.
       fileSystems."/boot" =
-        { device = "/dev/disk/by-uuid/1A4F-0EB0";
+        { device = "/dev/disk/by-label/NIXBOOT";
           fsType = "vfat";
           options = [ "fmask=0022" "dmask=0022" ];
+          neededForBoot = true;
         };
 
       # Create the swapfile on the @swap subvolume during install (see README)

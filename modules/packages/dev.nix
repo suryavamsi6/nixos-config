@@ -21,7 +21,6 @@
           treefmt
           kitty-themes
           tmux
-          appflowy
           dig
           code-cursor
           chntpw

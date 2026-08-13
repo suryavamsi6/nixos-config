@@ -67,7 +67,8 @@ hl.config({
   },
 
   misc = {
-    vrr = 1,
+    -- 2 = fullscreen only. Always-on VRR (1) flickers OLEDs on a static desktop.
+    vrr = 2,
     disable_hyprland_logo = true,
     disable_splash_rendering = true,
     force_default_wallpaper = 0,
