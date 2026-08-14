@@ -93,3 +93,11 @@ hl.window_rule({
   opacity = "1.0 1.0",
   rounding = 0,
 })
+
+-- Zoom VDI plugin Settings is a local Qt window; pin it above fullscreen wfica.
+hl.window_rule({
+  match = { class = "^(zoom|Zoom)$" },
+  float = true,
+  center = true,
+  pin = true,
+})

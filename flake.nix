@@ -37,6 +37,10 @@
       url = "github:LnL7/nix-darwin";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    gcb200-linux = {
+      url = "github:suryavamsi6/gcb200-linux";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = inputs:

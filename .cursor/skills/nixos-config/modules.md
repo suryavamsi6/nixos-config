@@ -19,10 +19,11 @@ Each leaf file **declares** `options.flake.modules.*`. Hosts **select** which to
 |---|---|
 | Packages (system) | `modules/packages/system.nix` |
 | Packages (dev / HM) | `modules/packages/dev.nix` |
-| Citrix / Zoom | `modules/packages/work.nix` |
+| Citrix / Zoom / Zoom VDI plugin | `modules/packages/work.nix`, `zoomvdi-universal-plugin.nix` |
 | PipeWire, BlueZ, BT udev | `modules/audio/default.nix` |
 | Limine, Windows chainload | `modules/boot/default.nix` |
 | NVIDIA | `modules/hardware/nvidia.nix` |
+| GCB200 GPU-bracket LCD | `modules/hardware/gcb200.nix` (flake `github:suryavamsi6/gcb200-linux`) |
 | Disks, kernel modules, r8125 | `modules/hardware/hyprland-hw.nix` |
 | NetworkManager / samba | `modules/networking/default.nix` |
 | Fonts | `modules/fonts/default.nix` |
@@ -34,4 +35,4 @@ Each leaf file **declares** `options.flake.modules.*`. Hosts **select** which to
 
 ## `#nixos` NixOS imports (do not assume others)
 
-`hardwareHyprland`, `nvidia`, `boot`, `nixSettings`, `users`, `networking`, `samba`, `environment`, `shell`, `fonts`, `audio`, `greetd`, `hyprland`, `gaming`, `social`, `system`, chaotic, `locale`.
+`hardwareHyprland`, `nvidia`, `gcb200`, `boot`, `nixSettings`, `users`, `networking`, `samba`, `environment`, `shell`, `fonts`, `audio`, `greetd`, `hyprland`, `gaming`, `social`, `system`, chaotic, `locale`.

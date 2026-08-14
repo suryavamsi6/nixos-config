@@ -72,6 +72,8 @@ MediaTek USB BT `0e8d:0616` (`btusb`). Paired: Sennheiser ACCENTUM Plus, MCHOSE 
 `modules/packages/work.nix`: wrap with `GDK_BACKEND=x11` (NVIDIA WebKit crash on Wayland).
 `RememberUsername=true` via `overrideAttrs` on `AuthManConfig.xml`. **Never** store the MS username or password in the flake. Leave `SavePasswordMode` alone. Rebuild of this package is slow.
 
+Zoom-inside-Citrix uses `zoomvdi-universal-plugin` 6.6.11 (must match VDI Zoom). `libZoomPlugin.so` is registered as Citrix `ZoomMedia.so`. Citrix execs the sibling `$plugin/zoom` inheriting wfica's `LD_LIBRARY_PATH` (no `libz`); that file must be a `makeWrapper` that `--set`s plugin+Qt+Nix libs. Also symlink Nix `.so`s into the plugin dir and `L+ /usr/lib/zoomvdi-universal-plugin`. Do not `buildFHSEnv` the helper. After a Citrix wrap change, `pkill icasessionmgr`. Do not bump the plugin past the VDI client version.
+
 ## Boot / disks
 
 - NixOS on `nvme1n1` (btrfs `@ @home @nix @log @swap`). Windows 11 on `nvme0n1`.

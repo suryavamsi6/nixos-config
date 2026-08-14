@@ -8,6 +8,7 @@
       # Hardware
       nixos.hardwareHyprland
       nixos.nvidia
+      nixos.gcb200
 
       # Core system
       nixos.boot
@@ -28,6 +29,7 @@
       nixos.gaming
       nixos.social
       nixos.system
+      nixos.work
 
       # External modules
       inputs.chaotic.nixosModules.default

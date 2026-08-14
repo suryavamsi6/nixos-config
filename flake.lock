@@ -160,6 +160,26 @@
         "type": "github"
       }
     },
+    "gcb200-linux": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1786730588,
+        "narHash": "sha256-btpQVSzbtNmlkcvCLpmM3PZoDaYHSEPkKQ2hNy4ixas=",
+        "owner": "suryavamsi6",
+        "repo": "gcb200-linux",
+        "rev": "e59e5a8fc1087d7d985dc2341bd0e0257f3f72ea",
+        "type": "github"
+      },
+      "original": {
+        "owner": "suryavamsi6",
+        "repo": "gcb200-linux",
+        "type": "github"
+      }
+    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -766,6 +786,7 @@
         "ags": "ags",
         "chaotic": "chaotic",
         "flake-parts": "flake-parts",
+        "gcb200-linux": "gcb200-linux",
         "home-manager": "home-manager_2",
         "hy3": "hy3",
         "hyprland": "hyprland",

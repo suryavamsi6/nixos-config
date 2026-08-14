@@ -1,24 +1,73 @@
-# Work tools (home-manager)
+# Work tools (Citrix + Zoom VDI plugin)
 { lib, ... }:
+let
+  zoomvdiFor = pkgs: pkgs.callPackage ./zoomvdi-universal-plugin.nix { };
+
+  citrixFor =
+    pkgs:
+    let
+      zoomvdi = zoomvdiFor pkgs;
+    in
+    pkgs.citrix-workspace.overrideAttrs (old: {
+      postFixup = (old.postFixup or "") + ''
+        xml="$out/opt/citrix-icaclient/config/AuthManConfig.xml"
+        if [ -f "$xml" ] && ! grep -q '<key>RememberUsername</key>' "$xml"; then
+          chmod u+w "$xml"
+          sed -i '/<\/dict>/i\
+	<key>RememberUsername</key>\
+	<value>true</value>' "$xml"
+        fi
+
+        ica="$out/opt/citrix-icaclient"
+        ln -sf ${zoomvdi.pluginLib} "$ica/ZoomMedia.so"
+        for f in "$ica/config/module.ini" "$ica/nls/"*/module.ini; do
+          [ -f "$f" ] || continue
+          grep -q 'DriverName=ZoomMedia.so' "$f" && continue
+          chmod u+w "$f"
+          sed -i \
+            -e 's/^VirtualDriver = .*/&, ZoomMedia/' \
+            -e '/^VDSCAN *= *On/a ZoomMedia=On' \
+            "$f"
+          printf '\n[ZoomMedia]\nDriverName=ZoomMedia.so\n' >> "$f"
+        done
+
+        # icasessionmgr execs $ICAROOT/wfica, not PATH. Keep it on this tree.
+        if [ -x "$ica/icasessionmgr" ]; then
+          wrapProgram "$ica/icasessionmgr" \
+            --set ICAROOT "$ica" \
+            --set-default GDK_BACKEND x11 \
+            --set-default EGL_PLATFORM x11 \
+            --set-default QT_QPA_PLATFORM xcb
+        fi
+      '';
+    });
+in
 {
+  options.flake.modules.nixos.work = lib.mkOption {
+    type = lib.types.deferredModule;
+    default =
+      { pkgs, ... }:
+      let
+        zoomvdi = zoomvdiFor pkgs;
+        citrix = citrixFor pkgs;
+      in
+      {
+        environment.etc."zoomvdi/ZoomMedia.ini".source = "${zoomvdi}/etc/zoomvdi/ZoomMedia.ini";
+        environment.etc."zoomvdi/citrix/ZoomMedia.ini".source = "${zoomvdi}/etc/zoomvdi/citrix/ZoomMedia.ini";
+        # Plugin probes `/opt/Citrix/ICAClient/wfica -version` (hardcoded).
+        systemd.tmpfiles.rules = [
+          "L+ /opt/Citrix/ICAClient - - - - ${citrix}/opt/citrix-icaclient"
+          "L+ /usr/lib/zoomvdi-universal-plugin - - - - ${zoomvdi}/lib/zoomvdi-universal-plugin"
+        ];
+      };
+  };
+
   options.flake.modules.homeManager.work = lib.mkOption {
     type = lib.types.deferredModule;
     default =
       { pkgs, ... }:
       let
-        # Linux CWA defaults RememberUsername=false (Windows defaults to true).
-        # AuthManager then refuses to prefill the gateway login form.
-        citrix = pkgs.citrix-workspace.overrideAttrs (old: {
-          postFixup = (old.postFixup or "") + ''
-            xml="$out/opt/citrix-icaclient/config/AuthManConfig.xml"
-            if [ -f "$xml" ] && ! grep -q '<key>RememberUsername</key>' "$xml"; then
-              chmod u+w "$xml"
-              sed -i '/<\/dict>/i\
-	<key>RememberUsername</key>\
-	<value>true</value>' "$xml"
-            fi
-          '';
-        });
+        citrix = citrixFor pkgs;
         # WebKitGTK login (selfservice) segfaults when GDK prefers Wayland on NVIDIA.
         citrixX11 = pkgs.symlinkJoin {
           name = "citrix-workspace-x11";

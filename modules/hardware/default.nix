@@ -5,5 +5,6 @@
     ./nvidia.nix
     ./hyprland-hw.nix
     ./gnome-hw.nix
+    ./gcb200.nix
   ];
 }
