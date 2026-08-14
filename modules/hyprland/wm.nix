@@ -47,7 +47,7 @@
   options.flake.modules.homeManager.hyprland = lib.mkOption {
     type = lib.types.deferredModule;
     default =
-      { ... }:
+      { pkgs, ... }:
       {
         imports = [
           ./script.nix
@@ -62,13 +62,13 @@
             general = {
               lock_cmd = "bash ~/.config/hypr/scripts/lock.sh";
               before_sleep_cmd = "loginctl lock-session";
-              after_sleep_cmd = "hyprctl dispatch dpms on";
+              after_sleep_cmd = "hyprctl dispatch 'hl.dsp.dpms(\"on\")'";
             };
             listener = [
               {
                 timeout = 120;
-                on-timeout = "brightnessctl -s set 10%";
-                on-resume = "brightnessctl -r";
+                on-timeout = "${lib.getExe pkgs.brightnessctl} -s set 10%";
+                on-resume = "${lib.getExe pkgs.brightnessctl} -r";
               }
               {
                 timeout = 180;
@@ -76,8 +76,8 @@
               }
               {
                 timeout = 360;
-                on-timeout = "hyprctl dispatch dpms off";
-                on-resume = "hyprctl dispatch dpms on";
+                on-timeout = "hyprctl dispatch 'hl.dsp.dpms(\"off\")'";
+                on-resume = "hyprctl dispatch 'hl.dsp.dpms(\"on\")'";
               }
             ];
           };

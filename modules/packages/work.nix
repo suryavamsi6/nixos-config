@@ -6,7 +6,19 @@
     default =
       { pkgs, ... }:
       let
-        citrix = pkgs.citrix-workspace;
+        # Linux CWA defaults RememberUsername=false (Windows defaults to true).
+        # AuthManager then refuses to prefill the gateway login form.
+        citrix = pkgs.citrix-workspace.overrideAttrs (old: {
+          postFixup = (old.postFixup or "") + ''
+            xml="$out/opt/citrix-icaclient/config/AuthManConfig.xml"
+            if [ -f "$xml" ] && ! grep -q '<key>RememberUsername</key>' "$xml"; then
+              chmod u+w "$xml"
+              sed -i '/<\/dict>/i\
+	<key>RememberUsername</key>\
+	<value>true</value>' "$xml"
+            fi
+          '';
+        });
         # WebKitGTK login (selfservice) segfaults when GDK prefers Wayland on NVIDIA.
         citrixX11 = pkgs.symlinkJoin {
           name = "citrix-workspace-x11";

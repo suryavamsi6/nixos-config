@@ -53,6 +53,7 @@
       nix.nixPath = [ "nixpkgs=${inputs.nixpkgs}" ];
 
       services.upower.enable = true;
+      services.blueman.enable = true;
 
       hardware.openrazer.enable = false;
       qt.enable = true;

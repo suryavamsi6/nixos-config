@@ -1,0 +1,14 @@
+---
+description: Hard constraints for this NixOS flake (rebuild, git, BT, secrets)
+alwaysApply: true
+---
+
+# nixos-config
+
+- Target `#nixos` (user `surya`) unless asked. Rebuild command is `nh os switch` from this repo — do not run it or reboot unless asked.
+- Do not commit unless asked. Do not write git config.
+- Never store MS/Citrix usernames, passwords, Wi-Fi PSKs, or API keys in the flake.
+- Do not spawn `bluetoothctl` from Serpantinum/bar scripts. Keep Bluetooth A2DP-only (no HFP autoswitch).
+- Hyprland is Lua (`modules/hyprland/lua/`). Serpantinum is patched in `modules/desktop/serpantinum.nix`, not forked.
+- New modules must be declared as `flake.modules.*` **and** imported from the host file. Defining a file is not enough.
+- Read `.cursor/skills/nixos-config/SKILL.md` when editing Nix, Hyprland, audio, boot, or the bar.

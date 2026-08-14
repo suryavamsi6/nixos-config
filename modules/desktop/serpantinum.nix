@@ -175,6 +175,31 @@
           p.write_text(t)
         '';
 
+        patchBtPanel = pkgs.writeText "patch-serpantinum-bt-panel.py" ''
+          from pathlib import Path
+          import sys
+          import textwrap
+
+          p = Path(sys.argv[1])
+          t = p.read_text()
+          start = t.index("get_status() {")
+          end = t.index("\ntoggle_power() {")
+          repl = textwrap.dedent(
+              """
+              get_status() {
+                  source "$(dirname "''${BASH_SOURCE[0]}")/../watchers/bt_dbus.sh"
+                  if ! declare -F bt_dbus_panel_status >/dev/null; then
+                      echo '{"present":true,"power":"off","connected":[],"devices":[]}'
+                      return
+                  fi
+                  bt_dbus_panel_status
+              }
+
+              """
+          ).lstrip("\n")
+          p.write_text(t[:start] + repl + t[end + 1 :])
+        '';
+
         # Upstream only scans /usr and ~/.nix-profile. Home Manager with
         # useUserPackages puts .desktop files in /etc/profiles/per-user/$USER.
         appFetcher = pkgs.writeText "app_fetcher.py" ''
@@ -280,11 +305,112 @@
               fetch_apps()
         '';
 
+        # bluetoothctl registers an AdvertisementMonitor on every invocation.
+        # The bar/network popup were spawning it every few seconds, which
+        # drops A2DP on the MediaTek mt7921 adapter. Query BlueZ over D-Bus.
+        btDbus = pkgs.writeText "bt_dbus.sh" ''
+          bt_dbus_adapter() {
+            ${pkgs.systemd}/bin/busctl --system tree org.bluez --list 2>/dev/null \
+              | grep -E '^/org/bluez/hci[0-9]+$' | head -n1
+          }
+          bt_dbus_prop() {
+            ${pkgs.systemd}/bin/busctl --system get-property org.bluez "$1" "$2" "$3" 2>/dev/null
+          }
+          bt_dbus_bool() { bt_dbus_prop "$@" | grep -q 'true'; }
+          bt_dbus_str() { bt_dbus_prop "$@" | sed -n 's/^s "\(.*\)"$/\1/p'; }
+          bt_dbus_byte() { bt_dbus_prop "$@" | awk '/^y / {print $2}'; }
+          bt_dbus_devices() {
+            local ad
+            ad=$(bt_dbus_adapter)
+            [ -n "$ad" ] || return 0
+            ${pkgs.systemd}/bin/busctl --system tree org.bluez --list 2>/dev/null | grep -E "^''${ad}/dev_[^/]+$"
+          }
+          bt_dbus_jq_escape() { ${pkgs.jq}/bin/jq -n --arg s "$1" '$s'; }
+
+          bt_dbus_panel_status() {
+            local ad power connected_json devices_json c_objs d_objs
+            ad=$(bt_dbus_adapter)
+            if [ -z "$ad" ]; then
+              echo '{"present":false,"power":"off","connected":[],"devices":[]}'
+              return
+            fi
+            power="off"
+            bt_dbus_bool "$ad" org.bluez.Adapter1 Powered && power="on"
+            connected_json="[]"
+            devices_json="[]"
+            c_objs=()
+            d_objs=()
+            if [ "$power" = on ]; then
+              local dev addr alias icon icon_type bat name_esc icon_esc
+              for dev in $(bt_dbus_devices); do
+                addr=$(bt_dbus_str "$dev" org.bluez.Device1 Address)
+                [ -n "$addr" ] || continue
+                alias=$(bt_dbus_str "$dev" org.bluez.Device1 Alias)
+                [ -z "$alias" ] && alias="$addr"
+                icon_type=$(bt_dbus_str "$dev" org.bluez.Device1 Icon)
+                icon=""
+                case "''${icon_type,,} ''${alias,,}" in
+                  *headset*|*headphone*|*buds*|*pods*) icon="🎧" ;;
+                  *audio*|*speaker*) icon="🔊" ;;
+                  *keyboard*) icon="" ;;
+                  *mouse*) icon="" ;;
+                  *phone*) icon="" ;;
+                esac
+                name_esc=$(bt_dbus_jq_escape "$alias")
+                icon_esc=$(bt_dbus_jq_escape "$icon")
+                if bt_dbus_bool "$dev" org.bluez.Device1 Connected; then
+                  bat=$(bt_dbus_byte "$dev" org.bluez.Battery1 Percentage)
+                  [ -z "$bat" ] && bat="0"
+                  c_objs+=("{\"id\":$(bt_dbus_jq_escape "$addr"),\"name\":$name_esc,\"mac\":$(bt_dbus_jq_escape "$addr"),\"icon\":$icon_esc,\"battery\":\"$bat\",\"profile\":\"Connected\"}")
+                elif bt_dbus_bool "$dev" org.bluez.Device1 Paired; then
+                  d_objs+=("{\"id\":$(bt_dbus_jq_escape "$addr"),\"name\":$name_esc,\"mac\":$(bt_dbus_jq_escape "$addr"),\"icon\":$icon_esc,\"action\":\"Connect\"}")
+                fi
+              done
+              if [ ''${#c_objs[@]} -gt 0 ]; then
+                connected_json="[$(IFS=,; echo "''${c_objs[*]}")]"
+              fi
+              if [ ''${#d_objs[@]} -gt 0 ]; then
+                devices_json="[$(IFS=,; echo "''${d_objs[*]}")]"
+              fi
+            fi
+            echo "{\"present\":true,\"power\":\"$power\",\"connected\":$connected_json,\"devices\":$devices_json}"
+          }
+        '';
+        btFetch = pkgs.writeText "bt_fetch.sh" ''
+          #!/usr/bin/env bash
+          source "$(dirname "''${BASH_SOURCE[0]}")/bt_dbus.sh"
+          ad=$(bt_dbus_adapter)
+          if [ -z "$ad" ] || ! bt_dbus_bool "$ad" org.bluez.Adapter1 Powered; then
+            ${pkgs.jq}/bin/jq -n -c '{status:"off",icon:"󰂲",connected:"Off"}'
+            exit 0
+          fi
+          name=""
+          any=0
+          for dev in $(bt_dbus_devices); do
+            bt_dbus_bool "$dev" org.bluez.Device1 Connected || continue
+            any=1
+            icon=$(bt_dbus_str "$dev" org.bluez.Device1 Icon)
+            alias=$(bt_dbus_str "$dev" org.bluez.Device1 Alias)
+            case "$icon" in
+              audio-headset|audio-headphones|audio-card) name=$alias; break ;;
+            esac
+            [ -z "$name" ] && name=$alias
+          done
+          if [ "$any" -eq 1 ]; then
+            ${pkgs.jq}/bin/jq -n -c --arg n "''${name:-Connected}" '{status:"on",icon:"󰂱",connected:$n}'
+          else
+            ${pkgs.jq}/bin/jq -n -c '{status:"on",icon:"󰂯",connected:"Disconnected"}'
+          fi
+        '';
+
         hyprScripts = pkgs.runCommand "serpantinum-hypr-scripts" { } ''
           mkdir -p $out
           cp -a ${dots}/config/sessions/hyprland/scripts/. $out/
           chmod -R u+w $out
           cp ${appFetcher} $out/quickshell/applauncher/app_fetcher.py
+          cp ${btDbus} $out/quickshell/watchers/bt_dbus.sh
+          cp ${btFetch} $out/quickshell/watchers/bt_fetch.sh
+          chmod +x $out/quickshell/watchers/bt_dbus.sh $out/quickshell/watchers/bt_fetch.sh
 
           find $out -type f \( -name '*.sh' -o -name '*.py' -o -name '*.qml' -o -name '*.js' \) -print0 \
             | xargs -0 sed -i \
@@ -379,7 +505,15 @@ fi'
     # Wi-Fi is reported independently so the bar can show both pills.
     if [ "$iface_type" = "wifi" ]; then'
 
+          substituteInPlace $out/quickshell/TopBar.qml \
+            --replace-fail 'barWindow.timeStr = Qt.formatDateTime(d, "HH:mm:ss");' \
+                           'barWindow.timeStr = Qt.formatDateTime(d, "HH:mm");'
           ${pkgs.python3}/bin/python3 ${patchTopBar} $out/quickshell/TopBar.qml
+          ${pkgs.python3}/bin/python3 ${patchBtPanel} $out/quickshell/network/bluetooth_panel_logic.sh
+
+          substituteInPlace $out/qs_manager.sh \
+            --replace-fail '{ echo "scan on"; sleep infinity; } | stdbuf -oL bluetoothctl > "$BT_SCAN_LOG" 2>&1 &' \
+                           ': # bluetoothctl scan on drops A2DP on MediaTek; paired devices still list over D-Bus'
 
           substituteInPlace $out/quickshell/settings/SettingsPopup.qml \
             --replace-fail 'Workspaces (SUPER + 1-9)' 'Workspaces (SUPER + 1-0, SHIFT moves)' \
@@ -640,18 +774,27 @@ fi'
           icon-theme = "Adwaita";
           cursor-theme = "ArcMidnight-Cursors";
           cursor-size = 24;
+          font-name = "Inter 11";
+          document-font-name = "Inter 11";
+          monospace-font-name = "JetBrainsMono Nerd Font 11";
         };
 
         gtk = {
           enable = true;
+          font = {
+            name = "Inter";
+            size = 11;
+          };
           gtk3.extraCss = gtkCssImport;
           gtk4.extraCss = gtkCssImport;
           gtk3.extraConfig = {
             gtk-application-prefer-dark-theme = 1;
             gtk-theme-name = "adw-gtk3-dark";
+            gtk-font-name = "Inter 11";
           };
           gtk4.extraConfig = {
             gtk-application-prefer-dark-theme = 1;
+            gtk-font-name = "Inter 11";
           };
         };
 
@@ -668,7 +811,7 @@ fi'
 
         programs.kitty.extraConfig = lib.mkForce ''
           font_family JetBrains Mono
-          font_size 16.0
+          font_size 13.0
           bold_font auto
           italic_font auto
           bold_italic_font auto

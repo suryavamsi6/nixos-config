@@ -4,7 +4,10 @@
   options.flake.modules.nixos.networking = lib.mkOption {
     type = lib.types.deferredModule;
     default = { ... }: {
-      networking.networkmanager.enable = true;
+      networking.networkmanager = {
+        enable = true;
+        wifi.powersave = false;
+      };
     };
   };
 

@@ -16,9 +16,12 @@
       boot.loader.efi.canTouchEfiVariables = true;
       boot.loader.efi.efiSysMountPoint = "/boot";
 
-      # Windows ESP is a different partition; boot(): would point at NIXBOOT.
-      # Limine 12+: protocol `efi` and guid(PARTUUID):/path (one slash after :).
-      boot.loader.limine.extraEntries = ''
+      # extraConfig is prepended. Nixpkgs then writes default_entry: 2 (the
+      # NixOS folder once Windows is entry 1). Limine keeps the *first*
+      # default_entry, so put 3 here: 1 Windows, 2 folder, 3 latest generation.
+      boot.loader.limine.extraConfig = ''
+        default_entry: 3
+
         /Windows 11
           protocol: efi
           path: guid(e60abccf-1a4b-4973-a37c-e20b992a9bc3):/EFI/Microsoft/Boot/bootmgfw.efi

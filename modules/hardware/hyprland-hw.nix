@@ -22,8 +22,14 @@
 
       boot.initrd.availableKernelModules = [ "nvme" "xhci_pci" "ahci" "usb_storage" "usbhid" "sd_mod" ];
       boot.initrd.kernelModules = [ ];
-      boot.kernelModules = [ "kvm-amd" ];
-      boot.extraModulePackages = [ ];
+      boot.kernelModules = [ "kvm-amd" "r8125" ];
+      # RTL8125 2.5G (10EC:8125) is bound to in-tree r8169, which often
+      # underperforms Realtek's Windows driver. Use the vendor module.
+      boot.extraModulePackages = [ config.boot.kernelPackages.r8125 ];
+      boot.blacklistedKernelModules = [ "r8169" ];
+      boot.extraModprobeConfig = ''
+        options r8125 aspm=0 eee=0
+      '';
 
       # Btrfs root UUID — REPLACE after install
       fileSystems."/" =
