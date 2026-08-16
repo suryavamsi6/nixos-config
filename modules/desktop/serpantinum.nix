@@ -175,6 +175,33 @@
           p.write_text(t)
         '';
 
+        patchQsManager = pkgs.writeText "patch-serpantinum-qs-manager.py" ''
+          from pathlib import Path
+          import sys
+
+          p = Path(sys.argv[1])
+          t = p.read_text()
+          old = 'find "$SRC_DIR" -maxdepth 1 -type f'
+          new = 'find -L "$SRC_DIR" -maxdepth 1 -type f'
+          if old not in t:
+              raise SystemExit("qs_manager find wallpaper scan not found")
+          t = t.replace(old, new, 1)
+          gif = '-o -iname "*.gif" -o -iname "*.mp4"'
+          webp = '-o -iname "*.gif" -o -iname "*.webp" -o -iname "*.mp4"'
+          if gif not in t:
+              raise SystemExit("qs_manager image filters not found")
+          t = t.replace(gif, webp, 1)
+          marker = '            if [[ "''${extension,,}" == "webp" ]]; then'
+          start = t.find(marker)
+          if start == -1:
+              raise SystemExit("qs_manager webp conversion block not found")
+          end = t.find("\n            fi\n", start)
+          if end == -1:
+              raise SystemExit("qs_manager webp conversion fi not found")
+          t = t[:start] + t[end + len("\n            fi\n") :]
+          p.write_text(t)
+        '';
+
         patchBtPanel = pkgs.writeText "patch-serpantinum-bt-panel.py" ''
           from pathlib import Path
           import sys
@@ -510,6 +537,7 @@ fi'
                            'barWindow.timeStr = Qt.formatDateTime(d, "HH:mm");'
           ${pkgs.python3}/bin/python3 ${patchTopBar} $out/quickshell/TopBar.qml
           ${pkgs.python3}/bin/python3 ${patchBtPanel} $out/quickshell/network/bluetooth_panel_logic.sh
+          ${pkgs.python3}/bin/python3 ${patchQsManager} $out/qs_manager.sh
 
           substituteInPlace $out/qs_manager.sh \
             --replace-fail '{ echo "scan on"; sleep infinity; } | stdbuf -oL bluetoothctl > "$BT_SCAN_LOG" 2>&1 &' \
@@ -886,11 +914,6 @@ fi'
           # Bare `qs` loads this path; leftover surface-dots config would show a second bar.
           rm -rf "$HOME/.config/quickshell"
         '';
-
-        home.file."Pictures/Wallpapers/IUBepkp.jpeg".source = ./wallpaper-assets/IUBepkp.jpeg;
-        home.file."Pictures/Wallpapers/nier.webp".source = ./wallpaper-assets/nier.webp;
-        home.file."Pictures/Wallpapers/car.png".source = ./wallpaper-assets/car.png;
-        home.file."Pictures/Wallpapers/leaf.png".source = ./wallpaper-assets/leaf.png;
 
         home.activation.seedSerpantinum = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
           seed_if_needed() {

@@ -19,17 +19,18 @@ Each leaf file **declares** `options.flake.modules.*`. Hosts **select** which to
 |---|---|
 | Packages (system) | `modules/packages/system.nix` |
 | Packages (dev / HM) | `modules/packages/dev.nix` |
-| Citrix / Zoom / Zoom VDI plugin | `modules/packages/work.nix`, `zoomvdi-universal-plugin.nix` |
+| Citrix / Zoom / Zoom VDI plugin | `modules/packages/work.nix`, `zoomvdi-universal-plugin.nix` (gnome-keyring for CLStore; `gcr-ssh-agent` off) |
 | PipeWire, BlueZ, BT udev | `modules/audio/default.nix` |
 | Limine, Windows chainload | `modules/boot/default.nix` |
 | NVIDIA | `modules/hardware/nvidia.nix` |
 | GCB200 GPU-bracket LCD | `modules/hardware/gcb200.nix` (flake `github:suryavamsi6/gcb200-linux`) |
 | Disks, kernel modules, r8125 | `modules/hardware/hyprland-hw.nix` |
-| NetworkManager / samba | `modules/networking/default.nix` |
+| NetworkManager / samba | `modules/networking/default.nix` (IPv6 off; BBR; Steam-oriented `tcp_rmem`) |
 | Fonts | `modules/fonts/default.nix` |
 | Fish / kitty | `modules/shell/default.nix` |
 | greetd | `modules/desktop/greetd.nix` |
 | Bar / lock / launcher | `modules/desktop/serpantinum.nix` |
+| Wallpapers (`ilyamiro/shell-wallpapers`) | `modules/desktop/wallpapers.nix` |
 | Hyprland NixOS pkgs + HM Lua | `modules/hyprland/wm.nix` + `lua/` |
 | New `#nixos` module | declare option, then add to `nixos-hyprland.nix` |
 

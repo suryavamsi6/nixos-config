@@ -60,8 +60,22 @@
           })
         ];
 
-        programs.git.settings.user.name = "suryavamsi6";
-        programs.git.settings.user.email = "d.suryavamsi@gmail.com";
+        programs.git = {
+          enable = true;
+          settings = {
+            user.name = "Surya Vamsi";
+            user.email = "d.suryavamsi@gmail.com";
+            # Public key, safe to commit. 1Password holds the private half.
+            user.signingkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDGneR+cI5ZQWog3zHRj1MvP3ek+1MikaD6uPY9hrmW+";
+            commit.gpgsign = true;
+            gpg.format = "ssh";
+            # 1Password's own setup writes /opt/1Password/op-ssh-sign into
+            # ~/.gitconfig, which does not exist on NixOS and fails every
+            # commit. Remove that file so this config is the only global one:
+            # git reads ~/.gitconfig after ~/.config/git/config, so it wins.
+            gpg.ssh.program = lib.getExe' pkgs._1password-gui "op-ssh-sign";
+          };
+        };
 
         home.file.".config/Code/User/settings.json" = {
           text = ''

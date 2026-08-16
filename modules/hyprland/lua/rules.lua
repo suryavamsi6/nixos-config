@@ -93,6 +93,22 @@ hl.window_rule({
   opacity = "1.0 1.0",
   rounding = 0,
 })
+-- SAML/Entra WebKit dialog. Tiling + focus_on_activate closes it as cancel.
+hl.window_rule({
+  match = { class = "^(PrimaryAuthManager|AuthManagerDaemon|UtilDaemon)$" },
+  float = true,
+  center = true,
+  pin = true,
+  stay_focused = true,
+  dim_around = true,
+  opacity = "1.0 1.0",
+  rounding = 0,
+  size = "960 720",
+})
+hl.window_rule({
+  match = { class = "^selfservice$" },
+  focus_on_activate = false,
+})
 
 -- Zoom VDI plugin Settings is a local Qt window; pin it above fullscreen wfica.
 hl.window_rule({

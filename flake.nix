@@ -33,6 +33,10 @@
       url = "github:ilyamiro/serpantinum";
       flake = false;
     };
+    shell-wallpapers = {
+      url = "github:ilyamiro/shell-wallpapers";
+      flake = false;
+    };
     nix-darwin = {
       url = "github:LnL7/nix-darwin";
       inputs.nixpkgs.follows = "nixpkgs";

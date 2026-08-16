@@ -1,19 +1,28 @@
-# Zoom VDI Universal Plugin 6.6.11 — media offload for Zoom-inside-Citrix.
-# Must match the Zoom VDI client version in the virtual desktop.
+# Zoom VDI Universal Plugin — media offload for Zoom-inside-Citrix.
+# Must match the Zoom VDI client version in the virtual desktop (currently
+# 7.0.11); a mismatched plugin loads fine but never connects.
 #
 # libZoomPlugin.so is dlopened by Nix Citrix (patchelf'd).
 # The zoom helper is exec'd as a child of wfica (pipes/PPid); do not put it
 # in buildFHSEnv/bwrap. Patchelf its interpreter so it does not use NixOS's
 # /lib64 stub ld. ZoomMedia.ini overwrites PATH and LD_LIBRARY_PATH, so tools
 # and extra libs must live in those ini paths.
+#
+# $plugin/zoom must stay the unwrapped ELF. The plugin authenticates whoever
+# connects back to its socket against the helper it spawned, and part of that
+# identity is /proc/<pid>/exe. Any exec wrapper leaves exe pointing at the
+# wrapper's target, the plugin hangs up mid-handshake, and the helper exits 0
+# after ~1s — which looks exactly like "Zoom crashed / VDI not connecting".
+# So the wrapper's two jobs are done without exec: libraries via DT_RPATH,
+# and environment/signal fixups via a DT_NEEDED constructor.
 {
   lib,
   stdenv,
   fetchurl,
   dpkg,
   autoPatchelfHook,
-  makeWrapper,
   writeShellScript,
+  alsa-lib,
   coreutils,
   dbus,
   findutils,
@@ -28,11 +37,15 @@
   iputils,
   iw,
   libGL,
+  libdrm,
   libkrb5,
   libpulseaudio,
   libx11,
+  libxcomposite,
+  libxcursor,
   libxext,
   libxfixes,
+  libxinerama,
   libxi,
   libxkbcommon,
   libxrandr,
@@ -54,10 +67,14 @@
   which,
   wirelesstools,
   zlib,
+  zstd,
 }:
 
 let
-  version = "6.6.11.26890";
+  # Zoom requires plugin/client version parity: a 6.6.x plugin silently refuses
+  # to connect to a 7.0.x VDI client (helper spawns, handshake fails, exits).
+  version = "7.0.11.27050";
+  shortVersion = lib.versions.pad 3 version;
 
   pacmdForZoom = writeShellScript "pacmd" ''
     set -euo pipefail
@@ -111,17 +128,22 @@ EOF
   '';
 
   extraLibs = [
+    alsa-lib
     dbus
     fontconfig
     freetype
     glib
     libGL
+    libdrm
     libkrb5
     libpulseaudio
     libx11
+    libxcomposite
+    libxcursor
     libxext
     libxfixes
     libxi
+    libxinerama
     libxkbcommon
     libxrandr
     libxrender
@@ -138,6 +160,7 @@ EOF
     stdenv.cc.cc
     udev
     zlib
+    zstd
   ];
 
   extraLibPath = lib.makeLibraryPath extraLibs;
@@ -147,8 +170,8 @@ stdenv.mkDerivation (finalAttrs: {
   inherit version;
 
   src = fetchurl {
-    url = "https://zoom.us/download/vdi/${version}/zoomvdi-universal-plugin-ubuntu_6.6.11.deb";
-    hash = "sha256-JffNfGU46FmDteDV00HRlGFHN06cEmos/bXJCFvSQM8=";
+    url = "https://zoom.us/download/vdi/${version}/zoomvdi-universal-plugin-ubuntu_${shortVersion}.deb";
+    hash = "sha256-1ADcgA74AhQaS6OGYEd2lu3bIwSvfW5oHG7p8XSErCo=";
     curlOptsList = [
       "-A"
       "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
@@ -158,7 +181,6 @@ stdenv.mkDerivation (finalAttrs: {
   nativeBuildInputs = [
     dpkg
     autoPatchelfHook
-    makeWrapper
   ];
 
   buildInputs = extraLibs;
@@ -195,20 +217,44 @@ stdenv.mkDerivation (finalAttrs: {
       done
     done
 
-    # Citrix execs this path (sibling of libZoomPlugin.so) and inherits
-    # wfica's LD_LIBRARY_PATH, which does not include libz. Wrap in place.
-    mv $plugin/zoom $plugin/.zoom-real
-    makeWrapper $plugin/.zoom-real $plugin/zoom \
-      --set LD_LIBRARY_PATH "$plugin:$plugin/Qt/lib:${extraLibPath}" \
-      --prefix PATH : "$out/bin" \
-      --set-default XDG_CURRENT_DESKTOP Hyprland \
-      --set-default GDMSESSION hyprland \
-      --set QT_QPA_PLATFORM xcb \
-      --unset QT_QPA_PLATFORMTHEME \
-      --unset PULSE_RUNTIME_PATH \
-      --unset PULSE_STATE_PATH \
-      --unset PULSE_CONFIG_PATH \
-      --unset LD_PRELOAD
+    # wfica spawns the helper with SIGCHLD set to SIG_IGN, and an ignored
+    # disposition survives execve. GLib's g_spawn_sync then loses the race to
+    # the kernel auto-reaper and waitpid() returns ECHILD while probing
+    # `pactl --version`, so Zoom logs "no pactl and pacmd found" and the
+    # AV/VPT processes bail. Nothing outside the process can undo an inherited
+    # SIG_IGN, and a wrapper that execs would break the exe identity check, so
+    # this is linked into the helper itself as a DT_NEEDED constructor.
+    # Only SIGCHLD is touched: resetting e.g. SIGPIPE to SIG_DFL would turn a
+    # closed socket into a fatal signal. The mask is cleared because a process
+    # that was not forked from wfica would start with an empty one.
+    cat > zoomfix.c <<'EOF'
+    #include <signal.h>
+    #include <stdlib.h>
+    #include <string.h>
+
+    __attribute__((constructor)) static void zoomvdi_fix(void) {
+      struct sigaction sa;
+      memset(&sa, 0, sizeof sa);
+      sa.sa_handler = SIG_DFL;
+      sigaction(SIGCHLD, &sa, (void *)0);
+
+      sigset_t set;
+      sigemptyset(&set);
+      sigprocmask(SIG_SETMASK, &set, (void *)0);
+
+      /* The bundle ships libqxcb.so but no usable wayland platform plugin, so
+         xcb is forced rather than defaulted: inheriting WAYLAND_DISPLAY from
+         the session is enough to make Qt abort with "Could not find the Qt
+         platform plugin". Citrix is X11-only anyway. */
+      setenv("QT_QPA_PLATFORM", "xcb", 1);
+
+      /* wfica exports XDG_CURRENT_DESKTOP but not GDMSESSION; Zoom reads both
+         when picking a screen-capture backend. */
+      setenv("GDMSESSION", "hyprland", 0);
+    }
+    EOF
+    $CC -O2 -fPIC -shared -o $plugin/libzoomvdifix.so zoomfix.c
+
     ln -sfn $plugin/zoom $out/bin/zoom
     ln -sfn ${pacmdForZoom} $out/bin/pacmd
     ln -sfn ${lsbReleaseForZoom} $out/bin/lsb_release
@@ -264,14 +310,36 @@ stdenv.mkDerivation (finalAttrs: {
   postFixup = ''
     plugin=$out/lib/zoomvdi-universal-plugin
     autoPatchelf $plugin/libZoomPlugin.so
-    autoPatchelf $plugin/.zoom-real $plugin/aomhost $plugin/crash_processor
-    for so in $plugin/*.so $plugin/*.so.*; do
+    autoPatchelf $plugin/zoom $plugin/aomhost $plugin/crash_processor
+    autoPatchelf $plugin/Zoom_VDI_Plugin_Management || true
+
+    # DT_RPATH rather than DT_RUNPATH: the 40 bundled Qt libraries carry no
+    # runpath of their own, and only RPATH is inherited by transitive
+    # dependencies. This is what the wrapper's LD_LIBRARY_PATH used to do —
+    # wfica's LD_LIBRARY_PATH, which the helper inherits, has no libz/libzstd.
+    # aomhost and crash_processor need it too; they used to inherit the
+    # wrapper's environment from zoom.
+    rpath="$plugin:$plugin/Qt/lib:${extraLibPath}"
+    for exe in zoom aomhost crash_processor; do
+      patchelf --force-rpath --set-rpath "$rpath" $plugin/$exe
+    done
+    patchelf --add-needed libzoomvdifix.so $plugin/zoom
+    # Every bundled object needs its own runpath. Inheriting the executable's
+    # DT_RPATH is not enough: the loader prunes that list as it goes, so late
+    # lookups (libxkbcommon, libz, libzstd, libEGL...) were searching only a
+    # subset of it and falling through to the system paths, where they do not
+    # exist. The vendor Qt tree ships with no runpath at all, so patch it too.
+    for so in $plugin/*.so $plugin/*.so.* $plugin/Qt/lib/*.so*; do
       [ -e "$so" ] || continue
       [ -L "$so" ] && continue
       case "$so" in
         *libZoomPlugin.so) continue ;;
       esac
       autoPatchelf "$so" || true
+    done
+    for d in $plugin/Qt/plugins $plugin/Qt/qml; do
+      [ -d "$d" ] || continue
+      autoPatchelf "$d" || true
     done
   '';
 

@@ -3,7 +3,16 @@
 {
   options.flake.modules.nixos.gaming = lib.mkOption {
     type = lib.types.deferredModule;
-    default = { pkgs, ... }: {
+    default = { pkgs, ... }:
+    let
+      # HTTP/2 on the 32-bit Linux client is the usual Windows-vs-Linux
+      # gap. Do not add @cMaxInitialDownloadSources — extra sockets stall
+      # on btrfs write gaps in large .vpk files.
+      steamDevCfg = pkgs.writeText "steam_dev.cfg" ''
+        @nClientDownloadEnableHTTP2PlatformLinux 0
+      '';
+    in
+    {
       environment.systemPackages = with pkgs; [
         gamescope
         protonup-ng
@@ -31,6 +40,10 @@
           };
         };
       };
+
+      systemd.tmpfiles.rules = [
+        "C+ /home/surya/.local/share/Steam/steam_dev.cfg 0644 surya users - ${steamDevCfg}"
+      ];
     };
   };
 }

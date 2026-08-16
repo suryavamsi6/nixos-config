@@ -11,11 +11,22 @@ let
     pkgs.citrix-workspace.overrideAttrs (old: {
       postFixup = (old.postFixup or "") + ''
         xml="$out/opt/citrix-icaclient/config/AuthManConfig.xml"
-        if [ -f "$xml" ] && ! grep -q '<key>RememberUsername</key>' "$xml"; then
+        if [ -f "$xml" ]; then
           chmod u+w "$xml"
-          sed -i '/<\/dict>/i\
+          if ! grep -q '<key>RememberUsername</key>' "$xml"; then
+            sed -i '/<\/dict>/i\
 	<key>RememberUsername</key>\
 	<value>true</value>' "$xml"
+          fi
+          # Embedded WebKitGTK Entra/SAML auto-submits after 30s (too short for
+          # MFA) and then fails on leftover NetScaler cookies. System browser
+          # uses FIDO2AuthTimeout instead. Do not put MS credentials here.
+          sed -i \
+            -e '/<key>AADSSOWithFido2AuthenticationEnabled<\/key>/{n;s|<value>false</value>|<value>true</value>|}' \
+            -e '/<key>SharedAuthContextEnabled<\/key>/{n;s|<value>false</value>|<value>true</value>|}' \
+            -e '/<key>FIDO2Enabled<\/key>/{n;s|<value>false</value>|<value>true</value>|}' \
+            -e 's|<FIDO2AuthTimeout>60</FIDO2AuthTimeout>|<FIDO2AuthTimeout>180</FIDO2AuthTimeout>|' \
+            "$xml"
         fi
 
         ica="$out/opt/citrix-icaclient"
@@ -32,12 +43,17 @@ let
         done
 
         # icasessionmgr execs $ICAROOT/wfica, not PATH. Keep it on this tree.
+        # Firefox is on PATH so Entra/SAML can use FIDO2AuthBrowser=firefox
+        # (Floorp/Zen are not names Citrix will launch).
         if [ -x "$ica/icasessionmgr" ]; then
           wrapProgram "$ica/icasessionmgr" \
             --set ICAROOT "$ica" \
+            --prefix PATH : "${lib.makeBinPath [ pkgs.firefox ]}" \
             --set-default GDK_BACKEND x11 \
             --set-default EGL_PLATFORM x11 \
-            --set-default QT_QPA_PLATFORM xcb
+            --set-default QT_QPA_PLATFORM xcb \
+            --set WEBKIT_DISABLE_COMPOSITING_MODE 1 \
+            --set WEBKIT_DISABLE_DMABUF_RENDERER 1
         fi
       '';
     });
@@ -59,13 +75,19 @@ in
           "L+ /opt/Citrix/ICAClient - - - - ${citrix}/opt/citrix-icaclient"
           "L+ /usr/lib/zoomvdi-universal-plugin - - - - ${zoomvdi}/lib/zoomvdi-universal-plugin"
         ];
+
+        # Citrix CLStore talks to Secret Service. Do not enable GCR's SSH
+        # agent — 1Password owns SSH_AUTH_SOCK.
+        services.gnome.gnome-keyring.enable = true;
+        services.gnome.gcr-ssh-agent.enable = false;
+        security.pam.services.greetd.enableGnomeKeyring = true;
       };
   };
 
   options.flake.modules.homeManager.work = lib.mkOption {
     type = lib.types.deferredModule;
     default =
-      { pkgs, ... }:
+      { pkgs, lib, ... }:
       let
         citrix = citrixFor pkgs;
         # WebKitGTK login (selfservice) segfaults when GDK prefers Wayland on NVIDIA.
@@ -79,6 +101,7 @@ in
               if [ -e "${citrix}/bin/$name" ]; then
                 rm -f "$out/bin/$name"
                 makeWrapper "${citrix}/bin/$name" "$out/bin/$name" \
+                  --prefix PATH : "${lib.makeBinPath [ pkgs.firefox ]}" \
                   --set GDK_BACKEND x11 \
                   --set QT_QPA_PLATFORM xcb \
                   --unset QT_QPA_PLATFORMTHEME \
