@@ -7,7 +7,8 @@
     let
       # HTTP/2 on the 32-bit Linux client is the usual Windows-vs-Linux
       # gap. Do not add @cMaxInitialDownloadSources — extra sockets stall
-      # on btrfs write gaps in large .vpk files.
+      # Steam's writer on large .ucas/.vpk files (write gaps), with or
+      # without btrfs CoW.
       steamDevCfg = pkgs.writeText "steam_dev.cfg" ''
         @nClientDownloadEnableHTTP2PlatformLinux 0
       '';

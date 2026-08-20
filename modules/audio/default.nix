@@ -6,16 +6,10 @@
     default = { pkgs, ... }: {
       security.rtkit.enable = true;
 
-      # MediaTek mt7921 BT (0e8d:0616) USB-autosuspends after 2s, which
-      # drops A2DP with "Host is down" and makes headsets vanish from Pulse
-      # (so Citrix AudioRedirectionV4 cannot list them).
+      # Intel BT (btusb) is fine with stock power management; keep
+      # autosuspend off anyway so A2DP does not drop on idle adapters.
       boot.extraModprobeConfig = lib.mkAfter ''
         options btusb enable_autosuspend=0
-        options mt7921e disable_aspm=1
-      '';
-      services.udev.extraRules = ''
-        ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="0e8d", ATTR{idProduct}=="0616", TEST=="power/control", ATTR{power/control}="on"
-        ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="0e8d", ATTR{idProduct}=="0616", TEST=="power/autosuspend", ATTR{power/autosuspend}="-1"
       '';
 
       hardware.bluetooth.settings = {

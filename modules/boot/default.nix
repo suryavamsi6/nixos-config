@@ -10,7 +10,7 @@
     default = { ... }: {
       boot.loader.limine.enable = true;
       boot.loader.limine.secureBoot.enable = true;
-      # Kernels live on the 2G NixOS ESP (nvme1n1p2, label NIXBOOT), not the
+      # Kernels live on the 2G NixOS ESP (Samsung, label NIXBOOT), not the
       # 100M Windows ESP. ~43M per generation.
       boot.loader.limine.maxGenerations = 10;
       boot.loader.efi.canTouchEfiVariables = true;

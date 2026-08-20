@@ -6,152 +6,185 @@ Flake hosts:
 
 | Attribute | Desktop | Notes |
 |-----------|---------|--------|
-| `#nixos` | Hyprland | Primary Linux host (btrfs + Limine + Windows chainload) |
+| `#nixos` | Hyprland | Primary Linux host (ext4 + Limine + Windows chainload) |
 | `#plasma` | GNOME | Alternate Linux host |
 | `#macbook-air` | nix-darwin | MacBook M4 Air |
 
 ---
 
-## Dual-boot NixOS + Windows (btrfs)
+## Reinstall NixOS (ext4) — nuke Samsung only
 
-This matches the `#nixos` (Hyprland) hardware module:
+This is the weekend wipe for the **Samsung 980 PRO 1TB** (`nvme0n1`). **Do not touch** the WD_BLACK SN850X (`nvme1n1`) — that is Windows 11.
 
-- Shared Windows EFI (vfat) at `/boot`
-- One btrfs partition with subvolumes `@`, `@home`, `@nix`, `@log`, `@swap`
-- Limine bootloader with a Windows Boot Manager entry
+Target layout after install:
 
-### 0. Prep in Windows
+| Disk | Role |
+|------|------|
+| `nvme0n1` Samsung | NixOS only: 2G ESP `NIXBOOT` + one ext4 root (label `nixos`) |
+| `nvme1n1` WD | Windows untouched. ESP PARTUUID `e60abccf-1a4b-4973-a37c-e20b992a9bc3` |
 
-1. Update Windows and reboot once.
-2. Disable **BitLocker** on the Windows drive (or suspend it) if enabled.
-3. Disable **Fast Startup**: Control Panel → Power Options → Choose what the power buttons do → uncheck Fast Startup.
-4. Free space: Disk Management → shrink `C:` (leave enough for NixOS; 80–200+ GB is typical).
-5. Note your disk layout. Do **not** delete the Windows EFI System Partition (ESP).
-6. Create a NixOS USB from the latest [NixOS ISO](https://nixos.org/download/).
+Limine lives on `NIXBOOT` and chainloads Windows via that GPT GUID (see `modules/boot/default.nix`).
 
-Firmware tips:
+Also: unplug the MediaTek USB Bluetooth dongle (`0e8d:0616`) and use the new **Intel** Bluetooth card before first boot of the new install.
 
-- Boot mode: **UEFI** (not Legacy/CSM).
-- For the first install, **disable Secure Boot** in firmware. This config enables Limine Secure Boot; enroll keys with `sbctl` later if you want SB back on.
+> **Do not `nh os switch` this commit on the current btrfs install.** `hyprland-hw.nix` already expects ext4. Pull/clone it from the installer after you wipe the Samsung disk.
 
-### 1. Boot the installer and identify disks
+### 0. Prep before you wipe
 
-```bash
-lsblk -f
-# EFI is usually vfat ~100–512M (Windows ESP)
-# Free space = unallocated region you shrunk
-```
+1. Push any uncommitted flake work you care about (this README assumes `main` on GitHub).
+2. Copy off anything only on the Samsung disk you need (`~/`, Steam under `~/.local/share/Steam`, Citrix `~/.ICAClient`, etc.). Windows files on the WD drive stay.
+3. In Windows (from the WD disk):
+   - Disable / suspend BitLocker if on.
+   - Disable Fast Startup.
+   - Confirm Windows still boots.
+4. Firmware: UEFI, Secure Boot **off** for the first bring-up (Limine SB can be re-enabled later with `sbctl`).
+5. Write a NixOS USB from the current [ISO](https://nixos.org/download/).
+6. Physically remove / disable the MediaTek BT dongle; seat the Intel BT adapter (PCIe or USB — confirm with `lsusb` / `lspci` after the new install).
 
-### 2. Partition
-
-Keep Windows partitions. In the free space create **one** Linux partition (btrfs). Reuse the existing Windows ESP — do not create a second EFI unless you know you need one.
-
-Example with `parted` (adjust disk/partition numbers):
+### 1. Boot the installer and confirm disks
 
 ```bash
-# Example only — verify device names first
-sudo parted /dev/nvme0n1 -- print
-# Create a partition in free space, type Linux filesystem, e.g. partition 5
-sudo mkfs.btrfs -L nixos /dev/nvme0n1pX
+lsblk -o NAME,SIZE,FSTYPE,LABEL,MODEL,PARTUUID
 ```
 
-### 3. Btrfs subvolumes
+Expected today:
+
+- `nvme0n1` — Samsung ~931G (NixOS — **this is what you wipe**)
+- `nvme1n1` — WD ~1.8T (Windows — **leave alone**)
+
+If labels/models are swapped on your machine, stop and rematch. Wiping the wrong NVMe destroys Windows.
+
+### 2. Wipe and partition the Samsung disk
+
+Only `nvme0n1`. Example with `parted` + `sgdisk`/`mkfs` (adjust if your device name differs):
 
 ```bash
-sudo mount /dev/nvme0n1pX /mnt
-sudo btrfs subvolume create /mnt/@
-sudo btrfs subvolume create /mnt/@home
-sudo btrfs subvolume create /mnt/@nix
-sudo btrfs subvolume create /mnt/@log
-sudo btrfs subvolume create /mnt/@swap
-sudo umount /mnt
+# Triple-check
+lsblk -o NAME,SIZE,MODEL /dev/nvme0n1
+
+# Destroy the old GPT (Samsung ONLY)
+sudo wipefs -a /dev/nvme0n1
+sudo sgdisk --zap-all /dev/nvme0n1
+
+# New GPT: 2G ESP + rest Linux
+sudo parted /dev/nvme0n1 -- mklabel gpt
+sudo parted /dev/nvme0n1 -- mkpart NIXBOOT fat32 1MiB 2049MiB
+sudo parted /dev/nvme0n1 -- set 1 esp on
+sudo parted /dev/nvme0n1 -- mkpart nixos ext4 2049MiB 100%
+
+sudo mkfs.vfat -F 32 -n NIXBOOT /dev/nvme0n1p1
+sudo mkfs.ext4 -L nixos /dev/nvme0n1p2
 ```
 
-### 4. Mount for install
+One ext4 volume is intentional: `/`, `/home`, `/nix`, `/var/log` are directories that share free space (no subvolume / size math).
+
+### 3. Mount for install
 
 ```bash
-sudo mount -o subvol=@,compress=zstd,noatime /dev/nvme0n1pX /mnt
-sudo mkdir -p /mnt/{boot,home,nix,var/log,swap}
-sudo mount -o subvol=@home,compress=zstd,noatime /dev/nvme0n1pX /mnt/home
-sudo mount -o subvol=@nix,compress=zstd,noatime /dev/nvme0n1pX /mnt/nix
-sudo mount -o subvol=@log,compress=zstd,noatime /dev/nvme0n1pX /mnt/var/log
-sudo mount -o subvol=@swap,noatime /dev/nvme0n1pX /mnt/swap
-
-# Shared Windows ESP (confirm device with lsblk -f)
-sudo mount /dev/nvme0n1p1 /mnt/boot
+sudo mount /dev/disk/by-label/nixos /mnt
+sudo mkdir -p /mnt/boot
+sudo mount /dev/disk/by-label/NIXBOOT /mnt/boot
 ```
 
-### 5. Swapfile on `@swap`
+### 4. Swapfile on ext4
 
 ```bash
-# Size example: 16G — change to match RAM / preference
-sudo btrfs filesystem mkswapfile --size 16g --uuid clear /mnt/swap/swapfile
-sudo chmod 600 /mnt/swap/swapfile
+# Match RAM / preference (16G example)
+sudo fallocate -l 16G /mnt/swapfile
+sudo chmod 600 /mnt/swapfile
+sudo mkswap /mnt/swapfile
 ```
 
-### 6. Clone this flake and set UUIDs
+### 5. Clone the flake and set the root UUID
 
 ```bash
 sudo mkdir -p /mnt/home/surya
-sudo git clone https://github.com/suryavamsi6/nixos-config.git /mnt/home/surya/nixos-config
-cd /mnt/home/surya/nixos-config
+sudo git clone https://github.com/suryavamsi6/nixos-config.git /mnt/home/surya/Dotfiles/nixos-config
+cd /mnt/home/surya/Dotfiles/nixos-config
 
-# Read new UUIDs
 lsblk -f
 blkid
 ```
 
 Edit `modules/hardware/hyprland-hw.nix`:
 
-1. Replace every btrfs `by-uuid/...` with the **new** btrfs UUID.
-2. Replace `/boot` `by-uuid/XXXX-XXXX` with the **Windows ESP** FAT UUID.
-3. Confirm `swapDevices` still points at `/swap/swapfile`.
+1. Set `fileSystems."/".device` to the **new** ext4 UUID (`by-uuid/...` from `blkid` on `nvme0n1p2`), or keep `by-label/nixos` if you used `-L nixos`.
+2. Leave `/boot` on `by-label/NIXBOOT`.
+3. Keep `swapDevices = [ { device = "/swapfile"; } ];`.
+4. Do **not** point `/boot` at the Windows ESP.
 
-Optional helper (do not overwrite the flake blindly):
+Optional check:
 
 ```bash
 sudo nixos-generate-config --root /mnt --show-hardware-config
 ```
 
-### 7. Install from the flake
+Use that only to copy UUIDs / kernel modules — do not replace the flake module blindly.
+
+Confirm Windows chainload GUID in `modules/boot/default.nix` still matches:
+
+```text
+guid(e60abccf-1a4b-4973-a37c-e20b992a9bc3):/EFI/Microsoft/Boot/bootmgfw.efi
+```
+
+If Windows was repartitioned, update that PARTUUID from `lsblk -o NAME,PARTUUID /dev/nvme1n1`.
+
+### 6. Install
 
 ```bash
-cd /mnt/home/surya/nixos-config
+cd /mnt/home/surya/Dotfiles/nixos-config
 sudo nixos-install --flake .#nixos
 ```
 
-When prompted, set the **root** password. User `surya` has no password in the flake yet — after first boot:
+Set the **root** password when prompted. After first boot:
 
 ```bash
 sudo passwd surya
 ```
 
-### 8. Reboot into Limine
+### 7. Reboot checklist
 
-1. Reboot, open firmware boot menu if needed, pick the Limine / NixOS entry.
-2. You should see **NixOS** and **Windows Boot Manager**.
-3. Confirm Windows still boots once.
-
-### 9. Day-2 rebuilds
+1. Firmware boot menu → Limine / NixOS on the Samsung ESP.
+2. Limine should list **Windows 11** and the latest NixOS generation (`default_entry: 3` in `modules/boot/default.nix`).
+3. Boot Windows once from Limine to confirm chainload.
+4. On NixOS:
 
 ```bash
-cd ~/nixos-config
-sudo nixos-rebuild switch --flake .#nixos
-# or, if nh is available:
-nh os switch .
+lsblk -f
+findmnt / /boot
+df -hT /
+lsusb | grep -iE 'intel|8087|bluetooth'
+bluetoothctl show
 ```
 
-### Secure Boot (optional, later)
+Intel BT should appear as an `hci` adapter without the MediaTek `0e8d:0616` USB id. Pair ACCENTUM Plus / MCHOSE K7 Ultra again (keys do not carry over from a wiped home).
 
-1. Disable Limine Secure Boot in firmware until enrollment works, **or** keep `boot.loader.limine.secureBoot.enable = true`.
-2. After a successful boot with SB off, enroll keys (`sbctl`) per [NixOS Limine docs](https://wiki.nixos.org/wiki/Limine), then re-enable Secure Boot.
+### 8. Day-2
 
-### Common pitfalls
+```bash
+cd ~/Dotfiles/nixos-config
+nh os switch
+```
 
-- **Wrong EFI**: mounting a new empty ESP instead of the Windows one breaks chainload / Windows boot entries.
-- **Stale UUIDs**: old values in `hyprland-hw.nix` will fail to mount on a fresh disk.
-- **Subvolume names**: this flake expects `@`, `@home`, `@nix`, `@log`, `@swap` (not `root` / `home` — those are for `#plasma`).
-- **NVIDIA**: this host assumes an NVIDIA GPU (`modules/hardware/nvidia.nix`). Change that if hardware differs.
+Steam library defaults to `~/.local/share/Steam` on the ext4 root — that is the point of this reinstall (no btrfs write-gap stalls on large `.ucas`).
+
+### 9. Secure Boot (optional, later)
+
+Keep SB off until Limine boots cleanly, then enroll keys with `sbctl` per [NixOS Limine docs](https://wiki.nixos.org/wiki/Limine) and leave `boot.loader.limine.secureBoot.enable = true`.
+
+### Pitfalls
+
+- **Wrong disk**: wiping `nvme1n1` destroys Windows. Match by **MODEL** and size, not only by name.
+- **Shared Windows ESP**: do not mount the 100M Windows ESP at `/boot`. Kernels need the 2G `NIXBOOT` partition.
+- **Stale UUIDs** in `hyprland-hw.nix` → emergency shell on first boot.
+- **MediaTek still plugged in**: two adapters confuse pairing; unplug the dongle.
+- **NVIDIA / r8125**: this host still expects NVIDIA + out-of-tree `r8125` (not `r8169`).
+
+### Bluetooth notes (Intel)
+
+- A2DP-only policy stays (no HFP autoswitch) — Citrix must not flip the headset to HFP. See `modules/audio/default.nix`.
+- Do not spawn `bluetoothctl` from Serpantinum bar scripts.
+- MediaTek-specific USB autosuspend udev rules are obsolete once that dongle is gone; Intel `btusb` is enough for AX200/AX210-class adapters.
 
 ---
 
@@ -161,6 +194,7 @@ nh os switch .
 git clone https://github.com/suryavamsi6/nixos-config.git
 cd nixos-config
 sudo nixos-rebuild switch --flake .#nixos
+# or: nh os switch
 ```
 
 GNOME variant: `.#plasma`.

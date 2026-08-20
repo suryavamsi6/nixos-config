@@ -18,16 +18,13 @@ let
 	<key>RememberUsername</key>\
 	<value>true</value>' "$xml"
           fi
-          # Embedded WebKitGTK Entra/SAML auto-submits after 30s (too short for
-          # MFA) and then fails on leftover NetScaler cookies. System browser
-          # uses FIDO2AuthTimeout instead. Do not put MS credentials here.
-          sed -i \
-            -e '/<key>AADSSOWithFido2AuthenticationEnabled<\/key>/{n;s|<value>false</value>|<value>true</value>|}' \
-            -e '/<key>SharedAuthContextEnabled<\/key>/{n;s|<value>false</value>|<value>true</value>|}' \
-            -e '/<key>FIDO2Enabled<\/key>/{n;s|<value>false</value>|<value>true</value>|}' \
-            -e 's|<FIDO2AuthTimeout>60</FIDO2AuthTimeout>|<FIDO2AuthTimeout>180</FIDO2AuthTimeout>|' \
-            "$xml"
         fi
+        # Entra/SAML deliberately stays on the embedded WebKitGTK dialog.
+        # Turning on AADSSOWithFido2AuthenticationEnabled / SharedAuthContext /
+        # FIDO2Enabled hands login to FIDO2AuthBrowser instead, and Citrix only
+        # launches known browser names — so it opens a bare Firefox with no MS
+        # session or passkeys rather than showing a popup, and the attempt ends
+        # as LogonResult_CancelledByUser. Keep the vendor defaults (false).
 
         ica="$out/opt/citrix-icaclient"
         ln -sf ${zoomvdi.pluginLib} "$ica/ZoomMedia.so"
@@ -43,8 +40,9 @@ let
         done
 
         # icasessionmgr execs $ICAROOT/wfica, not PATH. Keep it on this tree.
-        # Firefox is on PATH so Entra/SAML can use FIDO2AuthBrowser=firefox
-        # (Floorp/Zen are not names Citrix will launch).
+        # Firefox stays on PATH only so links opened from the store UI resolve;
+        # login itself does not use it (see the AuthManConfig note above).
+        # The WEBKIT_* flags matter for the embedded login dialog on NVIDIA.
         if [ -x "$ica/icasessionmgr" ]; then
           wrapProgram "$ica/icasessionmgr" \
             --set ICAROOT "$ica" \
@@ -81,6 +79,43 @@ in
         services.gnome.gnome-keyring.enable = true;
         services.gnome.gcr-ssh-agent.enable = false;
         security.pam.services.greetd.enableGnomeKeyring = true;
+
+        # Auth daemons outlive `nh os switch` and pin `-icaroot` to the old
+        # store path. A leftover ServiceRecord makes nFactor login cancel in
+        # ~3s with no dialog. Reap only those whose binary/icaroot is not
+        # this generation — never wfica / icasessionmgr (live session).
+        systemd.services.citrix-reap-stale = {
+          description = "Kill Citrix auth daemons left on a previous store path";
+          wantedBy = [ "multi-user.target" ];
+          after = [ "systemd-tmpfiles-resetup.service" ];
+          restartIfChanged = true;
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+          };
+          script = ''
+            current=${citrix}
+            for proc in /proc/[0-9]*; do
+              pid=''${proc#/proc/}
+              comm=$(cat "$proc/comm" 2>/dev/null) || continue
+              case "$comm" in
+                *ServiceRecord*|*AuthManager*|*selfservice*|*ctxwebhelper*|*storebrowse*) ;;
+                *) continue ;;
+              esac
+              exe=$(readlink "$proc/exe" 2>/dev/null) || continue
+              cmdline=$(tr '\0' ' ' < "$proc/cmdline" 2>/dev/null) || continue
+              case "$exe $cmdline" in
+                *citrix-workspace*) ;;
+                *) continue ;;
+              esac
+              case "$exe $cmdline" in
+                *$current*) continue ;;
+              esac
+              echo "citrix-reap-stale: pid $pid ($comm) is on a previous generation"
+              kill "$pid" 2>/dev/null || true
+            done
+          '';
+        };
       };
   };
 

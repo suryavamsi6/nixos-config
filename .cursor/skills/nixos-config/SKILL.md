@@ -61,7 +61,7 @@ Do not revive them unless asked. Desktop shell is **Serpantinum** (Quickshell).
 
 ## Bluetooth / audio
 
-MediaTek USB BT `0e8d:0616` (`btusb`). Paired: Sennheiser ACCENTUM Plus, MCHOSE K7 Ultra.
+Intel Bluetooth (`btusb`, e.g. AX200/AX210). Paired: Sennheiser ACCENTUM Plus, MCHOSE K7 Ultra. MediaTek USB `0e8d:0616` is retired — unplug it.
 
 - **Never** spawn `bluetoothctl` from bar/watchers (`scan on`, `--timeout`, poll loops). It registers AdvertisementMonitor and drops A2DP (`Host is down`).
 - Query BlueZ with `busctl` (`bt_dbus.sh` / `bt_fetch.sh`). Device paths: `^${adapter}/dev_[^/]+$` (skip GATT children).
@@ -73,7 +73,9 @@ MediaTek USB BT `0e8d:0616` (`btusb`). Paired: Sennheiser ACCENTUM Plus, MCHOSE 
 `modules/packages/work.nix`: wrap with `GDK_BACKEND=x11` (NVIDIA WebKit crash on Wayland).
 `RememberUsername=true` via `overrideAttrs` on `AuthManConfig.xml`. **Never** store the MS username or password in the flake. Leave `SavePasswordMode` alone. Rebuild of this package is slow.
 
-Embedded WebKitGTK Entra/SAML auto-submits after 30s (too short for MFA) and fails on stale NetScaler cookies. Keep `AADSSOWithFido2AuthenticationEnabled` / `FIDO2Enabled` so login uses Firefox (`FIDO2AuthBrowser`, 180s timeout) via `ctxaadsso://`. Citrix wrappers prefix `firefox` on PATH (Floorp/Zen names are ignored). `gnome-keyring` is Secret Service only — leave `gcr-ssh-agent` off (1Password). After a Citrix wrap change, `pkill` leftover `icasessionmgr` / `AuthManagerDaemon` / `selfservice`.
+Entra/SAML login stays on the **embedded WebKitGTK dialog** — leave `AADSSOWithFido2AuthenticationEnabled` / `SharedAuthContextEnabled` / `FIDO2Enabled` at the vendor `false`. Setting them true routes login to `FIDO2AuthBrowser` over `ctxaadsso://`, and since Citrix only launches known browser names it opens a bare Firefox with no MS session or passkeys instead of a popup; the attempt then ends as `LogonResult_CancelledByUser` and Citrix never opens. (`InteractionNotAllowed` just before that is the normal failed silent-SSO probe, not the fault.) The `WEBKIT_DISABLE_COMPOSITING_MODE` / `WEBKIT_DISABLE_DMABUF_RENDERER` flags exist for that embedded dialog on NVIDIA; `firefox` on PATH is only for links opened from the store UI. `gnome-keyring` is Secret Service only — leave `gcr-ssh-agent` off (1Password).
+
+**Stale Citrix daemons survive `nh os switch` and pin the old store path.** `systemd.services.citrix-reap-stale` (in `work.nix`) kills only `ServiceRecord` / `AuthManagerDaemon` / `PrimaryAuthManager` / `selfservice` / `ctxwebhelper` / `storebrowse` whose exe or cmdline is a *previous* `citrix-workspace` store path. It does **not** touch `wfica` or `icasessionmgr` (live session). The unit embeds the current package path, so it re-runs on switch only when Citrix itself changed. Manual check: compare `ps -eo pid,args` against `readlink -f /opt/Citrix/ICAClient`. Kill leftover PIDs by number — `pkill -f selfservice` matches your own shell. Signature if it still happens: nFactor hands over `m_StartUrl=.../nf/auth/startWebview.do`, no `PrimaryAuthManager` window maps, ~3s later `LogonResult_CancelledByUser` / "The user clicked cancel" with nothing clicked. Healthy: floating `PrimaryAuthManager` popup, then `CTokenCaches::AddAgSession`.
 
 Zoom-inside-Citrix uses `zoomvdi-universal-plugin` **7.0.11.27050**, matching the VDI Zoom client (7.0.11). Version parity is mandatory: a 6.6.x plugin against a 7.0.x client loads, spawns the helper, fails the handshake and exits in ~1s loops with no error — looking exactly like a local crash. Check the client version in the VDI (Zoom → About) before debugging the host. Bump via `version`; the URL derives `shortVersion` from it, and builds are listed on Zoom's "VDI releases and downloads" KB. 7.0.x bundles Qt 6.8 (6.6.x was Qt 5.15) and needs `zstd`. `libZoomPlugin.so` is registered as Citrix `ZoomMedia.so`. Citrix execs the sibling `$plugin/zoom` inheriting wfica's `LD_LIBRARY_PATH` (no `libz`), so the helper must be self-sufficient: `patchelf --force-rpath --set-rpath` plugin+Qt+Nix libs onto `zoom`, `aomhost` and `crash_processor`. Also symlink Nix `.so`s into the plugin dir and `L+ /usr/lib/zoomvdi-universal-plugin`. `DT_RPATH` on the executable is *not* sufficient on its own — the loader prunes that list as it walks the dependency graph, so late lookups (`libxkbcommon`, `libz`, `libzstd`, `libEGL`) miss it and fall through to the system paths. `autoPatchelf` the bundled `Qt/lib`, `Qt/plugins` and `Qt/qml` too so every object carries its own runpath; the vendor Qt tree ships with none. Verify with `ldd`: `env -u LD_LIBRARY_PATH ldd $plugin/zoom` must report zero `not found`. Do not `buildFHSEnv` the helper. After a Citrix wrap change, `pkill icasessionmgr`. Do not bump the plugin past the VDI client version.
 
@@ -89,8 +91,8 @@ Do not add a tracing hatch to `$plugin/zoom`: `ptrace_scope=1` blocks attaching 
 
 ## Boot / disks
 
-- NixOS on `nvme1n1` (btrfs `@ @home @nix @log @swap`). Windows 11 on `nvme0n1`.
-- `/boot` is the **2G NixOS ESP** (`label NIXBOOT`), not the Windows ESP. README dual-boot section that says “shared Windows EFI” is stale.
+- NixOS on **nvme0n1** (Samsung 980 PRO): one **ext4** root (`label nixos`) + 2G `NIXBOOT` ESP. Windows 11 on **nvme1n1** (WD SN850X). Full wipe/reinstall steps: repo `README.md`.
+- `/boot` is the **2G NixOS ESP** (`label NIXBOOT`), not the Windows ESP.
 - Limine `extraConfig` is **prepended**. Put `default_entry: 3` first (1 Windows, 2 NixOS folder, 3 latest generation). A trailing `default_entry` is ignored.
 - NIC: Realtek RTL8125 via out-of-tree `r8125` (`r8169` blacklisted). Ethernet `enp14s0`. Do not switch back to `r8169`.
 
