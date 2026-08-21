@@ -11,7 +11,6 @@
           libnotify
           xrdb
           hyprpolkitagent
-          xdg-desktop-portal-hyprland
           xdg-desktop-portal-gtk
           hyprcursor
           hypridle
@@ -22,6 +21,7 @@
           hyprshutdown
           aquamarine
           wl-clipboard
+          (pkgs.callPackage "${inputs.hyprexpose}/default.nix" { })
           gst_all_1.gstreamer
           gst_all_1.gst-plugins-ugly
           gst_all_1.gst-plugins-good
@@ -47,14 +47,31 @@
   options.flake.modules.homeManager.hyprland = lib.mkOption {
     type = lib.types.deferredModule;
     default =
-      { pkgs, ... }:
+      { pkgs, inputs, ... }:
+      let
+        hyprexpose = pkgs.callPackage "${inputs.hyprexpose}/default.nix" { };
+      in
       {
-        imports = [
-          ./script.nix
-        ];
+        home.packages = [ hyprexpose ];
+        systemd.user.services.hyprexpose = {
+          Unit = {
+            Description = "Workspace overview overlay";
+            After = [ "graphical-session.target" ];
+            PartOf = [ "graphical-session.target" ];
+          };
+          Service = {
+            ExecStart = "${lib.getExe hyprexpose} --allow-mouse";
+            Restart = "on-failure";
+          };
+          Install.WantedBy = [ "graphical-session.target" ];
+        };
 
         # Polkit GUI auth prompts (sudo/pkexec from desktop apps)
         services.hyprpolkitagent.enable = true;
+
+        # Compositor death makes xdph SEGV then Restart=on-failure races
+        # shutdown ("stop job is running for User Manager").
+        systemd.user.services.xdg-desktop-portal-hyprland.Service.Restart = lib.mkForce "no";
 
         services.hypridle = {
           enable = true;
@@ -90,6 +107,7 @@
           # NixOS module already installs Hyprland from the flake input
           package = null;
           portalPackage = null;
+          plugins = [ ];
 
           extraLuaFiles = {
             # Required by binds.lua; not auto-required on its own

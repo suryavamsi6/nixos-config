@@ -7,10 +7,10 @@
 # Or paste the relevant fileSystems / swapDevices from:
 #   nixos-generate-config --root /mnt --show-hardware-config
 #
-# Expected layout (matches this module + README reinstall):
-#   - NixOS ESP (vfat, label NIXBOOT) at /boot on nvme0n1p1 (Samsung)
-#   - Windows ESP left on nvme1n1p1; Limine chainloads it by GPT GUID
-#   - one ext4 root (label nixos) on nvme0n1p2 — /home /nix are directories
+# Match disks by MODEL, not nvmeN (names swap). This machine:
+#   - Samsung 980 PRO 1TB — NixOS ESP (~1G vfat) + ext4 root + swap
+#   - WD SN850X 2TB — Windows 11; Limine chainloads its ESP by GPT GUID
+# Currently Samsung is nvme1n1 and WD is nvme0n1.
 { lib, ... }:
 {
   options.flake.modules.nixos.hardwareHyprland = lib.mkOption {
@@ -19,7 +19,6 @@
       {
         config,
         lib,
-        pkgs,
         modulesPath,
         ...
       }:
@@ -49,27 +48,27 @@
           options r8125 aspm=0 eee=0
         '';
 
-        # Ext4 root — REPLACE UUID after wipe/reinstall (or keep by-label).
         fileSystems."/" = {
-          device = "/dev/disk/by-label/nixos";
+          device = "/dev/disk/by-uuid/8e68c4ac-6bc7-4fa3-b43e-0cabc31931cf";
           fsType = "ext4";
           options = [ "noatime" ];
         };
 
-        # NixOS EFI System Partition (2G on the Samsung SSD). Do not reuse
+        # NixOS EFI System Partition (~1G on the Samsung SSD). Do not reuse
         # the 100M Windows ESP — Limine copies kernels here.
         fileSystems."/boot" = {
-          device = "/dev/disk/by-label/NIXBOOT";
+          device = "/dev/disk/by-uuid/EC21-2EC2";
           fsType = "vfat";
           options = [
-            "fmask=0022"
-            "dmask=0022"
+            "fmask=0077"
+            "dmask=0077"
           ];
           neededForBoot = true;
         };
 
-        # Create /swapfile on the ext4 root during install (see README)
-        swapDevices = [ { device = "/swapfile"; } ];
+        swapDevices = [ { device = "/dev/disk/by-uuid/6d00e2b3-74e5-4f10-aafa-3fda71eaa7e2"; } ];
+
+        services.fstrim.enable = true;
 
         networking.useDHCP = lib.mkDefault true;
 

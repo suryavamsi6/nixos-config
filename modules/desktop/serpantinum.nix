@@ -210,7 +210,7 @@
           p = Path(sys.argv[1])
           t = p.read_text()
           start = t.index("get_status() {")
-          end = t.index("\ntoggle_power() {")
+          end = t.index('\ncmd="$1"')
           repl = textwrap.dedent(
               """
               get_status() {
@@ -220,6 +220,28 @@
                       return
                   fi
                   bt_dbus_panel_status
+              }
+
+              toggle_power() {
+                  source "$(dirname "''${BASH_SOURCE[0]}")/../watchers/bt_dbus.sh"
+                  local ad
+                  ad=$(bt_dbus_adapter)
+                  if [ -n "$ad" ] && bt_dbus_bool "$ad" org.bluez.Adapter1 Powered; then
+                      bt_dbus_set_powered off
+                  else
+                      bt_dbus_set_powered on
+                  fi
+                  sleep 0.5
+              }
+
+              connect_dev() {
+                  source "$(dirname "''${BASH_SOURCE[0]}")/../watchers/bt_dbus.sh"
+                  bt_dbus_connect "$1"
+              }
+
+              disconnect_dev() {
+                  source "$(dirname "''${BASH_SOURCE[0]}")/../watchers/bt_dbus.sh"
+                  bt_dbus_disconnect "$1"
               }
 
               """
@@ -353,6 +375,36 @@
             ${pkgs.systemd}/bin/busctl --system tree org.bluez --list 2>/dev/null | grep -E "^''${ad}/dev_[^/]+$"
           }
           bt_dbus_jq_escape() { ${pkgs.jq}/bin/jq -n --arg s "$1" '$s'; }
+
+          # Powered=false rfkill-softblocks MediaTek; bluetoothctl power on then
+          # fails with 0x03. Unblock first. Never invoke bluetoothctl here.
+          bt_dbus_set_powered() {
+            local ad
+            ad=$(bt_dbus_adapter)
+            [ -n "$ad" ] || return 1
+            if [ "$1" = on ]; then
+              ${pkgs.util-linux}/bin/rfkill unblock bluetooth >/dev/null 2>&1 || true
+              ${pkgs.systemd}/bin/busctl --system set-property org.bluez "$ad" org.bluez.Adapter1 Powered b true
+            else
+              ${pkgs.systemd}/bin/busctl --system set-property org.bluez "$ad" org.bluez.Adapter1 Powered b false
+            fi
+          }
+          bt_dbus_device_path() {
+            local ad mac="$1"
+            ad=$(bt_dbus_adapter)
+            [ -n "$ad" ] || return 1
+            echo "$ad/dev_''${mac//:/_}"
+          }
+          bt_dbus_connect() {
+            local path
+            path=$(bt_dbus_device_path "$1") || return 1
+            ${pkgs.systemd}/bin/busctl --system call org.bluez "$path" org.bluez.Device1 Connect >/dev/null
+          }
+          bt_dbus_disconnect() {
+            local path
+            path=$(bt_dbus_device_path "$1") || return 1
+            ${pkgs.systemd}/bin/busctl --system call org.bluez "$path" org.bluez.Device1 Disconnect >/dev/null
+          }
 
           bt_dbus_panel_status() {
             local ad power connected_json devices_json c_objs d_objs
@@ -541,7 +593,13 @@ fi'
 
           substituteInPlace $out/qs_manager.sh \
             --replace-fail '{ echo "scan on"; sleep infinity; } | stdbuf -oL bluetoothctl > "$BT_SCAN_LOG" 2>&1 &' \
-                           ': # bluetoothctl scan on drops A2DP on MediaTek; paired devices still list over D-Bus'
+                           ': # bluetoothctl scan on drops A2DP on MediaTek; paired devices still list over D-Bus' \
+            --replace-fail '(bluetoothctl scan off > /dev/null 2>&1) &' \
+                           ':'
+
+          substituteInPlace $out/workspaces.sh \
+            --replace-fail '(timeout 2 bluetoothctl scan off > /dev/null 2>&1) &' \
+                           ':'
 
           substituteInPlace $out/quickshell/settings/SettingsPopup.qml \
             --replace-fail 'Workspaces (SUPER + 1-9)' 'Workspaces (SUPER + 1-0, SHIFT moves)' \
@@ -651,7 +709,7 @@ fi'
             (mkBind "SUPER" "R" "exec" "toggle settings")
             (mkBind "SUPER" "Q" "exec" "kitty")
             (mkBind "SUPER" "RETURN" "exec" "kitty")
-            (mkBind "SUPER" "E" "exec" "thunar")
+            (mkBind "SUPER" "E" "exec" "nautilus")
             (mkBind "SUPER" "B" "exec" "zen-twilight")
             (mkBind "SUPER" "P" "exec" "hyprpicker -a")
             (mkBind "SUPER" "X" "killactive" "close window")
@@ -699,8 +757,7 @@ fi'
             (mkBind "SUPER" "V" "exec" "toggle volume")
             (mkBind "SUPER" "S" "exec" "toggle calendar")
             (mkBind "SUPER + SHIFT" "T" "exec" "toggle focustime")
-            (mkBind "SUPER" "F1" "exec" "toggle-laptop.sh")
-            (mkBind "SUPER" "F2" "exec" "toggle-monitor.sh")
+            (mkBind "SUPER" "TAB" "exec" "workspace overview")
           ];
 
         seedSettings = builtins.toJSON {
@@ -772,9 +829,6 @@ fi'
           iw
           libnotify
           python3
-          thunar
-          thunar-volman
-          tumbler
           hyprpicker
           cliphist
           qsWrapped
@@ -866,6 +920,10 @@ fi'
             ExecStart = "${qsWrapped}/bin/qs -p ${config.home.homeDirectory}/.config/hypr/scripts/quickshell/Shell.qml";
             Restart = "on-failure";
             RestartSec = "1s";
+            # Steam / nmcli / pactl waiters are in this cgroup when started
+            # from the bar. Do not wait 90s for them on poweroff.
+            KillMode = "control-group";
+            TimeoutStopSec = "5s";
           };
           Install.WantedBy = [ "graphical-session.target" ];
         };

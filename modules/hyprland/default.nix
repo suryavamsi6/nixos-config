@@ -3,6 +3,5 @@
 {
   imports = [
     ./wm.nix
-    ./hyprpaper.nix
   ];
 }

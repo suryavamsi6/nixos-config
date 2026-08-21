@@ -23,7 +23,6 @@
         heroic
         bottles
         qbittorrent
-        openrgb
         mangojuice
       ];
 
@@ -36,15 +35,43 @@
             extraPkgs = (
               pkgs: with pkgs; [
                 gamemode
+                mangohud
               ]
             );
+            extraProfile = ''
+              export MANGOHUD=1
+            '';
           };
         };
       };
 
-      systemd.tmpfiles.rules = [
-        "C+ /home/surya/.local/share/Steam/steam_dev.cfg 0644 surya users - ${steamDevCfg}"
+      # Must run as the user. A system C+ rule creates
+      # ~/.local/share/Steam as root and bootstraplinux_*.tar.xz cannot
+      # extract (Cannot mkdir).
+      systemd.user.tmpfiles.rules = [
+        "C+ %h/.local/share/Steam/steam_dev.cfg 0644 - - - ${steamDevCfg}"
       ];
+    };
+  };
+
+  options.flake.modules.homeManager.gaming = lib.mkOption {
+    type = lib.types.deferredModule;
+    default = { ... }: {
+      programs.mangohud = {
+        enable = true;
+        settings = {
+          toggle_hud = "Alt_L+G";
+          fps = true;
+          frametime = true;
+          frame_timing = true;
+          cpu_stats = true;
+          cpu_temp = true;
+          gpu_stats = true;
+          gpu_temp = true;
+          ram = true;
+          vram = true;
+        };
+      };
     };
   };
 }

@@ -109,12 +109,14 @@ hl.bind(mainMod .. " + SHIFT + L", hl.dsp.exec_cmd("bash " .. lock), { locked = 
 
 -- Serpantinum panels on keys the old map did not use
 hl.bind(mainMod .. " + D", hl.dsp.exec_cmd("bash " .. qs .. " toggle clipboard"))
+-- Node 100 custom key next to clipboard (Win+Tab / XF86LaunchA)
+local function toggleOverview()
+  hl.exec_cmd("pkill -USR1 -x hyprexpose")
+end
+hl.bind(mainMod .. " + TAB", toggleOverview)
+hl.bind("XF86LaunchA", toggleOverview)
 hl.bind(mainMod .. " + W", hl.dsp.exec_cmd("bash " .. qs .. " toggle wallpaper"))
 hl.bind(mainMod .. " + N", hl.dsp.exec_cmd("bash " .. qs .. " toggle network"))
 hl.bind(mainMod .. " + V", hl.dsp.exec_cmd("bash " .. qs .. " toggle volume"))
 hl.bind(mainMod .. " + S", hl.dsp.exec_cmd("bash " .. qs .. " toggle calendar"))
 hl.bind(mainMod .. " + SHIFT + T", hl.dsp.exec_cmd("bash " .. qs .. " toggle focustime"))
-
--- Monitor toggles
-hl.bind(mainMod .. " + F1", hl.dsp.exec_cmd("bash ~/.config/hypr/toggle-laptop.sh"))
-hl.bind(mainMod .. " + F2", hl.dsp.exec_cmd("bash ~/.config/hypr/toggle-monitor.sh"))

@@ -14,20 +14,18 @@ Flake hosts:
 
 ## Reinstall NixOS (ext4) — nuke Samsung only
 
-This is the weekend wipe for the **Samsung 980 PRO 1TB** (`nvme0n1`). **Do not touch** the WD_BLACK SN850X (`nvme1n1`) — that is Windows 11.
+Wipe the **Samsung 980 PRO 1TB** only. Identify by **MODEL**, not `nvmeN` (names swap). On this machine Samsung is currently `nvme1n1` and the WD_BLACK SN850X (Windows 11) is `nvme0n1`.
 
-Target layout after install:
+Live layout:
 
 | Disk | Role |
 |------|------|
-| `nvme0n1` Samsung | NixOS only: 2G ESP `NIXBOOT` + one ext4 root (label `nixos`) |
-| `nvme1n1` WD | Windows untouched. ESP PARTUUID `e60abccf-1a4b-4973-a37c-e20b992a9bc3` |
+| Samsung 980 PRO (`nvme1n1` today) | NixOS: ~1G ESP UUID `EC21-2EC2` at `/boot`, ext4 root, swap partition |
+| WD SN850X (`nvme0n1` today) | Windows untouched. ESP PARTUUID `e60abccf-1a4b-4973-a37c-e20b992a9bc3` |
 
-Limine lives on `NIXBOOT` and chainloads Windows via that GPT GUID (see `modules/boot/default.nix`).
+Limine lives on the NixOS ESP and chainloads Windows via that GPT GUID (see `modules/boot/default.nix`).
 
-Also: unplug the MediaTek USB Bluetooth dongle (`0e8d:0616`) and use the new **Intel** Bluetooth card before first boot of the new install.
-
-> **Do not `nh os switch` this commit on the current btrfs install.** `hyprland-hw.nix` already expects ext4. Pull/clone it from the installer after you wipe the Samsung disk.
+Wi-Fi/BT is **MediaTek MT7922** (PCIe + USB `0e8d:0616`). That USB id is the combo card, not a dongle — do not unplug it.
 
 ### 0. Prep before you wipe
 
@@ -39,7 +37,7 @@ Also: unplug the MediaTek USB Bluetooth dongle (`0e8d:0616`) and use the new **I
    - Confirm Windows still boots.
 4. Firmware: UEFI, Secure Boot **off** for the first bring-up (Limine SB can be re-enabled later with `sbctl`).
 5. Write a NixOS USB from the current [ISO](https://nixos.org/download/).
-6. Physically remove / disable the MediaTek BT dongle; seat the Intel BT adapter (PCIe or USB — confirm with `lsusb` / `lspci` after the new install).
+6. Leave the MT7922 combo card in place (`lsusb` should still show `0e8d:0616`).
 
 ### 1. Boot the installer and confirm disks
 
@@ -49,31 +47,31 @@ lsblk -o NAME,SIZE,FSTYPE,LABEL,MODEL,PARTUUID
 
 Expected today:
 
-- `nvme0n1` — Samsung ~931G (NixOS — **this is what you wipe**)
-- `nvme1n1` — WD ~1.8T (Windows — **leave alone**)
+- `nvme1n1` — Samsung ~931G (NixOS — **this is what you wipe**)
+- `nvme0n1` — WD ~1.8T (Windows — **leave alone**)
 
-If labels/models are swapped on your machine, stop and rematch. Wiping the wrong NVMe destroys Windows.
+If names are swapped on your machine, stop and rematch by **MODEL**. Wiping the WD SN850X destroys Windows.
 
 ### 2. Wipe and partition the Samsung disk
 
-Only `nvme0n1`. Example with `parted` + `sgdisk`/`mkfs` (adjust if your device name differs):
+Only the Samsung 980 PRO. Example uses `nvme1n1` (today's name); confirm MODEL first:
 
 ```bash
 # Triple-check
-lsblk -o NAME,SIZE,MODEL /dev/nvme0n1
+lsblk -o NAME,SIZE,MODEL /dev/nvme1n1
 
 # Destroy the old GPT (Samsung ONLY)
-sudo wipefs -a /dev/nvme0n1
-sudo sgdisk --zap-all /dev/nvme0n1
+sudo wipefs -a /dev/nvme1n1
+sudo sgdisk --zap-all /dev/nvme1n1
 
-# New GPT: 2G ESP + rest Linux
-sudo parted /dev/nvme0n1 -- mklabel gpt
-sudo parted /dev/nvme0n1 -- mkpart NIXBOOT fat32 1MiB 2049MiB
-sudo parted /dev/nvme0n1 -- set 1 esp on
-sudo parted /dev/nvme0n1 -- mkpart nixos ext4 2049MiB 100%
+# New GPT: 1G ESP + rest Linux (match the live ~1G ESP, or use 2G if you prefer)
+sudo parted /dev/nvme1n1 -- mklabel gpt
+sudo parted /dev/nvme1n1 -- mkpart ESP fat32 1MiB 1025MiB
+sudo parted /dev/nvme1n1 -- set 1 esp on
+sudo parted /dev/nvme1n1 -- mkpart nixos ext4 1025MiB 100%
 
-sudo mkfs.vfat -F 32 -n NIXBOOT /dev/nvme0n1p1
-sudo mkfs.ext4 -L nixos /dev/nvme0n1p2
+sudo mkfs.vfat -F 32 /dev/nvme1n1p1
+sudo mkfs.ext4 -L nixos /dev/nvme1n1p2
 ```
 
 One ext4 volume is intentional: `/`, `/home`, `/nix`, `/var/log` are directories that share free space (no subvolume / size math).
@@ -83,7 +81,7 @@ One ext4 volume is intentional: `/`, `/home`, `/nix`, `/var/log` are directories
 ```bash
 sudo mount /dev/disk/by-label/nixos /mnt
 sudo mkdir -p /mnt/boot
-sudo mount /dev/disk/by-label/NIXBOOT /mnt/boot
+sudo mount /dev/nvme1n1p1 /mnt/boot
 ```
 
 ### 4. Swapfile on ext4
@@ -108,10 +106,9 @@ blkid
 
 Edit `modules/hardware/hyprland-hw.nix`:
 
-1. Set `fileSystems."/".device` to the **new** ext4 UUID (`by-uuid/...` from `blkid` on `nvme0n1p2`), or keep `by-label/nixos` if you used `-L nixos`.
-2. Leave `/boot` on `by-label/NIXBOOT`.
-3. Keep `swapDevices = [ { device = "/swapfile"; } ];`.
-4. Do **not** point `/boot` at the Windows ESP.
+1. Set `fileSystems."/".device` to the **new** ext4 UUID (`by-uuid/...` from `blkid` on the Samsung root), or keep `by-label/nixos` if you used `-L nixos`.
+2. Set `/boot` to the new NixOS ESP UUID. Do not use the Windows ESP.
+3. Point `swapDevices` at the new swap UUID (or `/swapfile` if you used a file).
 
 Optional check:
 
@@ -127,7 +124,7 @@ Confirm Windows chainload GUID in `modules/boot/default.nix` still matches:
 guid(e60abccf-1a4b-4973-a37c-e20b992a9bc3):/EFI/Microsoft/Boot/bootmgfw.efi
 ```
 
-If Windows was repartitioned, update that PARTUUID from `lsblk -o NAME,PARTUUID /dev/nvme1n1`.
+If Windows was repartitioned, update that PARTUUID from `lsblk -o NAME,MODEL,PARTUUID` on the WD SN850X.
 
 ### 6. Install
 
@@ -153,11 +150,11 @@ sudo passwd surya
 lsblk -f
 findmnt / /boot
 df -hT /
-lsusb | grep -iE 'intel|8087|bluetooth'
-bluetoothctl show
+lsusb | grep -iE 'mediatek|0e8d|bluetooth'
+rfkill list bluetooth
 ```
 
-Intel BT should appear as an `hci` adapter without the MediaTek `0e8d:0616` USB id. Pair ACCENTUM Plus / MCHOSE K7 Ultra again (keys do not carry over from a wiped home).
+MT7922 should appear as an `hci` adapter (`lsusb` still shows `0e8d:0616`). Pair ACCENTUM Plus / MCHOSE K7 Ultra again (keys do not carry over from a wiped home).
 
 ### 8. Day-2
 
@@ -174,17 +171,16 @@ Keep SB off until Limine boots cleanly, then enroll keys with `sbctl` per [NixOS
 
 ### Pitfalls
 
-- **Wrong disk**: wiping `nvme1n1` destroys Windows. Match by **MODEL** and size, not only by name.
-- **Shared Windows ESP**: do not mount the 100M Windows ESP at `/boot`. Kernels need the 2G `NIXBOOT` partition.
+- **Wrong disk**: wiping the WD SN850X destroys Windows. Match by **MODEL** and size, not `nvmeN`.
+- **Shared Windows ESP**: do not mount the 100M Windows ESP at `/boot`. Kernels need the NixOS ESP (~1G on the Samsung SSD).
 - **Stale UUIDs** in `hyprland-hw.nix` → emergency shell on first boot.
-- **MediaTek still plugged in**: two adapters confuse pairing; unplug the dongle.
 - **NVIDIA / r8125**: this host still expects NVIDIA + out-of-tree `r8125` (not `r8169`).
 
-### Bluetooth notes (Intel)
+### Bluetooth notes (MT7922)
 
 - A2DP-only policy stays (no HFP autoswitch) — Citrix must not flip the headset to HFP. See `modules/audio/default.nix`.
 - Do not spawn `bluetoothctl` from Serpantinum bar scripts.
-- MediaTek-specific USB autosuspend udev rules are obsolete once that dongle is gone; Intel `btusb` is enough for AX200/AX210-class adapters.
+- USB id `0e8d:0616` is the onboard combo card. Do not unplug it. `Powered=false` rfkill-softblocks it; `rfkill unblock bluetooth` runs before BlueZ.
 
 ---
 

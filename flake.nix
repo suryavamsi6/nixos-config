@@ -21,13 +21,10 @@
     };
 
     hyprland.url = "github:hyprwm/Hyprland";
-    hyprpanel.url = "github:Jas-SinghFSU/HyprPanel";
-    hyprpanel.inputs.nixpkgs.follows = "nixpkgs";
-    hy3 = {
-      url = "github:outfoxxed/hy3";
-      inputs.hyprland.follows = "hyprland";
+    hyprexpose = {
+      url = "github:ThiagoAVicente/hyprexpose";
+      flake = false;
     };
-    ags.url = "github:aylur/ags";
     chaotic.url = "github:chaotic-cx/nyx/nyxpkgs-unstable";
     serpantinum = {
       url = "github:ilyamiro/serpantinum";

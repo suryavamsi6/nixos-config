@@ -9,6 +9,7 @@ hl.on("hyprland.start", function()
   hl.exec_cmd("sh -c 'pgrep -x awww-daemon >/dev/null || exec awww-daemon'")
   -- systemd starts Serpantinum; only spawn it if that unit is not already up
   hl.exec_cmd("sh -c 'pgrep -f \"quickshell.*Shell.qml\" >/dev/null || exec qs -p " .. shell .. "'")
+  hl.exec_cmd("sh -c 'pgrep -x hyprexpose >/dev/null || exec hyprexpose --allow-mouse'")
   hl.exec_cmd("sh -c 'pgrep -x playerctld >/dev/null || exec playerctld'")
   hl.exec_cmd("sh -c 'pgrep -x blueman-applet >/dev/null || exec blueman-applet'")
   hl.exec_cmd("wl-paste --type text --watch cliphist store")

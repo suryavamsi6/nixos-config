@@ -1,8 +1,8 @@
 # Boot — Limine + Windows dual-boot chainload
 #
-# Secure Boot: leave enabled only if you will enroll Limine keys (sbctl)
-# after install. For the first dual-boot bring-up, disable Secure Boot in
-# firmware, or temporarily set secureBoot.enable = false.
+# Secure Boot: sbctl keys live in /var/lib/sbctl. Enroll with
+# `sudo sbctl enroll-keys --microsoft --firmware-builtin` while firmware
+# is in Setup Mode (Windows needs the Microsoft keys), then rebuild.
 { lib, ... }:
 {
   options.flake.modules.nixos.boot = lib.mkOption {
@@ -10,7 +10,7 @@
     default = { ... }: {
       boot.loader.limine.enable = true;
       boot.loader.limine.secureBoot.enable = true;
-      # Kernels live on the 2G NixOS ESP (Samsung, label NIXBOOT), not the
+      # Kernels live on the NixOS ESP (~1G on the Samsung SSD), not the
       # 100M Windows ESP. ~43M per generation.
       boot.loader.limine.maxGenerations = 10;
       boot.loader.efi.canTouchEfiVariables = true;

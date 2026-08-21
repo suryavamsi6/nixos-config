@@ -5,8 +5,8 @@
     system = "x86_64-linux";
     specialArgs = { inherit inputs; system = "x86_64-linux"; };
     modules = with config.flake.modules; [
-      # Hardware
-      nixos.hardwareGnome
+      # Hardware (same machine as #nixos)
+      nixos.hardwareHyprland
       nixos.nvidia
 
       # Core system
@@ -34,8 +34,6 @@
       ({ pkgs, ... }: {
         networking.hostName = "nixos";
 
-        nixpkgs.overlays = [ inputs.hyprpanel.overlay ];
-
         system.stateVersion = "24.11";
       })
 
@@ -58,7 +56,7 @@
           home.stateVersion = "24.11";
           programs.home-manager.enable = true;
 
-          home.packages = with inputs.nixpkgs.legacyPackages.x86_64-linux; [
+          home.packages = [
             inputs.zen-browser.packages."x86_64-linux".twilight-official
           ];
         };

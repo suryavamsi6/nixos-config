@@ -10,16 +10,12 @@
         extraGroups = [
           "networkmanager"
           "wheel"
-          "openrazer"
           "disk"
         ];
         packages = [ ];
       };
     };
   };
-
-  # Gnome host has slightly fewer groups, but we use the superset.
-  # The hyprland host adds "disk" which is harmless on gnome too.
 
   options.flake.modules.darwin.users = lib.mkOption {
     type = lib.types.deferredModule;

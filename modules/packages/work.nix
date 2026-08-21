@@ -9,6 +9,7 @@ let
       zoomvdi = zoomvdiFor pkgs;
     in
     pkgs.citrix-workspace.overrideAttrs (old: {
+      nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.makeWrapper ];
       postFixup = (old.postFixup or "") + ''
         xml="$out/opt/citrix-icaclient/config/AuthManConfig.xml"
         if [ -f "$xml" ]; then
@@ -43,10 +44,15 @@ let
         # Firefox stays on PATH only so links opened from the store UI resolve;
         # login itself does not use it (see the AuthManConfig note above).
         # The WEBKIT_* flags matter for the embedded login dialog on NVIDIA.
+        # wrapGAppsHook replaces wrapProgram with makeCWrapper, which rejects
+        # --run. wrapProgramShell is the bash wrapper that still supports it.
         if [ -x "$ica/icasessionmgr" ]; then
-          wrapProgram "$ica/icasessionmgr" \
+          wrapProgramShell "$ica/icasessionmgr" \
             --set ICAROOT "$ica" \
             --prefix PATH : "${lib.makeBinPath [ pkgs.firefox ]}" \
+            --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [ pkgs.libpulseaudio ]}" \
+            --set PULSE_LATENCY_MSEC 30 \
+            --run "ulimit -c unlimited" \
             --set-default GDK_BACKEND x11 \
             --set-default EGL_PLATFORM x11 \
             --set-default QT_QPA_PLATFORM xcb \
@@ -137,6 +143,8 @@ in
                 rm -f "$out/bin/$name"
                 makeWrapper "${citrix}/bin/$name" "$out/bin/$name" \
                   --prefix PATH : "${lib.makeBinPath [ pkgs.firefox ]}" \
+                  --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [ pkgs.libpulseaudio ]}" \
+                  --set PULSE_LATENCY_MSEC 30 \
                   --set GDK_BACKEND x11 \
                   --set QT_QPA_PLATFORM xcb \
                   --unset QT_QPA_PLATFORMTHEME \

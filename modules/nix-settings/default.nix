@@ -32,6 +32,12 @@
       };
       nixpkgs.config.allowUnfree = true;
 
+      # Desktop apps launched from the bar (Steam, waiters) live in the
+      # user slice. Stock stop timeouts are 90s–2min, which is the
+      # "A stop job is running for User Manager for UID 1000" wait.
+      systemd.settings.Manager.DefaultTimeoutStopSec = "15s";
+      systemd.user.settings.Manager.DefaultTimeoutStopSec = "8s";
+
       # googlefonts/nanoemoji retagged v0.16.0; nixpkgs hash is stale and
       # blocks jetbrains-mono -> system fonts -> Steam FHS.
       nixpkgs.overlays = [

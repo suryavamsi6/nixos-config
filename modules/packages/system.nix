@@ -30,11 +30,9 @@
     in
     {
       environment.systemPackages = with pkgs; [
-        polychromatic
         pavucontrol
         openrgb
         superfile
-        toybox
         nautilus
         nautilus-open-any-terminal
         lm_sensors
@@ -55,7 +53,6 @@
       services.upower.enable = true;
       services.blueman.enable = true;
 
-      hardware.openrazer.enable = false;
       qt.enable = true;
 
       # 1Password (system module required for polkit + browser integration)
@@ -67,7 +64,7 @@
 
       programs.nh = {
         enable = true;
-        flake = "/home/$USER/Dotfiles/nixos-config";
+        flake = "/home/surya/Dotfiles/nixos-config";
       };
     };
   };

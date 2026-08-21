@@ -49,6 +49,7 @@
           settings.Login.HandleLidSwitch = "ignore";
           settings.Login.HandleLidSwitchExternalPower = "ignore";
           settings.Login.HandleLidSwitchDocked = "ignore";
+          settings.Login.KillUserProcesses = true;
         };
 
         system.stateVersion = "24.11";
@@ -69,6 +70,7 @@
             homeManager.wallpapers
             homeManager.dev
             homeManager.work
+            homeManager.gaming
           ];
 
           home.username = "surya";
@@ -76,7 +78,7 @@
           home.stateVersion = "24.11";
           programs.home-manager.enable = true;
 
-          home.packages = with inputs.nixpkgs.legacyPackages.x86_64-linux; [
+          home.packages = [
             inputs.zen-browser.packages."x86_64-linux".twilight
           ];
         };

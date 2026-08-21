@@ -37,14 +37,14 @@ options.flake.modules.homeManager.example = lib.mkOption {
 Import only from the host file (`modules/hosts/nixos-hyprland.nix` for `#nixos`) via
 `with config.flake.modules`. Defining a module does **not** enable it.
 
-Dead (defined, not imported by `#nixos`): `ags`, `swaync`, `hyprlauncher`, `hyprpaper`, `gtkTheme`.
-Do not revive them unless asked. Desktop shell is **Serpantinum** (Quickshell).
+Dead desktop modules were removed (AGS, SwayNC, hyprlauncher, hyprpaper, gtkTheme). Do not revive them unless asked. Desktop shell is **Serpantinum** (Quickshell).
 
 ## Hyprland
 
 - `wayland.windowManager.hyprland.configType = "lua"` (0.55+). Edit `modules/hyprland/lua/*.lua`, not hyprlang.
 - Dispatchers are Lua: `hyprctl dispatch 'hl.dsp.dpms("off")'`, not `dispatch dpms off`.
 - Monitor: MAG 341C OLED `HDMI-A-2` `3440x1440@175` HDR in `lua/monitors.lua`.
+- Workspace overview: hyprexpose (standalone overlay, not a C++ plugin). Super+Tab sits next to clipboard (Super+D) on the Node 100 custom row; also `XF86LaunchA`. Daemon: `hyprexpose --allow-mouse`, toggle `pkill -USR1 -x hyprexpose`. Esc closes. hymission does not compile against locked Hyprland git (CWindow members moved onto presentation/state). Do not mix hyprpm.
 - DM: greetd/tuigreet. Shell: Fish. Terminal: kitty. Browser package: zen-twilight.
 
 ## Serpantinum
@@ -61,7 +61,7 @@ Do not revive them unless asked. Desktop shell is **Serpantinum** (Quickshell).
 
 ## Bluetooth / audio
 
-Intel Bluetooth (`btusb`, e.g. AX200/AX210). Paired: Sennheiser ACCENTUM Plus, MCHOSE K7 Ultra. MediaTek USB `0e8d:0616` is retired — unplug it.
+MediaTek MT7922 combo (`btusb`; USB id `0e8d:0616` is the card, not a dongle — do not unplug). Paired: Sennheiser ACCENTUM Plus, MCHOSE K7 Ultra.
 
 - **Never** spawn `bluetoothctl` from bar/watchers (`scan on`, `--timeout`, poll loops). It registers AdvertisementMonitor and drops A2DP (`Host is down`).
 - Query BlueZ with `busctl` (`bt_dbus.sh` / `bt_fetch.sh`). Device paths: `^${adapter}/dev_[^/]+$` (skip GATT children).
@@ -71,7 +71,7 @@ Intel Bluetooth (`btusb`, e.g. AX200/AX210). Paired: Sennheiser ACCENTUM Plus, M
 ## Citrix
 
 `modules/packages/work.nix`: wrap with `GDK_BACKEND=x11` (NVIDIA WebKit crash on Wayland).
-`RememberUsername=true` via `overrideAttrs` on `AuthManConfig.xml`. **Never** store the MS username or password in the flake. Leave `SavePasswordMode` alone. Rebuild of this package is slow.
+`RememberUsername=true` via `overrideAttrs` on `AuthManConfig.xml`. **Never** store the MS username or password in the flake. Leave `SavePasswordMode` alone. Rebuild of this package is slow. `icasessionmgr` extra wrap must use `wrapProgramShell` (`--run ulimit`); `wrapGAppsHook` makes `wrapProgram` a C wrapper that rejects `--run`.
 
 Entra/SAML login stays on the **embedded WebKitGTK dialog** — leave `AADSSOWithFido2AuthenticationEnabled` / `SharedAuthContextEnabled` / `FIDO2Enabled` at the vendor `false`. Setting them true routes login to `FIDO2AuthBrowser` over `ctxaadsso://`, and since Citrix only launches known browser names it opens a bare Firefox with no MS session or passkeys instead of a popup; the attempt then ends as `LogonResult_CancelledByUser` and Citrix never opens. (`InteractionNotAllowed` just before that is the normal failed silent-SSO probe, not the fault.) The `WEBKIT_DISABLE_COMPOSITING_MODE` / `WEBKIT_DISABLE_DMABUF_RENDERER` flags exist for that embedded dialog on NVIDIA; `firefox` on PATH is only for links opened from the store UI. `gnome-keyring` is Secret Service only — leave `gcr-ssh-agent` off (1Password).
 
@@ -91,10 +91,11 @@ Do not add a tracing hatch to `$plugin/zoom`: `ptrace_scope=1` blocks attaching 
 
 ## Boot / disks
 
-- NixOS on **nvme0n1** (Samsung 980 PRO): one **ext4** root (`label nixos`) + 2G `NIXBOOT` ESP. Windows 11 on **nvme1n1** (WD SN850X). Full wipe/reinstall steps: repo `README.md`.
-- `/boot` is the **2G NixOS ESP** (`label NIXBOOT`), not the Windows ESP.
+- Match disks by **MODEL**, not `nvmeN`. NixOS is the **Samsung 980 PRO** (currently `nvme1n1`): one **ext4** root + ~1G ESP UUID `EC21-2EC2`. Windows 11 is the **WD SN850X** (currently `nvme0n1`). Full wipe/reinstall steps: repo `README.md`.
+- `/boot` is the **NixOS ESP** (~1G on the Samsung SSD), not the Windows ESP.
 - Limine `extraConfig` is **prepended**. Put `default_entry: 3` first (1 Windows, 2 NixOS folder, 3 latest generation). A trailing `default_entry` is ignored.
 - NIC: Realtek RTL8125 via out-of-tree `r8125` (`r8169` blacklisted). Ethernet `enp14s0`. Do not switch back to `r8169`.
+- Steam DNS: `services.dnsmasq` on 127.0.0.1, NM `dns = "none"`, upstream the LAN Pi-hole `192.168.0.105` (`modules/networking/default.nix`). Local cache + `dns-forward-max=32` so Steam does not saturate Pi-hole (that is what made nix fail to resolve `nix-community.cachix.org`). Do not also set NM `dns = "dnsmasq"`. Do not add public resolvers as extra `server=` entries — dnsmasq will skip a slow Pi-hole and leak ads. `services.resolved` stays off. IPv6 already disabled for Steam's "downgrading to ipv4-only" stall.
 
 ## Secrets / safety
 

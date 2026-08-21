@@ -232,6 +232,10 @@ stdenv.mkDerivation (finalAttrs: {
     #include <stdlib.h>
     #include <string.h>
 
+    #ifndef ZOOM_BIN_PATH
+    #define ZOOM_BIN_PATH "/usr/bin"
+    #endif
+
     __attribute__((constructor)) static void zoomvdi_fix(void) {
       struct sigaction sa;
       memset(&sa, 0, sizeof sa);
@@ -251,14 +255,23 @@ stdenv.mkDerivation (finalAttrs: {
       /* wfica exports XDG_CURRENT_DESKTOP but not GDMSESSION; Zoom reads both
          when picking a screen-capture backend. */
       setenv("GDMSESSION", "hyprland", 0);
+
+      /* wfica's PATH does not include pactl/pacmd/lspci. Zoom then logs
+         "no pactl and pacmd found" and talks audio through Citrix's Pulse
+         client, which SIGSEGVs in threaded-ml when the mic opens. */
+      setenv("PATH", ZOOM_BIN_PATH, 1);
     }
     EOF
-    $CC -O2 -fPIC -shared -o $plugin/libzoomvdifix.so zoomfix.c
+    $CC -O2 -fPIC -shared -o $plugin/libzoomvdifix.so zoomfix.c \
+      -DZOOM_BIN_PATH='"'"$out/bin"'"'
 
     ln -sfn $plugin/zoom $out/bin/zoom
     ln -sfn ${pacmdForZoom} $out/bin/pacmd
+    ln -sfn ${pacmdForZoom} $plugin/pacmd
     ln -sfn ${lsbReleaseForZoom} $out/bin/lsb_release
     ln -sfn ${lib.getBin pulseaudio}/bin/pactl $out/bin/pactl
+    ln -sfn ${lib.getBin pulseaudio}/bin/pactl $plugin/pactl
+    ln -sfn ${pciutils}/bin/lspci $plugin/lspci
     ln -sfn ${lib.getExe gnugrep} $out/bin/grep
     ln -sfn ${lib.getExe gawk} $out/bin/awk
     ln -sfn ${lib.getExe gnused} $out/bin/sed

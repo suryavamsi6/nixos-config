@@ -6,11 +6,17 @@
     default = { pkgs, ... }: {
       security.rtkit.enable = true;
 
-      # Intel BT (btusb) is fine with stock power management; keep
-      # autosuspend off anyway so A2DP does not drop on idle adapters.
+      # MediaTek MT7922 (btusb). Keep autosuspend off so A2DP does not
+      # drop on idle.
       boot.extraModprobeConfig = lib.mkAfter ''
         options btusb enable_autosuspend=0
       '';
+
+      # Powered=false rfkill-blocks MT7922. systemd-rfkill then restores
+      # that block on the next boot and AutoEnable fails with 0x03.
+      systemd.services.bluetooth.serviceConfig.ExecStartPre = [
+        "-${pkgs.util-linux}/bin/rfkill unblock bluetooth"
+      ];
 
       hardware.bluetooth.settings = {
         General = {
@@ -71,21 +77,23 @@
         wantedBy = [ "pipewire-pulse.service" ];
         serviceConfig = {
           Type = "oneshot";
+          TimeoutStartSec = "45s";
+          TimeoutStopSec = "5s";
           ExecStart = pkgs.writeShellScript "bt-reconnect-audio" ''
             bus=${pkgs.systemd}/bin/busctl
             sleep 8
-            adapter=$($bus --system tree org.bluez --list 2>/dev/null | grep -E '^/org/bluez/hci[0-9]+$' | head -n1)
+            adapter=$($bus --system --timeout=2 tree org.bluez --list 2>/dev/null | grep -E '^/org/bluez/hci[0-9]+$' | head -n1)
             [ -n "$adapter" ] || exit 0
-            $bus --system tree org.bluez --list 2>/dev/null | grep -E "^''${adapter}/dev_[^/]+$" | while read -r dev; do
-              uuids=$($bus --system get-property org.bluez "$dev" org.bluez.Device1 UUIDs 2>/dev/null || true)
+            $bus --system --timeout=2 tree org.bluez --list 2>/dev/null | grep -E "^''${adapter}/dev_[^/]+$" | while read -r dev; do
+              uuids=$($bus --system --timeout=2 get-property org.bluez "$dev" org.bluez.Device1 UUIDs 2>/dev/null || true)
               echo "$uuids" | grep -q 0000110b-0000-1000-8000-00805f9b34fb || continue
               for _try in 1 2 3 4 5; do
-                if $bus --system get-property org.bluez "$dev" org.bluez.Device1 Connected 2>/dev/null | grep -q true; then
+                if $bus --system --timeout=2 get-property org.bluez "$dev" org.bluez.Device1 Connected 2>/dev/null | grep -q true; then
                   break
                 fi
-                $bus --system call org.bluez "$dev" org.bluez.Device1 Disconnect >/dev/null 2>&1 || true
+                $bus --system --timeout=2 call org.bluez "$dev" org.bluez.Device1 Disconnect >/dev/null 2>&1 || true
                 sleep 2
-                $bus --system call org.bluez "$dev" org.bluez.Device1 Connect >/dev/null 2>&1 || true
+                $bus --system --timeout=2 call org.bluez "$dev" org.bluez.Device1 Connect >/dev/null 2>&1 || true
                 sleep 4
               done
             done

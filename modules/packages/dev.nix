@@ -88,17 +88,14 @@
                 "nix.serverPath" :"nixd",
                 "nix.serverSettings" : {
                   "nixpkgs" :{
-                    "expr" :"(builtins.getFlake \"home/surya/Dotfiles/nixos/\").inputs.nixpkgs {}",
+                    "expr" :"(builtins.getFlake \"/home/surya/Dotfiles/nixos-config\").inputs.nixpkgs {}",
                   },
                   "formatting" :{
                     "command" :[ "nixfmt" ],
                   },
                   "options" :{
                     "nixos" :{
-                      "expr" :"(builtins.getFlake \"home/surya/Dotfiles/nixos/\").nixosConfigurations.nixos.options",
-                    },
-                    "home_manager" :{
-                      "expr" :"(builtins.getFlake \"home/surya/Dotfiles/nixos/\").homeConfigurations.nixos.options",
+                      "expr" :"(builtins.getFlake \"/home/surya/Dotfiles/nixos-config\").nixosConfigurations.nixos.options",
                     },
                   },
                 },
