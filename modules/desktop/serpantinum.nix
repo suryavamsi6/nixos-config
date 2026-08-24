@@ -9,6 +9,7 @@
         dots = inputs.serpantinum;
 
         qsPkg = inputs.quickshell.packages.${pkgs.stdenv.hostPlatform.system}.default;
+        hyprlandPkg = inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland;
         qtQml = pkg: "${pkg}/lib/qt-6/qml";
         qmlPaths = lib.concatStringsSep ":" [
           (qtQml pkgs.kdePackages.qt5compat)
@@ -330,6 +331,8 @@
           ddcutil=${pkgs.ddcutil}/bin/ddcutil
           brightnessctl=${pkgs.brightnessctl}/bin/brightnessctl
           flock=${pkgs.util-linux}/bin/flock
+          hyprctl=${hyprlandPkg}/bin/hyprctl
+          jq=${pkgs.jq}/bin/jq
           cache_dir="''${XDG_CACHE_HOME:-$HOME/.cache}/serpantinum"
           bus_file="$cache_dir/ddc-bus"
           value_file="$cache_dir/brightness"
@@ -337,6 +340,20 @@
           mkdir -p "$cache_dir"
 
           backlight=$(find /sys/class/backlight -mindepth 1 -maxdepth 1 -type d -print -quit 2>/dev/null || true)
+
+          hdr_get_raw() {
+            local value
+            value=$("$hyprctl" monitors -j 2>/dev/null \
+              | "$jq" -er '.[] | select(.name == "HDMI-A-2" and .colorManagementPreset == "hdr") | (.sdrBrightness * 100 | round)') || return 1
+            [ "$value" -ge 0 ] && [ "$value" -le 100 ] || return 1
+            printf '%s\n' "$value"
+          }
+
+          hdr_set_raw() {
+            local percent="$1" multiplier
+            multiplier=$(awk -v value="$percent" 'BEGIN { printf "%.2f", value / 100 }')
+            "$hyprctl" eval "hl.monitor({ output = \"HDMI-A-2\", sdrbrightness = $multiplier })" >/dev/null
+          }
 
           read_cache() {
             local value
@@ -387,6 +404,10 @@
               if [ -n "$backlight" ]; then
                 exit 0
               fi
+              if value=$(hdr_get_raw); then
+                write_cache "$value"
+                exit 0
+              fi
               (
                 "$flock" -w 5 9 || exit 1
                 value=$(ddc_get_raw) || exit 1
@@ -396,6 +417,14 @@
             get)
               if [ -n "$backlight" ]; then
                 "$brightnessctl" -m | awk -F, '{print substr($4, 1, length($4)-1)}'
+                exit 0
+              fi
+              # The MAG 341C locks its hardware Brightness control while it
+              # receives HDR. Hyprland's SDR brightness multiplier is the
+              # effective desktop-luminance control in that mode.
+              if value=$(hdr_get_raw); then
+                write_cache "$value"
+                printf '%s\n' "$value"
                 exit 0
               fi
               # DDC is the source of truth. The cache is only a fallback for
@@ -423,6 +452,11 @@
               percent=$((percent > 100 ? 100 : percent))
               if [ -n "$backlight" ]; then
                 "$brightnessctl" set "$percent%"
+                exit 0
+              fi
+              if hdr_get_raw >/dev/null; then
+                write_cache "$percent"
+                hdr_set_raw "$percent"
                 exit 0
               fi
               # Optimistic cache so the popup poller never flashes back to 0
@@ -480,13 +514,19 @@
               """\
                                     // Brightness Slider (DDC/CI via brightness_control.sh)
                                     RowLayout {
+                                        z: 20
                                         visible: window.hasBrightness
                                         Layout.fillWidth: true
-                                        spacing: window.s(12)
+                                        spacing: window.s(15)
 
-                                        Item {
+                                        Rectangle {
                                             Layout.preferredWidth: window.s(32)
                                             Layout.preferredHeight: window.s(32)
+                                            radius: window.s(16)
+                                            color: "transparent"
+                                            border.color: "transparent"
+                                            Behavior on color { ColorAnimation { duration: 150 } }
+                                            Behavior on border.color { ColorAnimation { duration: 150 } }
                                             Text {
                                                 anchors.centerIn: parent
                                                 text: window.sysBrightness > 66 ? "󰃠" : (window.sysBrightness > 33 ? "󰃟" : "󰃞")
@@ -499,7 +539,7 @@
                                         Item {
                                             id: briSlider
                                             Layout.fillWidth: true
-                                            height: window.s(28)
+                                            height: window.s(18)
 
                                             readonly property string briScript: paths.home + "/.config/hypr/scripts/quickshell/watchers/brightness_control.sh"
 
@@ -507,62 +547,38 @@
                                                 Quickshell.execDetached([briSlider.briScript, "set", String(pct)]);
                                             }
 
-                                            function setFromX(mx, applyNow) {
-                                                let pct = Math.max(0, Math.min(100, Math.round((mx / Math.max(1, width)) * 100)));
-                                                window.sysBrightness = pct;
-                                                if (applyNow) {
-                                                    briDragThrottle.stop();
-                                                    applyBri(pct);
-                                                } else {
-                                                    briDragThrottle.targetPct = pct;
-                                                    briDragThrottle.restart();
-                                                }
-                                            }
-
                                             Timer {
                                                 id: briDragThrottle
-                                                interval: 350
+                                                interval: 50
                                                 property int targetPct: -1
                                                 onTriggered: {
-                                                    if (targetPct >= 0)
+                                                    if (targetPct >= 0) {
                                                         briSlider.applyBri(targetPct);
+                                                        targetPct = -1;
+                                                    }
                                                 }
                                             }
 
                                             Rectangle {
-                                                id: briTrack
-                                                anchors.left: parent.left
-                                                anchors.right: parent.right
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                height: window.s(12)
-                                                radius: height / 2
+                                                anchors.fill: parent
+                                                radius: window.s(9)
                                                 color: window.surface1
                                                 border.color: window.surface2
                                                 border.width: 1
+                                                clip: true
 
                                                 Rectangle {
-                                                    anchors.left: parent.left
-                                                    anchors.top: parent.top
-                                                    anchors.bottom: parent.bottom
-                                                    width: Math.max(height, parent.width * (window.sysBrightness / 100))
-                                                    radius: height / 2
-                                                    color: window.teal
-                                                    Behavior on width { enabled: !window.isDraggingBri; NumberAnimation { duration: 160; easing.type: Easing.OutQuint } }
-                                                }
-
-                                                Rectangle {
-                                                    width: window.s(18)
-                                                    height: window.s(18)
-                                                    radius: width / 2
-                                                    anchors.verticalCenter: parent.verticalCenter
-                                                    x: {
-                                                        let track = briTrack.width - width;
-                                                        return Math.max(0, Math.min(track, (window.sysBrightness / 100) * briTrack.width - width / 2));
+                                                    height: parent.height
+                                                    width: parent.width * (window.sysBrightness / 100)
+                                                    radius: window.s(9)
+                                                    opacity: briMa.containsMouse ? 1.0 : 0.85
+                                                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                                                    Behavior on width { enabled: !window.isDraggingBri; NumberAnimation { duration: 200; easing.type: Easing.OutQuint } }
+                                                    gradient: Gradient {
+                                                        orientation: Gradient.Horizontal
+                                                        GradientStop { position: 0.0; color: window.profileStart; Behavior on color { ColorAnimation { duration: 300 } } }
+                                                        GradientStop { position: 1.0; color: window.profileEnd; Behavior on color { ColorAnimation { duration: 300 } } }
                                                     }
-                                                    color: window.text
-                                                    border.color: window.teal
-                                                    border.width: 2
-                                                    Behavior on x { enabled: !window.isDraggingBri; NumberAnimation { duration: 160; easing.type: Easing.OutQuint } }
                                                 }
                                             }
 
@@ -570,20 +586,15 @@
                                                 id: briMa
                                                 anchors.fill: parent
                                                 hoverEnabled: true
-                                                preventStealing: true
                                                 cursorShape: Qt.PointingHandCursor
-                                                onPressed: (mouse) => {
-                                                    briSyncDelay.stop();
-                                                    window.isDraggingBri = true;
-                                                    briSlider.setFromX(mouse.x, true);
-                                                }
-                                                onPositionChanged: (mouse) => {
-                                                    if (pressed)
-                                                        briSlider.setFromX(mouse.x, false);
-                                                }
-                                                onReleased: (mouse) => {
-                                                    briSlider.setFromX(mouse.x, true);
-                                                    briSyncDelay.restart();
+                                                onPressed: (mouse) => { briSyncDelay.stop(); window.isDraggingBri = true; updateBri(mouse.x); }
+                                                onPositionChanged: (mouse) => { if (pressed) updateBri(mouse.x); }
+                                                onReleased: { briSyncDelay.restart(); }
+                                                function updateBri(mx) {
+                                                    let pct = Math.max(0, Math.min(100, Math.round((mx / width) * 100)));
+                                                    window.sysBrightness = pct;
+                                                    briDragThrottle.targetPct = pct;
+                                                    if (!briDragThrottle.running) briDragThrottle.start();
                                                 }
                                             }
                                         }

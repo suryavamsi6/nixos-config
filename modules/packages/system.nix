@@ -56,6 +56,10 @@
 
       services.upower.enable = true;
       services.blueman.enable = true;
+      services.ollama = {
+        enable = true;
+        package = pkgs.ollama-cuda;
+      };
 
       qt.enable = true;
 

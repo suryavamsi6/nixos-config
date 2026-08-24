@@ -15,6 +15,20 @@
           icon = "utilities-terminal";
           categories = [ "Development" ];
         };
+        ohMyPi = pkgs.stdenvNoCC.mkDerivation {
+          pname = "oh-my-pi";
+          version = "18.0.4";
+          src = pkgs.fetchurl {
+            url = "https://github.com/can1357/oh-my-pi/releases/download/v18.0.4/omp-linux-x64";
+            hash = "sha256-lOxC0X1xl1o4HiAzW7PABaf9fuwZsxk1jfbSLyjhazc=";
+          };
+          nativeBuildInputs = [ pkgs.patchelf ];
+          dontUnpack = true;
+          installPhase = ''
+            install -Dm755 "$src" "$out/bin/omp"
+            patchelf --set-interpreter ${pkgs.stdenv.cc.libc}/lib/ld-linux-x86-64.so.2 "$out/bin/omp"
+          '';
+        };
       in
       {
         imports = [ inputs.codex-desktop-linux.homeManagerModules.default ];
@@ -53,6 +67,7 @@
           dig
           code-cursor
           codex
+          ohMyPi
           codexCliDesktop
           chntpw
           (vscode-with-extensions.override {
