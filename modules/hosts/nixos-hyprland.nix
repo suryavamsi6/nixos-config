@@ -9,6 +9,7 @@
       nixos.hardwareHyprland
       nixos.nvidia
       nixos.gcb200
+      nixos.openrgb
 
       # Core system
       nixos.boot
@@ -80,6 +81,7 @@
 
           home.packages = [
             inputs.zen-browser.packages."x86_64-linux".twilight
+            inputs.helium-browser.packages."x86_64-linux".helium
           ];
         };
       }

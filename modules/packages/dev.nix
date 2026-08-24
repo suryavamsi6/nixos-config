@@ -4,8 +4,37 @@
   options.flake.modules.homeManager.dev = lib.mkOption {
     type = lib.types.deferredModule;
     default =
-      { pkgs, ... }:
+      { pkgs, inputs, config, ... }:
+      let
+        # pkgs.codex is CLI-only. Super+Space ignores Terminal=true.
+        codexCliDesktop = pkgs.makeDesktopItem {
+          name = "codex-cli";
+          desktopName = "Codex CLI";
+          comment = "OpenAI Codex in the terminal";
+          exec = "${lib.getExe pkgs.kitty} --title Codex -e ${lib.getExe pkgs.codex}";
+          icon = "utilities-terminal";
+          categories = [ "Development" ];
+        };
+      in
       {
+        imports = [ inputs.codex-desktop-linux.homeManagerModules.default ];
+
+        # ChatGPT desktop app (Chat + Work + Codex UI). cliPackage so the
+        # Electron wrapper finds pkgs.codex from Super+Space.
+        programs.codexDesktopLinux = {
+          enable = true;
+          cliPackage = pkgs.codex;
+        };
+
+        xdg.desktopEntries.codex = {
+          name = "Codex";
+          comment = "OpenAI Codex desktop";
+          exec = "${config.home.profileDirectory}/bin/codex-desktop";
+          icon = "codex-desktop";
+          categories = [ "Development" ];
+          startupNotify = true;
+        };
+
         home.packages = with pkgs; [
           superfile
           wget
@@ -23,6 +52,8 @@
           tmux
           dig
           code-cursor
+          codex
+          codexCliDesktop
           chntpw
           (vscode-with-extensions.override {
             vscodeExtensions = pkgs.vscode-utils.extensionsFromVscodeMarketplace [

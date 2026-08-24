@@ -108,6 +108,9 @@
           package = null;
           portalPackage = null;
           plugins = [ ];
+          # Citrix CLStore needs gnome-keyring Secret Service. PAM unlocks it
+          # at greetd login; XDG autostart keeps the daemon up for the session.
+          systemd.enableXdgAutostart = true;
 
           extraLuaFiles = {
             # Required by binds.lua; not auto-required on its own

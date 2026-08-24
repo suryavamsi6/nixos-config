@@ -54,7 +54,7 @@ Dead desktop modules were removed (AGS, SwayNC, hyprlauncher, hyprpaper, gtkThem
 
 - Prefer `substituteInPlace` / Python patchers in that Nix file. Do not maintain a full fork.
 - `caching.sh` **overwrites `SCRIPT_DIR`**. Source helpers with `"$(dirname "${BASH_SOURCE[0]}")/..."`, never `$SCRIPT_DIR`.
-- `patchTopBar` must still run after the clock `h:mm AP` substitute, or the bar loses Wi-Fi/BT pills. Keep the bar on 12-hour (`h:mm AP`); calendar big clock is `h:mm`.
+- `patchTopBar` must still run after the clock `HH:mm` substitute, or the bar loses Wi-Fi/BT pills.
 - Python inside Nix strings: keep indent uniform or use `textwrap.dedent`. A less-indented `r"""` causes `IndentationError` at build.
 - Live files after switch: `~/.config/hypr/scripts/quickshell/`.
 - Battery popup reads laptop `BAT*` then UPower UPS (APC Back-UPS RS 1500G-IN on this box; it is not under `/sys/class/power_supply`). Hide power-profiles and brightness when PPD/backlight are absent. Do not add `power-profiles-daemon` just to fill that dock.

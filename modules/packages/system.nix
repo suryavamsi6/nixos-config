@@ -31,7 +31,6 @@
     {
       environment.systemPackages = with pkgs; [
         pavucontrol
-        openrgb
         superfile
         nautilus
         nautilus-open-any-terminal
@@ -39,12 +38,17 @@
         p7zip
         unzip
         blueman
-        floorp-bin
         cheese
         cameractrls-gtk4
         nodejs
         glance
         sbctl
+        stremio-linux-shell
+        (kodi-wayland.withPackages (kodiPkgs: with kodiPkgs; [
+          inputstream-adaptive
+          inputstreamhelper
+          netflix
+        ]))
         qsWrapped
       ];
 

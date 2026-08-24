@@ -5,5 +5,6 @@
     ./nvidia.nix
     ./hyprland-hw.nix
     ./gcb200.nix
+    ./openrgb.nix
   ];
 }

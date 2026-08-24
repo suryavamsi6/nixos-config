@@ -8,6 +8,7 @@
       # Hardware (same machine as #nixos)
       nixos.hardwareHyprland
       nixos.nvidia
+      nixos.openrgb
 
       # Core system
       nixos.boot

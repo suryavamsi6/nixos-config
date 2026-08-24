@@ -59,6 +59,35 @@ let
             --set WEBKIT_DISABLE_COMPOSITING_MODE 1 \
             --set WEBKIT_DISABLE_DMABUF_RENDERER 1
         fi
+
+        # AuthManager forks $ICAROOT/adapter (not PATH) as the store→HDX
+        # UIPipe child. Vendor adapter waits on a session hash and exits in
+        # ~10s when it cannot get one — never reaching wfica. Same ICA via
+        # `wfica -file` works. Replace both tree + bin entrypoints with a
+        # shim that strips UIPipe-only flags and execs wfica.
+        if [ -x "$ica/adapter" ]; then
+          mv "$ica/adapter" "$ica/.adapter-uipipe-vendor"
+          install -m755 ${./citrix-adapter-wfica-shim.sh} "$ica/adapter"
+        fi
+        if [ -e "$out/bin/adapter" ]; then
+          rm -f "$out/bin/adapter"
+          ln -s "$ica/adapter" "$out/bin/adapter"
+        fi
+
+        # wfica itself is also exec'd from $ICAROOT (shim, icasessionmgr).
+        # Force X11/WebKit flags here so store launches match the PATH wrap.
+        if [ -x "$ica/wfica" ] && [ ! -e "$ica/.wfica-wrapped" ]; then
+          wrapProgramShell "$ica/wfica" \
+            --set ICAROOT "$ica" \
+            --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [ pkgs.libpulseaudio ]}" \
+            --set PULSE_LATENCY_MSEC 30 \
+            --set GDK_BACKEND x11 \
+            --set EGL_PLATFORM x11 \
+            --set QT_QPA_PLATFORM xcb \
+            --unset QT_QPA_PLATFORMTHEME \
+            --set WEBKIT_DISABLE_COMPOSITING_MODE 1 \
+            --set WEBKIT_DISABLE_DMABUF_RENDERER 1
+        fi
       '';
     });
 in

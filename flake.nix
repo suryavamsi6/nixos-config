@@ -7,6 +7,10 @@
     zen-browser = {
       url = "github:0xc000022070/zen-browser-flake";
     };
+    helium-browser = {
+      url = "github:oxcl/nix-flake-helium-browser";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     quickshell = {
       # add ?ref=<tag> to track a tag
       url = "git+https://git.outfoxxed.me/outfoxxed/quickshell";
@@ -42,6 +46,9 @@
       url = "github:suryavamsi6/gcb200-linux";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # Official ChatGPT/Codex Linux desktop (Electron). Own nixpkgs on
+    # purpose — it wraps the upstream .deb, not our tree.
+    codex-desktop-linux.url = "github:ilysenko/codex-desktop-linux";
   };
 
   outputs = inputs:

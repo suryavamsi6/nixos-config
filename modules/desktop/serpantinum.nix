@@ -104,6 +104,34 @@
                   'property real targetWidth: barWindow.isDesktop ? 0 : btLayoutRow.implicitWidth + barWindow.s(24)',
                   'property real targetWidth: btLayoutRow.implicitWidth + barWindow.s(24)',
               ),
+              (
+                  'property bool isDesktop: false',
+                  'property bool isDesktop: false\n            property bool hasPowerSupply: false',
+              ),
+              (
+                  'if (barWindow.batStatus !== data.status) barWindow.batStatus = data.status;',
+                  'if (barWindow.batStatus !== data.status) barWindow.batStatus = data.status;\n                                if (barWindow.hasPowerSupply !== !!data.present) barWindow.hasPowerSupply = !!data.present;',
+              ),
+              (
+                  'color: barWindow.isDesktop ? mocha.red : barWindow.batDynamicColor;',
+                  'color: !barWindow.hasPowerSupply ? mocha.red : barWindow.batDynamicColor;',
+              ),
+              (
+                  'color: barWindow.isDesktop ? Qt.lighter(mocha.red, 1.3) : Qt.lighter(barWindow.batDynamicColor, 1.3);',
+                  'color: !barWindow.hasPowerSupply ? Qt.lighter(mocha.red, 1.3) : Qt.lighter(barWindow.batDynamicColor, 1.3);',
+              ),
+              (
+                  'property real targetWidth: barWindow.isDesktop ? barWindow.s(34) : batLayoutRow.implicitWidth + barWindow.s(24)',
+                  'property real targetWidth: !barWindow.hasPowerSupply ? barWindow.s(34) : batLayoutRow.implicitWidth + barWindow.s(24)',
+              ),
+              (
+                  'text: barWindow.isDesktop ? "" : barWindow.batIcon;',
+                  'text: !barWindow.hasPowerSupply ? "" : barWindow.batIcon;',
+              ),
+              (
+                  'visible: !barWindow.isDesktop\n                                        text: barWindow.batPercent;',
+                  'visible: barWindow.hasPowerSupply\n                                        text: barWindow.batPercent;',
+              ),
           ]
           for old, new in replacements:
               if old not in t:
@@ -172,6 +200,410 @@
           if marker not in t:
               raise SystemExit("TopBar patch missing wifiPill marker")
           t = t.replace(marker, eth + marker, 1)
+          p.write_text(t)
+        '';
+
+        patchBatteryPopup = pkgs.writeText "patch-serpantinum-battery-popup.py" ''
+          from pathlib import Path
+          import sys
+          import textwrap
+
+          p = Path(sys.argv[1])
+          t = p.read_text()
+          replacements = [
+              (
+                  '    property string batStatus: "Unknown"\n    property string powerProfile: "balanced"',
+                  '    property string batStatus: "Unknown"\n    property string batKind: "none"\n    property bool hasPowerSupply: false\n    property bool hasBrightness: false\n    property bool hasPowerProfiles: false\n    property string powerProfile: "balanced"',
+              ),
+              (
+                  '                            property bool isDangerState: !window.isCharging && window.batCapacity < 15',
+                  '                            property bool isDangerState: window.hasPowerSupply && !window.isCharging && window.batCapacity < 15',
+              ),
+              (
+                  '                                        text: window.isCharging ? "󰂄" : (window.batCapacity > 20 ? "󰁹" : "󰂃")',
+                  '                                        text: window.batKind === "ups" ? (window.isCharging ? "󰂄" : "󰚥") : (window.isCharging ? "󰂄" : (window.batCapacity > 20 ? "󰁹" : "󰂃"))',
+              ),
+              (
+                  '                                        text: window.batStatus.toUpperCase()',
+                  '                                        text: (window.batKind === "ups" ? "UPS · " : "") + window.batStatus.toUpperCase()',
+              ),
+              (
+                  '                                Layout.preferredHeight: window.s(96)',
+                  '                                Layout.preferredHeight: window.hasBrightness ? window.s(96) : window.s(54)',
+              ),
+              (
+                  '                                    // Brightness Slider\n                                    RowLayout {\n                                        Layout.fillWidth: true\n                                        spacing: window.s(15)',
+                  '                                    // Brightness Slider\n                                    RowLayout {\n                                        visible: window.hasBrightness\n                                        Layout.fillWidth: true\n                                        spacing: window.s(15)',
+              ),
+              (
+                  '                            // 3. POWER PROFILES DOCK\n                            Rectangle {\n                                Layout.fillWidth: true\n                                Layout.preferredHeight: window.s(54)',
+                  '                            // 3. POWER PROFILES DOCK\n                            Rectangle {\n                                visible: window.hasPowerProfiles\n                                Layout.fillWidth: true\n                                Layout.preferredHeight: window.hasPowerProfiles ? window.s(54) : 0',
+              ),
+              (
+                  '            "cat /sys/class/power_supply/BAT*/capacity 2>/dev/null | head -n1 || echo \'0\'; " +\n            "cat /sys/class/power_supply/BAT*/status 2>/dev/null | head -n1 || echo \'Unknown\'; " +\n            "powerprofilesctl get 2>/dev/null || echo \'balanced\'; " +',
+                  '            "powerprofilesctl get 2>/dev/null || echo \'balanced\'; " +',
+              ),
+              (
+                  '                let lines = this.text.trim().split("\\n");\n                if (lines.length >= 6) {\n                    if (window.batCapacity !== parseInt(lines[0])) {\n                        window.batCapacity = parseInt(lines[0]);\n                        window.animCapacity = window.batCapacity;\n                    }\n                    window.batStatus = lines[1];\n                    window.powerProfile = lines[2];',
+                  '                let lines = this.text.trim().split("\\n");\n                if (lines.length >= 4) {\n                    window.powerProfile = lines[0];',
+              ),
+              (
+                  '                    let upParts = lines[3].split("h ");',
+                  '                    let upParts = lines[1].split("h ");',
+              ),
+              (
+                  '                        let volParts = (lines[4] || "0 on").trim().split(" ");',
+                  '                        let volParts = (lines[2] || "0 on").trim().split(" ");',
+              ),
+              (
+                  '                        window.sysBrightness = parseInt(lines[5]) || 0;',
+                  '                        window.sysBrightness = parseInt(lines[3]) || 0;',
+              ),
+              (
+                  '        onTriggered: sysPoller.running = true',
+                  '        onTriggered: { sysPoller.running = true; batFetch.running = true; }',
+              ),
+          ]
+          for old, new in replacements:
+              if old not in t:
+                  raise SystemExit(f"BatteryPopup patch missing string:\\n{old}")
+              t = t.replace(old, new, 1)
+
+          marker = "    Process {\n        id: sysPoller"
+          insert = textwrap.dedent(
+              """
+              Process {
+                  id: featureDetect
+                  running: true
+                  command: ["bash", "-c", "if ls /sys/class/backlight/*/brightness >/dev/null 2>&1; then echo 1; else echo 0; fi; if systemctl is-active --quiet power-profiles-daemon; then echo 1; else echo 0; fi"]
+                  stdout: StdioCollector {
+                      onStreamFinished: {
+                          let lines = this.text.trim().split("\\n");
+                          if (lines.length >= 2) {
+                              window.hasBrightness = lines[0] === "1";
+                              window.hasPowerProfiles = lines[1] === "1";
+                          }
+                      }
+                  }
+              }
+
+              Process {
+                  id: batFetch
+                  command: ["bash", "-c", "~/.config/hypr/scripts/quickshell/watchers/battery_fetch.sh"]
+                  running: true
+                  stdout: StdioCollector {
+                      onStreamFinished: {
+                          let txt = this.text.trim();
+                          if (txt === "") return;
+                          try {
+                              let data = JSON.parse(txt);
+                              let pct = parseInt(data.percent) || 0;
+                              if (window.batCapacity !== pct) {
+                                  window.batCapacity = pct;
+                                  window.animCapacity = pct;
+                              }
+                              if (data.status) window.batStatus = data.status;
+                              window.batKind = data.kind || "none";
+                              window.hasPowerSupply = !!data.present;
+                          } catch (e) {}
+                      }
+                  }
+              }
+              """
+          ).strip("\n")
+          insert = "\n".join(("    " + line) if line else line for line in insert.split("\n")) + "\n\n"
+          if marker not in t:
+              raise SystemExit("BatteryPopup patch missing sysPoller marker")
+          t = t.replace(marker, insert + marker, 1)
+          p.write_text(t)
+        '';
+
+        # The MAG 341C OLED is an external display, so it has no kernel
+        # backlight device. Prefer a laptop backlight when one exists, then
+        # fall back to the monitor's DDC/CI brightness VCP (0x10).
+        # DDC is slow (~0.7s) and exclusive per I2C bus — serialize with flock,
+        # pin the bus, and cache the last value so the popup poller stays fast
+        # and concurrent get/set from Quickshell do not reset the slider to 0.
+        brightnessControl = pkgs.writeShellScript "serpantinum-brightness" ''
+          set -euo pipefail
+
+          ddcutil=${pkgs.ddcutil}/bin/ddcutil
+          brightnessctl=${pkgs.brightnessctl}/bin/brightnessctl
+          flock=${pkgs.util-linux}/bin/flock
+          cache_dir="''${XDG_CACHE_HOME:-$HOME/.cache}/serpantinum"
+          bus_file="$cache_dir/ddc-bus"
+          value_file="$cache_dir/brightness"
+          lock_file="$cache_dir/ddc.lock"
+          mkdir -p "$cache_dir"
+
+          backlight=$(find /sys/class/backlight -mindepth 1 -maxdepth 1 -type d -print -quit 2>/dev/null || true)
+
+          read_cache() {
+            local value
+            [ -f "$value_file" ] || return 1
+            value=$(tr -cd '0-9' <"$value_file")
+            [ -n "$value" ] || return 1
+            printf '%s\n' "$value"
+          }
+
+          write_cache() {
+            printf '%s\n' "$1" >"$value_file"
+          }
+
+          ddc_bus() {
+            local bus
+            if [ -f "$bus_file" ]; then
+              bus=$(tr -cd '0-9' <"$bus_file")
+              if [ -n "$bus" ] && [ -e "/dev/i2c-$bus" ]; then
+                printf '%s\n' "$bus"
+                return 0
+              fi
+            fi
+            bus=$("$ddcutil" detect --brief 2>/dev/null | sed -n 's|.*/dev/i2c-\([0-9][0-9]*\).*|\1|p' | head -n1)
+            [ -n "$bus" ] || return 1
+            printf '%s\n' "$bus" >"$bus_file"
+            printf '%s\n' "$bus"
+          }
+
+          ddc_get_raw() {
+            local bus result current maximum
+            bus=$(ddc_bus) || return 1
+            result=$("$ddcutil" --bus "$bus" getvcp 10 2>/dev/null) || return 1
+            current=$(sed -n 's/.*current value = [[:space:]]*\([0-9][0-9]*\), max value = [[:space:]]*\([0-9][0-9]*\).*/\1/p' <<<"$result" | head -n1)
+            maximum=$(sed -n 's/.*current value = [[:space:]]*\([0-9][0-9]*\), max value = [[:space:]]*\([0-9][0-9]*\).*/\2/p' <<<"$result" | head -n1)
+            [ -n "$current" ] && [ -n "$maximum" ] && [ "$maximum" -gt 0 ] || return 1
+            printf '%s\n' "$((current * 100 / maximum))"
+          }
+
+          ddc_set_raw() {
+            local bus percent="$1"
+            bus=$(ddc_bus) || return 1
+            # MAG 341C reports max=100, so percent maps 1:1 onto VCP 0x10.
+            "$ddcutil" --bus "$bus" setvcp 10 "$percent" >/dev/null
+          }
+
+          case "''${1:-}" in
+            available)
+              if [ -n "$backlight" ]; then
+                exit 0
+              fi
+              (
+                "$flock" -w 5 9 || exit 1
+                value=$(ddc_get_raw) || exit 1
+                write_cache "$value"
+              ) 9>"$lock_file"
+              ;;
+            get)
+              if [ -n "$backlight" ]; then
+                "$brightnessctl" -m | awk -F, '{print substr($4, 1, length($4)-1)}'
+                exit 0
+              fi
+              # DDC is the source of truth. The cache is only a fallback for
+              # transient monitor/I2C errors; otherwise a stale value makes
+              # the popup snap back after the user moves the slider.
+              if value=$(
+                (
+                  "$flock" -w 5 9 || exit 1
+                  ddc_get_raw
+                ) 9>"$lock_file"
+              ); then
+                write_cache "$value"
+                printf '%s\n' "$value"
+              elif value=$(read_cache); then
+                printf '%s\n' "$value"
+              else
+                exit 1
+              fi
+              ;;
+            set)
+              percent="''${2:-}"
+              case "$percent" in
+                ""|*[!0-9]*) exit 2 ;;
+              esac
+              percent=$((percent > 100 ? 100 : percent))
+              if [ -n "$backlight" ]; then
+                "$brightnessctl" set "$percent%"
+                exit 0
+              fi
+              # Optimistic cache so the popup poller never flashes back to 0
+              # while a slow DDC write is still in flight.
+              write_cache "$percent"
+              (
+                "$flock" -w 5 9 || exit 1
+                ddc_set_raw "$percent"
+              ) 9>"$lock_file" || true
+              ;;
+            *)
+              echo "Usage: $0 {available|get|set PERCENT}" >&2
+              exit 2
+              ;;
+          esac
+        '';
+
+        patchBatteryBrightness = pkgs.writeText "patch-serpantinum-battery-brightness.py" ''
+          from pathlib import Path
+          import sys
+          import textwrap
+
+          p = Path(sys.argv[1])
+          t = p.read_text()
+          replacements = [
+              (
+                  'command: ["bash", "-c", "if ls /sys/class/backlight/*/brightness >/dev/null 2>&1; then echo 1; else echo 0; fi; if systemctl is-active --quiet power-profiles-daemon; then echo 1; else echo 0; fi"]',
+                  'command: ["bash", "-c", "if ~/.config/hypr/scripts/quickshell/watchers/brightness_control.sh available; then echo 1; else echo 0; fi; if systemctl is-active --quiet power-profiles-daemon; then echo 1; else echo 0; fi"]',
+              ),
+              (
+                  "brightnessctl -m 2>/dev/null | awk -F, '{print substr($4, 1, length($4)-1)}' || echo '0'",
+                  "~/.config/hypr/scripts/quickshell/watchers/brightness_control.sh get 2>/dev/null || echo '0'",
+              ),
+              (
+                  'Timer { id: briSyncDelay; interval: 800; onTriggered: window.isDraggingBri = false; triggeredOnStart: true; }',
+                  'Timer { id: briSyncDelay; interval: 1500; onTriggered: window.isDraggingBri = false; }',
+              ),
+              (
+                  'Layout.preferredHeight: window.hasBrightness ? window.s(96) : window.s(54)',
+                  'Layout.preferredHeight: window.hasBrightness ? window.s(110) : window.s(54)',
+              ),
+          ]
+          for old, new in replacements:
+              if old not in t:
+                  raise SystemExit(f"Battery brightness patch missing string:\\n{old}")
+              t = t.replace(old, new, 1)
+
+          marker_start = "                                    // Brightness Slider\n"
+          marker_end = "                                    // Volume Slider\n"
+          if marker_start not in t or marker_end not in t:
+              raise SystemExit("Battery brightness slider markers missing")
+          start = t.index(marker_start)
+          end = t.index(marker_end)
+          new_bri = textwrap.dedent(
+              """\
+                                    // Brightness Slider (DDC/CI via brightness_control.sh)
+                                    RowLayout {
+                                        visible: window.hasBrightness
+                                        Layout.fillWidth: true
+                                        spacing: window.s(12)
+
+                                        Item {
+                                            Layout.preferredWidth: window.s(32)
+                                            Layout.preferredHeight: window.s(32)
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: window.sysBrightness > 66 ? "󰃠" : (window.sysBrightness > 33 ? "󰃟" : "󰃞")
+                                                font.family: "Iosevka Nerd Font"
+                                                font.pixelSize: window.s(22)
+                                                color: window.teal
+                                            }
+                                        }
+
+                                        Item {
+                                            id: briSlider
+                                            Layout.fillWidth: true
+                                            height: window.s(28)
+
+                                            readonly property string briScript: paths.home + "/.config/hypr/scripts/quickshell/watchers/brightness_control.sh"
+
+                                            function applyBri(pct) {
+                                                Quickshell.execDetached([briSlider.briScript, "set", String(pct)]);
+                                            }
+
+                                            function setFromX(mx, applyNow) {
+                                                let pct = Math.max(0, Math.min(100, Math.round((mx / Math.max(1, width)) * 100)));
+                                                window.sysBrightness = pct;
+                                                if (applyNow) {
+                                                    briDragThrottle.stop();
+                                                    applyBri(pct);
+                                                } else {
+                                                    briDragThrottle.targetPct = pct;
+                                                    briDragThrottle.restart();
+                                                }
+                                            }
+
+                                            Timer {
+                                                id: briDragThrottle
+                                                interval: 350
+                                                property int targetPct: -1
+                                                onTriggered: {
+                                                    if (targetPct >= 0)
+                                                        briSlider.applyBri(targetPct);
+                                                }
+                                            }
+
+                                            Rectangle {
+                                                id: briTrack
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                height: window.s(12)
+                                                radius: height / 2
+                                                color: window.surface1
+                                                border.color: window.surface2
+                                                border.width: 1
+
+                                                Rectangle {
+                                                    anchors.left: parent.left
+                                                    anchors.top: parent.top
+                                                    anchors.bottom: parent.bottom
+                                                    width: Math.max(height, parent.width * (window.sysBrightness / 100))
+                                                    radius: height / 2
+                                                    color: window.teal
+                                                    Behavior on width { enabled: !window.isDraggingBri; NumberAnimation { duration: 160; easing.type: Easing.OutQuint } }
+                                                }
+
+                                                Rectangle {
+                                                    width: window.s(18)
+                                                    height: window.s(18)
+                                                    radius: width / 2
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    x: {
+                                                        let track = briTrack.width - width;
+                                                        return Math.max(0, Math.min(track, (window.sysBrightness / 100) * briTrack.width - width / 2));
+                                                    }
+                                                    color: window.text
+                                                    border.color: window.teal
+                                                    border.width: 2
+                                                    Behavior on x { enabled: !window.isDraggingBri; NumberAnimation { duration: 160; easing.type: Easing.OutQuint } }
+                                                }
+                                            }
+
+                                            MouseArea {
+                                                id: briMa
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                preventStealing: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onPressed: (mouse) => {
+                                                    briSyncDelay.stop();
+                                                    window.isDraggingBri = true;
+                                                    briSlider.setFromX(mouse.x, true);
+                                                }
+                                                onPositionChanged: (mouse) => {
+                                                    if (pressed)
+                                                        briSlider.setFromX(mouse.x, false);
+                                                }
+                                                onReleased: (mouse) => {
+                                                    briSlider.setFromX(mouse.x, true);
+                                                    briSyncDelay.restart();
+                                                }
+                                            }
+                                        }
+
+                                        Text {
+                                            Layout.preferredWidth: window.s(40)
+                                            horizontalAlignment: Text.AlignRight
+                                            text: Math.round(window.sysBrightness) + "%"
+                                            font.family: "JetBrains Mono"
+                                            font.weight: Font.Bold
+                                            font.pixelSize: window.s(13)
+                                            color: window.subtext0
+                                        }
+                                    }
+
+              """
+          )
+          # Re-indent: textwrap.dedent stripped common indent; block must keep
+          # the 36-space RowLayout indent used in BatteryPopup.
+          t = t[:start] + new_bri + t[end:]
           p.write_text(t)
         '';
 
@@ -376,6 +808,128 @@
           }
           bt_dbus_jq_escape() { ${pkgs.jq}/bin/jq -n --arg s "$1" '$s'; }
 
+          bt_dbus_battery_dir() { echo "''${XDG_RUNTIME_DIR:-/tmp}/qs-bt-battery"; }
+
+          bt_dbus_battery_cache_set() {
+            local dev="$1" bat="$2" addr dir
+            addr=$(bt_dbus_str "$dev" org.bluez.Device1 Address)
+            [ -n "$addr" ] && [ -n "$bat" ] || return 0
+            dir=$(bt_dbus_battery_dir)
+            mkdir -p "$dir"
+            printf '%s\n' "$bat" > "$dir/$addr"
+          }
+
+          bt_dbus_battery_cache_get() {
+            local dev="$1" addr dir age
+            addr=$(bt_dbus_str "$dev" org.bluez.Device1 Address)
+            dir=$(bt_dbus_battery_dir)
+            [ -n "$addr" ] && [ -f "$dir/$addr" ] || return 0
+            age=$(($(date +%s) - $(stat -c %Y "$dir/$addr" 2>/dev/null || echo 0)))
+            # Stale cache is how ACCENTUM Plus stuck at 10% all afternoon.
+            [ "$age" -lt 1200 ] || return 0
+            tr -d '[:space:]' < "$dir/$addr"
+          }
+
+          bt_dbus_2a19_path() {
+            local dev="$1" addr dir cache char uuid
+            addr=$(bt_dbus_str "$dev" org.bluez.Device1 Address)
+            dir=$(bt_dbus_battery_dir)
+            mkdir -p "$dir"
+            cache="$dir/''${addr}.char"
+            if [ -f "$cache" ]; then
+              char=$(tr -d '[:space:]' < "$cache")
+              uuid=$(bt_dbus_str "$char" org.bluez.GattCharacteristic1 UUID)
+              case "''${uuid,,}" in
+                00002a19-0000-1000-8000-00805f9b34fb) echo "$char"; return 0 ;;
+              esac
+            fi
+            while IFS= read -r char; do
+              [ -n "$char" ] || continue
+              uuid=$(bt_dbus_str "$char" org.bluez.GattCharacteristic1 UUID)
+              case "''${uuid,,}" in
+                00002a19-0000-1000-8000-00805f9b34fb)
+                  printf '%s\n' "$char" > "$cache"
+                  echo "$char"
+                  return 0
+                  ;;
+              esac
+            done < <(${pkgs.systemd}/bin/busctl --system tree org.bluez --list 2>/dev/null | grep -E "^''${dev}/service[^/]+/char[^/]+$")
+          }
+
+          bt_dbus_gatt_level() {
+            local char val
+            char=$(bt_dbus_2a19_path "$1") || return 0
+            [ -n "$char" ] || return 0
+            val=$(${pkgs.systemd}/bin/busctl --system --timeout=3 call org.bluez "$char" org.bluez.GattCharacteristic1 ReadValue 'a{sv}' 0 2>/dev/null) || return 0
+            echo "$val" | awk '/^ay / { print $NF; exit }'
+          }
+
+          bt_dbus_battery() {
+            local dev="$1" bat
+            bat=$(bt_dbus_byte "$dev" org.bluez.Battery1 Percentage)
+            if [ -z "$bat" ]; then
+              bat=$(bt_dbus_gatt_level "$dev")
+            fi
+            if [ -n "$bat" ]; then
+              bt_dbus_battery_cache_set "$dev" "$bat"
+              echo "$bat"
+              return 0
+            fi
+            bt_dbus_battery_cache_get "$dev"
+          }
+
+          bt_dbus_is_audio() {
+            local icon uuids
+            icon=$(bt_dbus_str "$1" org.bluez.Device1 Icon)
+            case "$icon" in
+              audio-headset|audio-headphones|audio-card) return 0 ;;
+            esac
+            uuids=$(bt_dbus_prop "$1" org.bluez.Device1 UUIDs)
+            echo "$uuids" | grep -q 0000110b-0000-1000-8000-00805f9b34fb
+          }
+
+          # Dual-mode headsets expose 0x2A19 only on LE. Snapshot once, then
+          # drop LE so A2DP is not sharing the radio. Do not poll
+          # Bearer.LE1.Connect — that scans if idle. Cooldown stops the
+          # popup's 3s refresh from reconnecting LE in a loop.
+          bt_dbus_refresh_headset_battery() {
+            local dev="$1" lock bat i age addr dir stamp
+            bt_dbus_is_audio "$dev" || return 0
+            [ -n "$(bt_dbus_prop "$dev" org.bluez.Bearer.LE1 Connected)" ] || return 0
+            addr=$(bt_dbus_str "$dev" org.bluez.Device1 Address)
+            dir=$(bt_dbus_battery_dir)
+            mkdir -p "$dir"
+            stamp="$dir/''${addr}.le-try"
+            if [ -f "$stamp" ]; then
+              age=$(($(date +%s) - $(stat -c %Y "$stamp" 2>/dev/null || echo 0)))
+              [ "$age" -lt 60 ] && return 0
+            fi
+            lock="''${XDG_RUNTIME_DIR:-/tmp}/qs-bt-battery.lock"
+            if [ -d "$lock" ]; then
+              age=$(($(date +%s) - $(stat -c %Y "$lock" 2>/dev/null || echo 0)))
+              [ "$age" -gt 30 ] && rmdir "$lock" 2>/dev/null || true
+            fi
+            mkdir "$lock" 2>/dev/null || return 0
+            touch "$stamp"
+            if ! bt_dbus_bool "$dev" org.bluez.Bearer.LE1 Connected; then
+              ${pkgs.systemd}/bin/busctl --system --timeout=8 call org.bluez "$dev" org.bluez.Bearer.LE1 Connect >/dev/null 2>&1 || true
+            fi
+            bat=""
+            i=0
+            while [ "$i" -lt 12 ]; do
+              i=$((i + 1))
+              bat=$(bt_dbus_byte "$dev" org.bluez.Battery1 Percentage)
+              [ -z "$bat" ] && bat=$(bt_dbus_gatt_level "$dev")
+              if [ -n "$bat" ]; then
+                bt_dbus_battery_cache_set "$dev" "$bat"
+                break
+              fi
+              sleep 0.4
+            done
+            ${pkgs.systemd}/bin/busctl --system --timeout=3 call org.bluez "$dev" org.bluez.Bearer.LE1 Disconnect >/dev/null 2>&1 || true
+            rmdir "$lock" 2>/dev/null || true
+          }
+
           # Powered=false rfkill-softblocks MediaTek; bluetoothctl power on then
           # fails with 0x03. Unblock first. Never invoke bluetoothctl here.
           bt_dbus_set_powered() {
@@ -399,6 +953,7 @@
             local path
             path=$(bt_dbus_device_path "$1") || return 1
             ${pkgs.systemd}/bin/busctl --system call org.bluez "$path" org.bluez.Device1 Connect >/dev/null
+            bt_dbus_refresh_headset_battery "$path" || true
           }
           bt_dbus_disconnect() {
             local path
@@ -438,8 +993,10 @@
                 name_esc=$(bt_dbus_jq_escape "$alias")
                 icon_esc=$(bt_dbus_jq_escape "$icon")
                 if bt_dbus_bool "$dev" org.bluez.Device1 Connected; then
-                  bat=$(bt_dbus_byte "$dev" org.bluez.Battery1 Percentage)
-                  [ -z "$bat" ] && bat="0"
+                  bat=$(bt_dbus_battery "$dev")
+                  if [ -z "$bat" ] && bt_dbus_is_audio "$dev"; then
+                    bt_dbus_refresh_headset_battery "$dev" >/dev/null 2>&1 &
+                  fi
                   c_objs+=("{\"id\":$(bt_dbus_jq_escape "$addr"),\"name\":$name_esc,\"mac\":$(bt_dbus_jq_escape "$addr"),\"icon\":$icon_esc,\"battery\":\"$bat\",\"profile\":\"Connected\"}")
                 elif bt_dbus_bool "$dev" org.bluez.Device1 Paired; then
                   d_objs+=("{\"id\":$(bt_dbus_jq_escape "$addr"),\"name\":$name_esc,\"mac\":$(bt_dbus_jq_escape "$addr"),\"icon\":$icon_esc,\"action\":\"Connect\"}")
@@ -482,6 +1039,88 @@
           fi
         '';
 
+        # Laptop BAT* first, else UPower UPS (this desktop is an APC Back-UPS
+        # RS 1500G-IN on hiddev; it never appears under /sys/class/power_supply).
+        batteryFetch = pkgs.writeText "battery_fetch.sh" ''
+          #!/usr/bin/env bash
+          icon_for() {
+            local percent=$1 status=$2
+            if [ "$status" = "Charging" ] || [ "$status" = "Full" ]; then
+              if [ "$percent" -ge 90 ]; then echo "󰂅"
+              elif [ "$percent" -ge 80 ]; then echo "󰂋"
+              elif [ "$percent" -ge 60 ]; then echo "󰂊"
+              elif [ "$percent" -ge 40 ]; then echo "󰢞"
+              elif [ "$percent" -ge 20 ]; then echo "󰂆"
+              else echo "󰢜"; fi
+            else
+              if [ "$percent" -ge 90 ]; then echo "󰁹"
+              elif [ "$percent" -ge 80 ]; then echo "󰂂"
+              elif [ "$percent" -ge 70 ]; then echo "󰂁"
+              elif [ "$percent" -ge 60 ]; then echo "󰂀"
+              elif [ "$percent" -ge 50 ]; then echo "󰁿"
+              elif [ "$percent" -ge 40 ]; then echo "󰁾"
+              elif [ "$percent" -ge 30 ]; then echo "󰁽"
+              elif [ "$percent" -ge 20 ]; then echo "󰁼"
+              elif [ "$percent" -ge 10 ]; then echo "󰁻"
+              else echo "󰁺"; fi
+            fi
+          }
+          emit() {
+            local percent=$1 status=$2 kind=$3 present=$4
+            percent=''${percent%.*}
+            percent=''${percent:-0}
+            ${pkgs.jq}/bin/jq -n -c \
+              --arg percent "$percent" \
+              --arg status "$status" \
+              --arg icon "$(icon_for "$percent" "$status")" \
+              --arg kind "$kind" \
+              --argjson present "$present" \
+              '{percent:$percent,status:$status,icon:$icon,kind:$kind,present:$present}'
+          }
+          up_prop() {
+            ${pkgs.systemd}/bin/busctl --system get-property org.freedesktop.UPower \
+              "$1" org.freedesktop.UPower.Device "$2" 2>/dev/null | awk '{print $2; exit}'
+          }
+          up_state_name() {
+            case $1 in
+              1|5) echo Charging ;;
+              4) echo Full ;;
+              2|6) echo "On battery" ;;
+              3) echo Empty ;;
+              *) echo Unknown ;;
+            esac
+          }
+          try_upower() {
+            local path=$1 present type pct state kind
+            present=$(up_prop "$path" IsPresent)
+            type=$(up_prop "$path" Type)
+            [ "$present" = true ] || return 1
+            [ "$type" = 2 ] || [ "$type" = 3 ] || return 1
+            pct=$(up_prop "$path" Percentage)
+            state=$(up_prop "$path" State)
+            if [ "$type" = 3 ]; then kind=ups; else kind=battery; fi
+            emit "$pct" "$(up_state_name "$state")" "$kind" true
+          }
+
+          shopt -s nullglob
+          for bat in /sys/class/power_supply/BAT*; do
+            if [ -r "$bat/capacity" ]; then
+              emit "$(LC_ALL=C cat "$bat/capacity")" "$(LC_ALL=C cat "$bat/status")" battery true
+              exit 0
+            fi
+          done
+
+          while IFS= read -r path; do
+            case $path in
+              */DisplayDevice) continue ;;
+            esac
+            try_upower "$path" && exit 0
+          done < <(${pkgs.upower}/bin/upower -e)
+
+          try_upower /org/freedesktop/UPower/devices/DisplayDevice && exit 0
+          emit 0 Offline none false
+        '';
+
         hyprScripts = pkgs.runCommand "serpantinum-hypr-scripts" { } ''
           mkdir -p $out
           cp -a ${dots}/config/sessions/hyprland/scripts/. $out/
@@ -489,7 +1128,9 @@
           cp ${appFetcher} $out/quickshell/applauncher/app_fetcher.py
           cp ${btDbus} $out/quickshell/watchers/bt_dbus.sh
           cp ${btFetch} $out/quickshell/watchers/bt_fetch.sh
-          chmod +x $out/quickshell/watchers/bt_dbus.sh $out/quickshell/watchers/bt_fetch.sh
+          cp ${batteryFetch} $out/quickshell/watchers/battery_fetch.sh
+          cp ${brightnessControl} $out/quickshell/watchers/brightness_control.sh
+          chmod +x $out/quickshell/watchers/bt_dbus.sh $out/quickshell/watchers/bt_fetch.sh $out/quickshell/watchers/battery_fetch.sh $out/quickshell/watchers/brightness_control.sh
 
           find $out -type f \( -name '*.sh' -o -name '*.py' -o -name '*.qml' -o -name '*.js' \) -print0 \
             | xargs -0 sed -i \
@@ -586,10 +1227,20 @@ fi'
 
           substituteInPlace $out/quickshell/TopBar.qml \
             --replace-fail 'barWindow.timeStr = Qt.formatDateTime(d, "HH:mm:ss");' \
-                           'barWindow.timeStr = Qt.formatDateTime(d, "HH:mm");'
+                           'barWindow.timeStr = Qt.formatDateTime(d, "h:mm AP");'
+
+          substituteInPlace $out/quickshell/calendar/CalendarPopup.qml \
+            --replace-fail 'text: Qt.formatTime(window.currentTime, "HH:mm")' \
+                           'text: Qt.formatTime(window.currentTime, "h:mm")'
           ${pkgs.python3}/bin/python3 ${patchTopBar} $out/quickshell/TopBar.qml
+          ${pkgs.python3}/bin/python3 ${patchBatteryPopup} $out/quickshell/battery/BatteryPopup.qml
+          ${pkgs.python3}/bin/python3 ${patchBatteryBrightness} $out/quickshell/battery/BatteryPopup.qml
           ${pkgs.python3}/bin/python3 ${patchBtPanel} $out/quickshell/network/bluetooth_panel_logic.sh
           ${pkgs.python3}/bin/python3 ${patchQsManager} $out/qs_manager.sh
+
+          substituteInPlace $out/quickshell/network/NetworkPopup.qml \
+            --replace-fail 'nodes.push({ id: "bat_" + obj.mac, name: (obj.battery || "0") + "%", icon: "󰥉", action: "Battery", isInfoNode: true, isActionable: false, parentIndex: cIndex });' \
+                           'if (obj.battery) { nodes.push({ id: "bat_" + obj.mac, name: obj.battery + "%", icon: "󰥉", action: "Battery", isInfoNode: true, isActionable: false, parentIndex: cIndex }); }'
 
           substituteInPlace $out/qs_manager.sh \
             --replace-fail '{ echo "scan on"; sleep infinity; } | stdbuf -oL bluetoothctl > "$BT_SCAN_LOG" 2>&1 &' \
@@ -813,6 +1464,7 @@ fi'
           playerctl
           pamixer
           brightnessctl
+          ddcutil
           jq
           imagemagick
           ffmpeg
