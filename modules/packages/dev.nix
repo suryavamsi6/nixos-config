@@ -29,6 +29,25 @@
             patchelf --set-interpreter ${pkgs.stdenv.cc.libc}/lib/ld-linux-x86-64.so.2 "$out/bin/omp"
           '';
         };
+        # DeepSeek Harness is published as an npm CLI. pnpm is required here
+        # because the package's plugin bundles use peer dependencies. Install
+        # the OAuth provider into the persistent web profile on first launch.
+        deepseekHarness = pkgs.writeShellApplication {
+          name = "dsh";
+          runtimeInputs = [ pkgs.nodejs_22 pkgs.pnpm pkgs.gnused ];
+          text = ''
+            # shellcheck disable=SC2016
+            exec pnpm dlx --package @deepseek-ai/dsh@0.1.1-rc.2 sh -c '
+              shim=$(command -v dsh)
+              script=$(sed -n "s/^# cmd-shim-target=//p" "$shim")
+              profile="$HOME/.dsh/profiles/web"
+              if [ ! -e "$profile/node_modules/dsh-openai-oauth" ]; then
+                node --expose-internals "$script" plugin --profile web add dsh-openai-oauth
+              fi
+              exec node --expose-internals "$script" "$@"
+            ' dsh "$@"
+          '';
+        };
       in
       {
         imports = [ inputs.codex-desktop-linux.homeManagerModules.default ];
@@ -68,6 +87,7 @@
           code-cursor
           codex
           ohMyPi
+          deepseekHarness
           codexCliDesktop
           chntpw
           (vscode-with-extensions.override {
