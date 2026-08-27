@@ -43,6 +43,13 @@
             src = pkgs.fishPlugins.z.src;
           }
         ];
+
+        # Expose 1Password SSH agent socket so git push uses the GitHub key.
+        shellInit = ''
+          if test -S "$HOME/.1password/agent.sock"
+            set -gx SSH_AUTH_SOCK "$HOME/.1password/agent.sock"
+          end
+        '';
       };
 
       programs.kitty = {
