@@ -56,6 +56,7 @@ let
             --set-default GDK_BACKEND x11 \
             --set-default EGL_PLATFORM x11 \
             --set-default QT_QPA_PLATFORM xcb \
+            --set LIBGL_ALWAYS_SOFTWARE 1 \
             --set WEBKIT_DISABLE_COMPOSITING_MODE 1 \
             --set WEBKIT_DISABLE_DMABUF_RENDERER 1
         fi
@@ -177,6 +178,7 @@ in
                   --set GDK_BACKEND x11 \
                   --set QT_QPA_PLATFORM xcb \
                   --unset QT_QPA_PLATFORMTHEME \
+                  --set LIBGL_ALWAYS_SOFTWARE 1 \
                   --set WEBKIT_DISABLE_COMPOSITING_MODE 1 \
                   --set WEBKIT_DISABLE_DMABUF_RENDERER 1
               fi

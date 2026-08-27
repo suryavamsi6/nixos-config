@@ -92,6 +92,14 @@ Do not run a rebuild, switch, reboot, or destructive disk/install command unless
 - `modules/packages/zoomvdi-universal-plugin.nix`: pinned Zoom VDI derivation.
 - `README.md`: installation, rebuild, boot, and hardware workflows.
 
+## Hermes Desktop Worker
+
+- `modules/packages/hermes-desktop.nix` configures the always-on Pi Hermes integration: SSH key authorization for `surya`, magic-packet WoL on `enp14s0`, and CUDA Ollama reachable only on the wired LAN.
+- Hermes runs on the Raspberry Pi under `/home/suryavamsi/hermes/`; its persistent state is `/home/suryavamsi/.hermes`. Do not store Pi credentials, OAuth credentials, or router API keys in this repository.
+- The desktop is a worker, not an always-on host. Hermes must use a dedicated SSH key, never broad passwordless sudo; it must not suspend or power off the desktop.
+- Private/unknown/tool-output conversations must remain on the desktop's local Ollama model. Cloud routing is allowed only after a deterministic, full-conversation privacy check; local inference failure must return an error, never fall back to cloud.
+- Before changing this integration, back up Pi Hermes `config.yaml`, `.env`, `auth.json`, and Compose configuration. Verify Pi-to-desktop SSH, the Ollama `/v1/models` endpoint, GPU inference, and WoL separately.
+
 ## Runtime/Tooling Preferences
 
 Nix is the build/configuration system; use flakes and the repository's pinned inputs. The target systems are `x86_64-linux` and `aarch64-darwin`. User shell is Fish; terminal is Kitty. Quickshell is the configured desktop shell, wrapped with the required Qt6 QML import paths.

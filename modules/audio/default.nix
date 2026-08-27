@@ -18,13 +18,15 @@
         "-${pkgs.util-linux}/bin/rfkill unblock bluetooth"
       ];
 
-      # BlueZ 5.87 no longer accepts DisablePlugins in main.conf.  Pass the
-      # exclusions on its command line instead: the battery plugin's GATT
-      # notify request makes the ACCENTUM's LE bearer time out and can take
-      # down its BR/EDR audio bearer with it.
+      # Keep the Bluetooth headset profiles available so applications can
+      # select the ACCENTUM microphone. WirePlumber switches A2DP to HFP
+      # only while capture is active; Bluetooth cannot carry both profiles
+      # concurrently, so playback quality changes to the headset codec then.
+      # Exclude only the battery plugin, whose GATT notifications destabilize
+      # this headset; do not disable the headset plugin.
       systemd.services.bluetooth.serviceConfig.ExecStart = lib.mkForce [
         ""
-        "${pkgs.bluez}/libexec/bluetooth/bluetoothd -f /etc/bluetooth/main.conf -P headset,battery"
+        "${pkgs.bluez}/libexec/bluetooth/bluetoothd -f /etc/bluetooth/main.conf -P battery"
       ];
 
       hardware.bluetooth.settings = {
@@ -62,17 +64,20 @@
             ];
           };
         };
-        wireplumber.extraConfig."51-bluez-a2dp-prefer" = {
+        wireplumber.extraConfig."51-bluez-headset" = {
           "wireplumber.settings" = {
-            "bluetooth.autoswitch-to-headset-profile" = false;
+            "bluetooth.autoswitch-to-headset-profile" = true;
           };
           "monitor.bluez.properties" = {
+            "bluez5.hfphsp-backend" = "native";
             "bluez5.enable-sbc-xq" = true;
             "bluez5.enable-msbc" = true;
             "bluez5.enable-hw-volume" = true;
             "bluez5.roles" = [
               "a2dp_sink"
               "a2dp_source"
+              "hfp_hf"
+              "hfp_ag"
             ];
           };
           "monitor.bluez.rules" = [
@@ -80,8 +85,8 @@
               matches = [ { "device.name" = "~bluez_card.*"; } ];
               actions = {
                 update-props = {
-                  "bluez5.auto-connect" = [ "a2dp_sink" ];
-                  "bluez5.hw-volume" = [ "a2dp_sink" ];
+                  "bluez5.auto-connect" = [ "a2dp_sink" "hfp_hf" "hfp_ag" ];
+                  "bluez5.hw-volume" = [ "a2dp_sink" "hfp_hf" "hfp_ag" ];
                 };
               };
             }

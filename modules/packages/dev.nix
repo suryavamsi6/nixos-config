@@ -17,10 +17,10 @@
         };
         ohMyPi = pkgs.stdenvNoCC.mkDerivation {
           pname = "oh-my-pi";
-          version = "18.0.4";
+          version = "18.0.6";
           src = pkgs.fetchurl {
-            url = "https://github.com/can1357/oh-my-pi/releases/download/v18.0.4/omp-linux-x64";
-            hash = "sha256-lOxC0X1xl1o4HiAzW7PABaf9fuwZsxk1jfbSLyjhazc=";
+            url = "https://github.com/can1357/oh-my-pi/releases/download/v18.0.6/omp-linux-x64";
+            hash = "sha256-nLx4vpumNXtTpqBVyYrXr+5MANIKMg1Ru3apSbilpEQ=";
           };
           nativeBuildInputs = [ pkgs.patchelf ];
           dontUnpack = true;

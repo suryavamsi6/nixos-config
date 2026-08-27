@@ -3,7 +3,10 @@
 {
   flake.nixosConfigurations.nixos = inputs.nixpkgs.lib.nixosSystem {
     system = "x86_64-linux";
-    specialArgs = { inherit inputs; system = "x86_64-linux"; };
+    specialArgs = {
+      inherit inputs;
+      system = "x86_64-linux";
+    };
     modules = with config.flake.modules; [
       # Hardware
       nixos.hardwareHyprland
@@ -31,6 +34,7 @@
       nixos.social
       nixos.system
       nixos.work
+      nixos.hermesDesktop
 
       # External modules
       inputs.chaotic.nixosModules.default
@@ -62,7 +66,10 @@
         home-manager.useGlobalPkgs = true;
         home-manager.useUserPackages = true;
         home-manager.backupFileExtension = "bak";
-        home-manager.extraSpecialArgs = { inherit inputs; system = "x86_64-linux"; };
+        home-manager.extraSpecialArgs = {
+          inherit inputs;
+          system = "x86_64-linux";
+        };
         home-manager.users.surya = { ... }: {
           imports = with config.flake.modules; [
             homeManager.shell

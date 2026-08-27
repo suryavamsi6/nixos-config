@@ -117,3 +117,10 @@ hl.window_rule({
   center = true,
   pin = true,
 })
+-- Annotation is a separate Zoom helper window. Do not apply the Settings
+-- placement to it; Zoom positions the toolbar itself near the shared content.
+hl.window_rule({
+  match = { title = "^annotate_sub_toolbar$" },
+  center = false,
+  pin = false,
+})

@@ -27,7 +27,19 @@
       ];
 
       programs = {
-        gamemode.enable = true;
+        gamemode = {
+          enable = true;
+          settings = {
+            general = {
+              renice = 0;
+              inhibit_screensaver = 1;
+            };
+            cpu = {
+              park_cores = 0;
+              pin_cores = 0;
+            };
+          };
+        };
         steam = {
           enable = true;
           gamescopeSession.enable = true;
@@ -60,6 +72,9 @@
       programs.mangohud = {
         enable = true;
         settings = {
+          # Load MangoHud for every Steam game, but keep it hidden until
+          # the toggle key is pressed.
+          no_display = true;
           toggle_hud = "Alt_L+G";
           fps = true;
           frametime = true;
@@ -68,6 +83,8 @@
           cpu_temp = true;
           gpu_stats = true;
           gpu_temp = true;
+          gpu_power = true;
+          throttling_status = true;
           ram = true;
           vram = true;
         };

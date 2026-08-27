@@ -23,7 +23,7 @@ hl.env("NIXOS_OZONE_WL", "1")
 
 hl.config({
   cursor = {
-    no_hardware_cursors = true,
+    no_hardware_cursors = false,
   },
 
   general = {
@@ -35,7 +35,7 @@ hl.config({
       inactive_border = colors.inactive_border,
     },
     resize_on_border = true,
-    allow_tearing = false,
+    allow_tearing = true,
     layout = "dwindle",
   },
 
@@ -50,10 +50,7 @@ hl.config({
       enabled = false,
     },
     blur = {
-      enabled = true,
-      size = 8,
-      passes = 2,
-      new_optimizations = true,
+      enabled = false,
     },
   },
 

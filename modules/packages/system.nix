@@ -43,7 +43,6 @@
         nodejs
         glance
         sbctl
-        stremio-linux-shell
         (kodi-wayland.withPackages (kodiPkgs: with kodiPkgs; [
           inputstream-adaptive
           inputstreamhelper
@@ -56,9 +55,24 @@
 
       services.upower.enable = true;
       services.blueman.enable = true;
+      zramSwap = {
+        enable = true;
+        memoryPercent = 25;
+        algorithm = "zstd";
+      };
+      systemd.oomd = {
+        enable = true;
+        enableRootSlice = true;
+        enableUserSlices = true;
+      };
       services.ollama = {
         enable = true;
         package = pkgs.ollama-cuda;
+        environmentVariables = {
+          OLLAMA_KEEP_ALIVE = "5m";
+          OLLAMA_NUM_PARALLEL = "1";
+          OLLAMA_MAX_LOADED_MODELS = "1";
+        };
       };
 
       qt.enable = true;

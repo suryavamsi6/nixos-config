@@ -7,5 +7,6 @@
     ./gaming.nix
     ./social.nix
     ./system.nix
+    ./hermes-desktop.nix
   ];
 }
