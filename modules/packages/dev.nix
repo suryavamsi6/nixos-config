@@ -202,6 +202,9 @@
             }
           '';
         };
+        home.file.".agents/git-ops.md" = {
+          source = ../../.agents/git-ops.md;
+        };
       };
   };
 
