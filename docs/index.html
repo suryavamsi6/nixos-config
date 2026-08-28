@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A focused, reproducible NixOS and nix-darwin configuration for Hyprland, GNOME, and macOS.">
+  <title>NixOS Config · Surya Vamsi</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0d12;
+      --panel: #121620;
+      --panel-2: #171c29;
+      --text: #f5f7fb;
+      --muted: #a4adbd;
+      --line: #283143;
+      --blue: #89b4fa;
+      --lavender: #cba6f7;
+      --teal: #94e2d5;
+      --peach: #fab387;
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 80% -10%, #263454 0, transparent 35%), var(--bg);
+      color: var(--text);
+      font: 16px/1.6 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    a { color: inherit; }
+    .wrap { width: min(1120px, calc(100% - 40px)); margin: auto; }
+    nav { display: flex; justify-content: space-between; align-items: center; padding: 26px 0; }
+    .brand { display: flex; align-items: center; gap: 11px; font-weight: 750; letter-spacing: -.02em; }
+    .mark { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: linear-gradient(135deg, var(--blue), var(--lavender)); color: #10131c; font-weight: 900; }
+    nav ul { display: flex; gap: 24px; list-style: none; padding: 0; margin: 0; color: var(--muted); font-size: 14px; }
+    nav a { text-decoration: none; }
+    nav a:hover { color: var(--text); }
+    .hero { padding: 82px 0 105px; max-width: 820px; }
+    .eyebrow { color: var(--teal); font-size: 13px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { font-size: clamp(44px, 8vw, 82px); line-height: .98; letter-spacing: -.065em; margin: 18px 0 25px; max-width: 780px; }
+    .lede { max-width: 650px; color: var(--muted); font-size: clamp(18px, 2.3vw, 22px); }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 32px; }
+    .button { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 999px; padding: 11px 17px; text-decoration: none; font-weight: 700; font-size: 14px; background: var(--panel); }
+    .button.primary { background: var(--blue); border-color: var(--blue); color: #111521; }
+    .button:hover { transform: translateY(-1px); border-color: var(--blue); }
+    section { padding: 70px 0; border-top: 1px solid var(--line); }
+    .section-head { display: flex; justify-content: space-between; gap: 24px; align-items: end; margin-bottom: 28px; }
+    h2 { margin: 0; font-size: clamp(28px, 4vw, 42px); letter-spacing: -.045em; line-height: 1.1; }
+    .section-head p { max-width: 440px; color: var(--muted); margin: 0; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+    .card { background: linear-gradient(145deg, rgba(23,28,41,.95), rgba(18,22,32,.95)); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; }
+    .card .tag { color: var(--blue); font: 700 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; text-transform: uppercase; }
+    .card h3 { margin: 16px 0 7px; font-size: 22px; letter-spacing: -.025em; }
+    .card p { color: var(--muted); margin: 0; }
+    .card strong { color: var(--text); }
+    .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; align-items: stretch; }
+    .flow-step { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+    .flow-step:not(:last-child)::after { content: "→"; position: absolute; right: -19px; top: 31px; color: var(--lavender); font-size: 22px; z-index: 1; }
+    .number { color: var(--peach); font: 700 12px ui-monospace, monospace; }
+    .flow-step h3 { margin: 10px 0 4px; font-size: 17px; }
+    .flow-step p { margin: 0; color: var(--muted); font-size: 14px; }
+    pre { overflow-x: auto; background: #080a0f; border: 1px solid var(--line); border-radius: 14px; padding: 22px; color: #cdd6e7; font: 14px/1.8 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    code { color: var(--teal); }
+    .principles { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    .principle { display: flex; gap: 14px; padding: 20px 0; border-bottom: 1px solid var(--line); }
+    .dot { flex: 0 0 9px; height: 9px; margin-top: 9px; border-radius: 50%; background: var(--lavender); box-shadow: 0 0 18px var(--lavender); }
+    .principle h3 { margin: 0 0 4px; font-size: 17px; }
+    .principle p { margin: 0; color: var(--muted); }
+    footer { padding: 35px 0 55px; color: var(--muted); display: flex; justify-content: space-between; gap: 15px; font-size: 14px; }
+    @media (max-width: 760px) {
+      .wrap { width: min(100% - 28px, 620px); }
+      nav ul { display: none; }
+      .hero { padding: 55px 0 75px; }
+      section { padding: 52px 0; }
+      .grid, .flow, .principles { grid-template-columns: 1fr; }
+      .flow-step:not(:last-child)::after { content: "↓"; right: auto; left: 22px; top: auto; bottom: -25px; }
+      .section-head { display: block; }
+      .section-head p { margin-top: 13px; }
+      footer { display: block; }
+      footer span { display: block; margin-top: 6px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="wrap">
+    <nav aria-label="Primary navigation">
+      <a class="brand" href="."><span class="mark">N</span><span>NixOS Config</span></a>
+      <ul>
+        <li><a href="#systems">Systems</a></li>
+        <li><a href="#architecture">Architecture</a></li>
+        <li><a href="#start">Get started</a></li>
+      </ul>
+    </nav>
+    <div class="hero">
+      <div class="eyebrow">Reproducible · modular · personal</div>
+      <h1>A calm, capable desktop — declared in Nix.</h1>
+      <p class="lede">One flake for a Hyprland workstation, a GNOME alternative, and a MacBook Air. Hardware, services, shells, and the desktop experience stay reviewable and reproducible.</p>
+      <div class="actions">
+        <a class="button primary" href="https://github.com/suryavamsi6/nixos-config">View on GitHub ↗</a>
+        <a class="button" href="#start">Start here ↓</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="systems">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Three targets.<br>One source of truth.</h2>
+          <p>Flake outputs compose small, focused modules into complete operating-system configurations.</p>
+        </div>
+        <div class="grid">
+          <article class="card"><div class="tag">01 · primary</div><h3>NixOS / Hyprland</h3><p>A Wayland-first desktop with Ghostty, Quickshell, declarative hardware, gaming, and work tooling.</p></article>
+          <article class="card"><div class="tag">02 · alternative</div><h3>NixOS / GNOME</h3><p>A conventional GNOME session built from the same reusable system and Home Manager layers.</p></article>
+          <article class="card"><div class="tag">03 · mobile</div><h3>nix-darwin / macOS</h3><p>A MacBook Air configuration that keeps shell, development, and user preferences portable.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="architecture">
+      <div class="wrap">
+        <div class="section-head"><h2>Designed as a flow.</h2><p>Inputs become modules, modules become hosts, and hosts become a working desktop.</p></div>
+        <div class="flow">
+          <div class="flow-step"><div class="number">01 / INPUTS</div><h3>Flake inputs</h3><p>Pin the ecosystem and keep updates intentional.</p></div>
+          <div class="flow-step"><div class="number">02 / MODULES</div><h3>Deferred modules</h3><p>Group concerns without enabling them accidentally.</p></div>
+          <div class="flow-step"><div class="number">03 / HOSTS</div><h3>Host composition</h3><p>Select the right system and user layers.</p></div>
+          <div class="flow-step"><div class="number">04 / RUNTIME</div><h3>Daily desktop</h3><p>Services, UI, tools, and hardware work together.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="section-head"><h2>What lives here?</h2><p>Not just packages — the details that make a machine feel like yours.</p></div>
+        <div class="grid">
+          <article class="card"><div class="tag">desktop</div><h3>Serpantinum</h3><p>A Quickshell desktop shell with a patched upstream source, focused on useful status and control surfaces.</p></article>
+          <article class="card"><div class="tag">workflow</div><h3>Developer tools</h3><p>Fish, Starship, Ghostty, VS Code, Codex, Git, and project tooling configured together.</p></article>
+          <article class="card"><div class="tag">systems</div><h3>Hardware-aware</h3><p>Audio, Bluetooth, NVIDIA, networking, boot, storage, and work integrations tuned for real hardware.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="start">
+      <div class="wrap">
+        <div class="section-head"><h2>Bring it up.</h2><p>Clone the flake, choose a target, and let Nix do the rest.</p></div>
+        <pre><code>git clone https://github.com/suryavamsi6/nixos-config.git
+cd nixos-config
+
+# Primary Linux host
+nh os switch
+
+# Alternate Linux host
+sudo nixos-rebuild switch --flake .#plasma
+
+# MacBook Air
+nix run nix-darwin -- switch --flake .#macbook-air</code></pre>
+        <div class="principles">
+          <div class="principle"><span class="dot"></span><div><h3>Small modules, clear boundaries</h3><p>System configuration and Home Manager configuration stay separate until the host composes them.</p></div></div>
+          <div class="principle"><span class="dot"></span><div><h3>Upstream where possible</h3><p>Use inputs and focused build-time patches instead of maintaining unnecessary forks.</p></div></div>
+          <div class="principle"><span class="dot"></span><div><h3>Safe by default</h3><p>Secrets stay out of the flake, and destructive hardware workflows require deliberate checks.</p></div></div>
+          <div class="principle"><span class="dot"></span><div><h3>Made for the actual machine</h3><p>Performance and reliability choices follow the hardware and the way it is used every day.</p></div></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="wrap"><div>Built with Nix · maintained by Surya Vamsi</div><span><a href="https://github.com/suryavamsi6/nixos-config">Source on GitHub ↗</a></span></footer>
+</body>
+</html>
