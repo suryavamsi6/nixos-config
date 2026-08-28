@@ -17,7 +17,7 @@ hl.env("XCURSOR_THEME", "ArcMidnight-Cursors")
 hl.env("XCURSOR_SIZE", "24")
 hl.env("HYPRCURSOR_THEME", "ArcMidnight-Cursors")
 hl.env("HYPRCURSOR_SIZE", "24")
-hl.env("TERMINAL", "kitty")
+hl.env("TERMINAL", "ghostty")
 hl.env("QT_QPA_PLATFORMTHEME", "qt6ct")
 hl.env("NIXOS_OZONE_WL", "1")
 

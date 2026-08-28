@@ -4,14 +4,14 @@
   options.flake.modules.homeManager.dev = lib.mkOption {
     type = lib.types.deferredModule;
     default =
-      { pkgs, inputs, config, ... }:
+      { pkgs, inputs, config, lib, ... }:
       let
         # pkgs.codex is CLI-only. Super+Space ignores Terminal=true.
         codexCliDesktop = pkgs.makeDesktopItem {
           name = "codex-cli";
           desktopName = "Codex CLI";
           comment = "OpenAI Codex in the terminal";
-          exec = "${lib.getExe pkgs.kitty} --title Codex -e ${lib.getExe pkgs.codex}";
+          exec = "${lib.getExe pkgs.ghostty} --title Codex -e ${lib.getExe pkgs.codex}";
           icon = "utilities-terminal";
           categories = [ "Development" ];
         };
@@ -48,6 +48,37 @@
             ' dsh "$@"
           '';
         };
+        piAgent = pkgs.writeShellApplication {
+          name = "pi";
+          runtimeInputs = [
+            pkgs.nodejs_22
+            pkgs.pnpm
+            pkgs.gnumake
+            pkgs.gcc
+            pkgs.python3
+          ];
+          text = ''
+            exec pnpm dlx --package @earendil-works/pi-coding-agent@0.84.3 pi "$@"
+          '';
+        };
+        # Install these manually with: pi install <extension>
+        piExtensions = [
+          "npm:@ff-labs/pi-fff"
+          "npm:@narumitw/pi-lsp"
+          "npm:pi-subagents"
+          "npm:@narumitw/pi-plan-mode"
+          "npm:pi-mcp-adapter"
+          "npm:pi-linehash-edit"
+          "npm:@gotgenes/pi-permission-system"
+          "npm:pi-web-access"
+          "npm:@juicesharp/rpiv-ask-user-question"
+          "npm:pi-background-tasks"
+          "npm:context-mode"
+          "npm:pi-hermes-memory"
+          "npm:@zosmaai/pi-llm-wiki"
+          "npm:pi-cc-header"
+          "npm:better-claude-code-ui"
+        ];
       in
       {
         imports = [ inputs.codex-desktop-linux.homeManagerModules.default ];
@@ -72,7 +103,7 @@
           superfile
           wget
           git
-          kitty
+          ghostty
           htop
           nixfmt
           vim
@@ -81,13 +112,13 @@
           nixd
           yazi
           treefmt
-          kitty-themes
           tmux
           dig
           code-cursor
           codex
           ohMyPi
           deepseekHarness
+          piAgent
           codexCliDesktop
           chntpw
           (vscode-with-extensions.override {

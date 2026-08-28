@@ -45,7 +45,7 @@ Dead desktop modules were removed (AGS, SwayNC, hyprlauncher, hyprpaper, gtkThem
 - Dispatchers are Lua: `hyprctl dispatch 'hl.dsp.dpms("off")'`, not `dispatch dpms off`.
 - Monitor: MAG 341C OLED `HDMI-A-2` `3440x1440@175` HDR in `lua/monitors.lua`.
 - Workspace overview: hyprexpose (standalone overlay, not a C++ plugin). Super+Tab sits next to clipboard (Super+D) on the Node 100 custom row; also `XF86LaunchA`. Daemon: `hyprexpose --allow-mouse`, toggle `pkill -USR1 -x hyprexpose`. Esc closes. hymission does not compile against locked Hyprland git (CWindow members moved onto presentation/state). Do not mix hyprpm.
-- DM: greetd/tuigreet. Shell: Fish. Terminal: kitty. Browsers on `#nixos`: zen-twilight (Super+B) and Helium (`inputs.helium-browser`). Do not add Floorp or other browsers. `pkgs.firefox` stays only on the Citrix wrapper PATH for store-UI links, not as a desktop browser.
+- DM: greetd/tuigreet. Shell: Fish. Terminal: Ghostty. Browsers on `#nixos`: zen-twilight (Super+B) and Helium (`inputs.helium-browser`). Do not add Floorp or other browsers. `pkgs.firefox` stays only on the Citrix wrapper PATH for store-UI links, not as a desktop browser.
 
 ## Serpantinum
 
@@ -105,7 +105,7 @@ Do not add a tracing hatch to `$plugin/zoom`: `ptrace_scope=1` blocks attaching 
 
 ## Codex
 
-`pkgs.codex` is the CLI. The GUI is OpenAI’s ChatGPT Linux desktop (`inputs.codex-desktop-linux`, `programs.codexDesktopLinux` in `homeManager.dev`) with `cliPackage = pkgs.codex`. Super+Space **Codex** launches `codex-desktop`; **Codex CLI** is kitty. Do not store OpenAI API keys in the flake. Cachix: `codex-desktop-linux.cachix.org`.
+`pkgs.codex` is the CLI. The GUI is OpenAI’s ChatGPT Linux desktop (`inputs.codex-desktop-linux`, `programs.codexDesktopLinux` in `homeManager.dev`) with `cliPackage = pkgs.codex`. Super+Space **Codex** launches `codex-desktop`; **Codex CLI** is Ghostty. Do not store OpenAI API keys in the flake. Cachix: `codex-desktop-linux.cachix.org`.
 
 ## Secrets / safety
 

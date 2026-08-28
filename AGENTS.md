@@ -38,7 +38,7 @@ NixOS system configuration and Home Manager/user-runtime configuration are separ
 - `modules/desktop/`: Serpantinum/Quickshell, GNOME, greetd, and wallpapers.
 - `modules/packages/`: custom derivations and application wrappers, including Citrix and Zoom VDI.
 - `modules/hardware/`: GPU, disks, RGB, and device-specific configuration.
-- `modules/shell/`: Fish, Kitty, Starship, and shell abbreviations.
+- `modules/shell/`: Fish, Ghostty, Starship, and shell abbreviations.
 - `.cursor/skills/` and `.agents/skills/`: detailed repository-specific operational guidance.
 
 ## Development Commands
@@ -102,9 +102,10 @@ Do not run a rebuild, switch, reboot, or destructive disk/install command unless
 
 ## Runtime/Tooling Preferences
 
-Nix is the build/configuration system; use flakes and the repository's pinned inputs. The target systems are `x86_64-linux` and `aarch64-darwin`. User shell is Fish; terminal is Kitty. Quickshell is the configured desktop shell, wrapped with the required Qt6 QML import paths.
+Nix is the build/configuration system; use flakes and the repository's pinned inputs. The target systems are `x86_64-linux` and `aarch64-darwin`. User shell is Fish; terminal is Ghostty. Quickshell is the configured desktop shell, wrapped with the required Qt6 QML import paths.
 
 Development tools provided by the configuration include `nixfmt`, `treefmt`, `nixd`, `nix-init`, `git`, and `codex`. Follow existing Nix formatting and module conventions; do not add a new package manager or runtime without a concrete need.
+- For file search and content search, use the FFF tools (`fffind`, `ffgrep`, and `fff-multi-grep`) instead of the built-in search tools.
 
 ## Testing & QA
 

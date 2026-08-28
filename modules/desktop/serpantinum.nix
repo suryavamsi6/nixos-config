@@ -34,8 +34,7 @@
         matugenReload = pkgs.writeShellScript "matugen_reload.sh" ''
           set -euo pipefail
 
-          killall -USR1 kitty 2>/dev/null || true
-          killall -USR1 .kitty-wrapped 2>/dev/null || true
+          # Ghostty owns its terminal colors and reload behavior.
 
           apply_hypr_borders() {
             local colors_lua="''${HOME}/.config/hypr/colors.lua"
@@ -1297,13 +1296,6 @@ fi'
           input_path = "~/.config/matugen/templates/qs_colors.json.template"
           output_path = "~/.cache/matugen/qs_colors.json"
 
-          [templates.kitty]
-          input_path = "~/.config/matugen/templates/kitty-colors.conf.template"
-          output_path = "/tmp/kitty-matugen-colors.conf"
-
-          [templates.kitty_cache]
-          input_path = "~/.config/matugen/templates/kitty-colors.conf.template"
-          output_path = "~/.cache/matugen/kitty-colors.conf"
 
           [templates.cava]
           input_path = "~/.config/matugen/templates/cava-colors.ini.template"
@@ -1369,8 +1361,8 @@ fi'
           [
             (mkBind "SUPER" "SPACE" "exec" "toggle applauncher")
             (mkBind "SUPER" "R" "exec" "toggle settings")
-            (mkBind "SUPER" "Q" "exec" "kitty")
-            (mkBind "SUPER" "RETURN" "exec" "kitty")
+            (mkBind "SUPER" "Q" "exec" "ghostty")
+            (mkBind "SUPER" "RETURN" "exec" "ghostty")
             (mkBind "SUPER" "E" "exec" "nautilus")
             (mkBind "SUPER" "B" "exec" "zen-twilight")
             (mkBind "SUPER" "P" "exec" "hyprpicker -a")
@@ -1430,7 +1422,7 @@ fi'
 
         seedMatugen = pkgs.writeShellScript "serpantinum-seed-matugen" ''
           set -euo pipefail
-          if [ -f /tmp/qs_colors.json ] && [ -f /tmp/kitty-matugen-colors.conf ]; then
+          if [ -f /tmp/qs_colors.json ]; then
             exit 0
           fi
 
@@ -1501,7 +1493,7 @@ fi'
         home.sessionVariables = {
           NIXOS_OZONE_WL = "1";
           QT_QPA_PLATFORMTHEME = "qt6ct";
-          TERMINAL = "kitty";
+          TERMINAL = "ghostty";
         };
 
         home.pointerCursor = {
@@ -1554,23 +1546,24 @@ fi'
           stylePath = "${config.home.homeDirectory}/.config/swayosd/style.css";
         };
 
-        programs.kitty.extraConfig = lib.mkForce ''
-          font_family JetBrains Mono
-          font_size 13.0
-          bold_font auto
-          italic_font auto
-          bold_italic_font auto
-          cursor_trail 1
-          background_opacity 1.0
-          confirm_os_window_close 0
-          scrollback_lines 2000
-          wheel_scroll_min_lines 1
-          enable_audio_bell no
-          hide_window_decorations yes
-          window_padding_width 4
-          include ${config.home.homeDirectory}/.cache/matugen/kitty-colors.conf
-          include /tmp/kitty-matugen-colors.conf
-        '';
+        programs.ghostty.settings = {
+          font-family = "JetBrains Mono";
+          font-size = 13;
+          background-opacity = 1.0;
+          confirm-close-surface = false;
+          scrollback-limit = 2000;
+          window-padding-x = 4;
+          window-padding-y = 4;
+          cursor-style-blink = false;
+          background = "#1e1e2e";
+          foreground = "#cdd6f4";
+          palette = [
+            "0=#45475a" "1=#f38ba8" "2=#a6e3a1" "3=#f9e2af"
+            "4=#89b4fa" "5=#f5c2e7" "6=#94e2d5" "7=#bac2de"
+            "8=#585b70" "9=#f38ba8" "10=#a6e3a1" "11=#f9e2af"
+            "12=#89b4fa" "13=#f5c2e7" "14=#94e2d5" "15=#a6adc8"
+          ];
+        };
 
         systemd.user.services.quickshell = {
           Unit = {

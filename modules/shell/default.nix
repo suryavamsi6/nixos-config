@@ -1,4 +1,4 @@
-# Shell — Fish + Kitty + bash-to-fish wrapper (NixOS + home-manager)
+# Shell — Fish + Ghostty + bash-to-fish wrapper (NixOS + home-manager)
 { lib, ... }:
 {
   # NixOS-level shell config
@@ -52,12 +52,17 @@
         '';
       };
 
-      programs.kitty = {
+      programs.ghostty = {
         enable = true;
-        shellIntegration.enableFishIntegration = true;
-        extraConfig = ''
-          include /tmp/kitty-matugen-colors.conf
-        '';
+        enableFishIntegration = true;
+        settings = {
+          font-family = "JetBrains Mono";
+          font-size = 13;
+          background-opacity = 1.0;
+          confirm-close-surface = false;
+          scrollback-limit = 2000;
+          shell-integration-features = "no-cursor";
+        };
       };
 
       programs.starship = {

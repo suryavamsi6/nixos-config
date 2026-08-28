@@ -19,7 +19,6 @@
       nixos.nixSettings
       nixos.users
       nixos.networking
-      nixos.samba
       nixos.environment
       nixos.shell
       nixos.fonts
