@@ -40,6 +40,7 @@
         blueman
         cheese
         cameractrls-gtk4
+        comfyui
         nodejs
         glance
         sbctl

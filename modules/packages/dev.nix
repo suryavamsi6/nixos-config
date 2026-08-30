@@ -58,7 +58,7 @@
             pkgs.python3
           ];
           text = ''
-            exec pnpm dlx --package @earendil-works/pi-coding-agent@0.84.3 pi "$@"
+            exec npm exec --yes --package @earendil-works/pi-coding-agent@latest -- pi "$@"
           '';
         };
         # Install these manually with: pi install <extension>

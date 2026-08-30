@@ -18,10 +18,10 @@
       networking.nameservers = [ "127.0.0.1" ];
       # Stub on 127.0.0.53 would steal queries from dnsmasq.
       services.resolved.enable = false;
-      # Steam looks up CDN names on every chunk. Talking to the Pi-hole
-      # (192.168.0.105) directly saturates it, then nix fails with
-      # "Could not resolve host: nix-community.cachix.org". Cache here,
-      # forward misses to Pi-hole so ads still get blocked.
+      # Steam looks up CDN names on every chunk. Normally forward misses to
+      # the Pi-hole (192.168.0.105); use the router temporarily while the
+      # Pi migration is in progress because that address now serves NixOS.
+      # Restore 192.168.0.105 after Pi-hole is migrated.
       # Do not also set NM dns=dnsmasq — two listeners on :53.
       services.dnsmasq = {
         enable = true;
@@ -31,7 +31,7 @@
           no-resolv = true;
           cache-size = 10000;
           min-cache-ttl = 3600;
-          server = [ "192.168.0.105" ];
+          server = [ "192.168.0.1" ];
           # Cap in-flight forwards so a cold Steam cache cannot knock
           # the Pi over (default 150). Local hits do not count.
           dns-forward-max = 32;

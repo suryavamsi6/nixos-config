@@ -38,15 +38,10 @@
         boot.initrd.kernelModules = [ ];
         boot.kernelModules = [
           "kvm-amd"
-          "r8125"
+          "r8169"
         ];
-        # RTL8125 2.5G (10EC:8125) is bound to in-tree r8169, which often
-        # underperforms Realtek's Windows driver. Use the vendor module.
-        boot.extraModulePackages = [ config.boot.kernelPackages.r8125 ];
-        boot.blacklistedKernelModules = [ "r8169" ];
-        boot.extraModprobeConfig = ''
-          options r8125 aspm=0 eee=0
-        '';
+        # RTL8125 2.5G: use the maintained in-tree driver for standard
+        # kernel reset and power-management handling across reboots.
 
         fileSystems."/" = {
           device = "/dev/disk/by-uuid/8e68c4ac-6bc7-4fa3-b43e-0cabc31931cf";

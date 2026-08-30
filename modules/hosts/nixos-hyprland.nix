@@ -42,6 +42,8 @@
 
       # Host-specific config
       ({ pkgs, ... }: {
+        # Required to cross-build aarch64 Raspberry Pi SD images on this x86_64 host.
+        boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
         networking.hostName = "nixos";
 
         nixpkgs.config.permittedInsecurePackages = [

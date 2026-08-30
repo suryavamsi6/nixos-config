@@ -1,0 +1,20 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {"title":"CPU usage","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":0},"targets":[{"expr":"100 - (avg by(instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)","legendFormat":"{{instance}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"percent","max":100,"min":0},"overrides":[]}},
+    {"title":"Memory usage","type":"timeseries","gridPos":{"h":8,"w":12,"x":12,"y":0},"targets":[{"expr":"100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)","legendFormat":"{{instance}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"percent","max":100,"min":0},"overrides":[]}},
+    {"title":"Filesystem usage","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":8},"targets":[{"expr":"100 * (1 - node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs\",mountpoint=\"/\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs\",mountpoint=\"/\"})","legendFormat":"{{mountpoint}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"percent","max":100,"min":0},"overrides":[]}},
+    {"title":"Network traffic","type":"timeseries","gridPos":{"h":8,"w":12,"x":12,"y":8},"targets":[{"expr":"rate(node_network_receive_bytes_total{device!~\"lo|podman.*|veth.*\"}[5m])","legendFormat":"RX {{device}}","refId":"A"},{"expr":"rate(node_network_transmit_bytes_total{device!~\"lo|podman.*|veth.*\"}[5m])","legendFormat":"TX {{device}}","refId":"B"}],"fieldConfig":{"defaults":{"unit":"Bps"},"overrides":[]}},
+    {"title":"Service CPU usage","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":16},"targets":[{"expr":"sum by(id) (rate(container_cpu_usage_seconds_total{id=~\"/system.slice/.*\\.service\"}[5m])) * 100","legendFormat":"{{id}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"percent"},"overrides":[]}},
+    {"title":"Service memory usage","type":"timeseries","gridPos":{"h":8,"w":12,"x":12,"y":16},"targets":[{"expr":"container_memory_working_set_bytes{id=~\"/system.slice/.*\\.service\"}","legendFormat":"{{id}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"bytes"},"overrides":[]}},
+    {"title":"Service and exporter health","type":"table","gridPos":{"h":8,"w":24,"x":0,"y":24},"targets":[{"expr":"up","format":"table","instant":true,"refId":"A"}],"fieldConfig":{"defaults":{"custom":{"align":"auto","displayMode":"auto"}},"overrides":[]}}
+  ],
+  "schemaVersion": 39,
+  "templating": {"list": []},
+  "time": {"from":"now-6h","to":"now"},
+  "title":"Raspberry Pi — System & Services",
+  "uid":"raspberry-pi-overview",
+  "version":2
+}
