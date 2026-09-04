@@ -8,12 +8,17 @@ Item {
     id: root
     property var barWindow
     property bool moduleActive: true
+    property real targetX: 0
+    property real targetWidth: moduleActive ? implicitWidth : 0
     implicitWidth: barWindow ? barWindow.s(34) : 34
     implicitHeight: barWindow ? barWindow.barHeight : 30
-    width: implicitWidth
+    x: targetX
+    y: barWindow ? barWindow.baseOffsetY : 0
+    width: targetWidth
     height: implicitHeight
     enabled: moduleActive
-
+    Behavior on x { NumberAnimation { duration: 600; easing.type: Easing.OutQuint } }
+    Behavior on width { NumberAnimation { duration: 450; easing.type: Easing.OutQuint } }
     property bool popupActive: currentWidget.trim() === "worldclock"
     property string currentWidget: ""
 

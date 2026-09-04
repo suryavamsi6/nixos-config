@@ -20,15 +20,10 @@
         worldClockGlobe = pkgs.writeText "WorldClockGlobe.qml" (builtins.readFile ./serpantinum/world-clock/WorldClockGlobe.qml);
         worldClockButton = pkgs.writeText "WorldClockButton.qml" (builtins.readFile ./serpantinum/world-clock/WorldClockButton.qml);
         worldClockTexture = pkgs.writeText "earth-land.svg" (builtins.readFile ./serpantinum/world-clock/earth-land.svg);
+        worldClockQmldir = pkgs.writeText "world-clock-qmldir" (builtins.readFile ./serpantinum/world-clock/qmldir);
         worldClockScript = pkgs.writeText "world_clock.py" (builtins.readFile ./serpantinum/world-clock/world_clock.py);
         patchWorldClock = pkgs.writeText "patch-serpantinum-world-clock.py" (builtins.readFile ./serpantinum/world-clock/patch-serpantinum.py);
-        qtQuickShellWith3d = pkgs.symlinkJoin {
-          name = "quickshell-with-qtquick3d";
-          paths = [ pkgs.quickshell pkgs.qt6.qtquick3d ];
-        };
-        serpantinum = pkgs.callPackage "${inputs.serpantinum}/nix/package.nix" {
-          quickshell = qtQuickShellWith3d;
-        };
+        serpantinum = pkgs.callPackage "${inputs.serpantinum}/nix/package.nix" { };
         worldClockQt = serpantinum.overrideAttrs (old: {
           postInstall = (old.postInstall or "") + ''
             mkdir -p $out/share/serpantinum/quickshell/worldclock
@@ -36,6 +31,7 @@
             mkdir -p $out/share/serpantinum/scripts
             cp ${worldClockPopup} $out/share/serpantinum/quickshell/worldclock/WorldClockPopup.qml
             cp ${worldClockGlobe} $out/share/serpantinum/quickshell/worldclock/WorldClockGlobe.qml
+            cp ${worldClockQmldir} $out/share/serpantinum/quickshell/worldclock/qmldir
             cp ${worldClockTexture} $out/share/serpantinum/quickshell/worldclock/earth-land.svg
             cp ${worldClockButton} $out/share/serpantinum/quickshell/bar/modules/worldclock/WorldClockButton.qml
             cp ${worldClockScript} $out/share/serpantinum/scripts/world_clock.py
