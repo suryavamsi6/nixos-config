@@ -43,6 +43,11 @@
         # RTL8125 2.5G: use the maintained in-tree driver for standard
         # kernel reset and power-management handling across reboots.
 
+        # Allow the logged-in desktop user to use WebHID configurators.
+        services.udev.extraRules = ''
+          SUBSYSTEM=="hidraw", ATTRS{idVendor}=="19f5", TAG+="uaccess", GROUP="users", MODE="0660"
+          SUBSYSTEM=="hidraw", ATTRS{idVendor}=="5253", TAG+="uaccess", GROUP="users", MODE="0660"
+        '';
         fileSystems."/" = {
           device = "/dev/disk/by-uuid/8e68c4ac-6bc7-4fa3-b43e-0cabc31931cf";
           fsType = "ext4";

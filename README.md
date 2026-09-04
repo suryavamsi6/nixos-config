@@ -174,7 +174,7 @@ Keep SB off until Limine boots cleanly, then enroll keys with `sbctl` per [NixOS
 - **Wrong disk**: wiping the WD SN850X destroys Windows. Match by **MODEL** and size, not `nvmeN`.
 - **Shared Windows ESP**: do not mount the 100M Windows ESP at `/boot`. Kernels need the NixOS ESP (~1G on the Samsung SSD).
 - **Stale UUIDs** in `hyprland-hw.nix` → emergency shell on first boot.
-- **NVIDIA / r8125**: this host still expects NVIDIA + out-of-tree `r8125` (not `r8169`).
+- **NVIDIA / RTL8125**: this host uses the open NVIDIA kernel modules and the in-tree `r8169` driver for RTL8125 Ethernet.
 
 ### Bluetooth notes (MT7922)
 
@@ -194,6 +194,18 @@ sudo nixos-rebuild switch --flake .#nixos
 ```
 
 GNOME variant: `.#plasma`.
+
+### Controlled gaming-kernel trial
+
+The primary `.#nixos` host currently boots the default CachyOS kernel. The newest Limine generation also contains a `stock-kernel` specialisation using the stock nixpkgs kernel; older generations remain available as an additional rollback path.
+
+Install kernel changes without activating them in the running session:
+
+```bash
+sudo nixos-rebuild boot --flake .#nixos
+```
+
+After rebooting, select either the normal `cachyos-trial` entry or `stock-kernel` by label in Limine. A runtime specialisation switch cannot replace the running kernel.
 
 ---
 

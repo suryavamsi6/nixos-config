@@ -21,9 +21,8 @@
       systemd.tmpfiles.rules = [
         "C+ /var/lib/OpenRGB/sizes.ors 0644 root root - ${./openrgb-sizes.ors}"
       ];
-      systemd.user.tmpfiles.rules = [
-        "C+ %h/.config/OpenRGB/sizes.ors 0644 - - - ${./openrgb-sizes.ors}"
-      ];
+      # User tmpfiles rules also run for greetd, whose home is /var/empty.
+      home-manager.users.surya.home.file.".config/OpenRGB/sizes.ors".source = ./openrgb-sizes.ors;
     };
   };
 }

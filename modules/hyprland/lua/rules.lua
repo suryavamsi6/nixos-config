@@ -87,10 +87,12 @@ hl.window_rule({ match = { title = "^(Create New Folder)$" }, size = "450 200" }
 hl.window_rule({ match = { title = "^(Properties)$" }, size = "500 600" })
 hl.window_rule({ match = { modal = true }, float = true, center = true, rounding = 10 })
 
--- Citrix Workspace: keep the ICA session fully opaque on XWayland
+-- Citrix Workspace: keep the ICA session fully opaque and out of
+-- workspace transition animations on XWayland.
 hl.window_rule({
   match = { class = "^(Wfica|Wfica_Seamless|selfservice|Adapter)$" },
   opacity = "1.0 1.0",
+  no_anim = true,
   rounding = 0,
 })
 -- SAML/Entra WebKit dialog. Tiling + focus_on_activate closes it as cancel.

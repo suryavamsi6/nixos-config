@@ -30,10 +30,7 @@
       flake = false;
     };
     chaotic.url = "github:chaotic-cx/nyx/nyxpkgs-unstable";
-    serpantinum = {
-      url = "github:ilyamiro/serpantinum";
-      flake = false;
-    };
+    serpantinum.url = "github:ilyamiro/serpantinum";
     shell-wallpapers = {
       url = "github:ilyamiro/shell-wallpapers";
       flake = false;

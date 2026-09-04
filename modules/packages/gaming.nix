@@ -4,16 +4,8 @@
   options.flake.modules.nixos.gaming = lib.mkOption {
     type = lib.types.deferredModule;
     default = { pkgs, ... }:
-    let
-      # HTTP/2 on the 32-bit Linux client is the usual Windows-vs-Linux
-      # gap. Do not add @cMaxInitialDownloadSources — extra sockets stall
-      # Steam's writer on large .ucas/.vpk files (write gaps), with or
-      # without btrfs CoW.
-      steamDevCfg = pkgs.writeText "steam_dev.cfg" ''
-        @nClientDownloadEnableHTTP2PlatformLinux 0
-      '';
-    in
     {
+      # HTTP/2 is disabled in the Steam client through the user config below.
       environment.systemPackages = with pkgs; [
         gamescope
         protonup-ng
@@ -56,19 +48,16 @@
           };
         };
       };
-
-      # Must run as the user. A system C+ rule creates
-      # ~/.local/share/Steam as root and bootstraplinux_*.tar.xz cannot
-      # extract (Cannot mkdir).
-      systemd.user.tmpfiles.rules = [
-        "C+ %h/.local/share/Steam/steam_dev.cfg 0644 - - - ${steamDevCfg}"
-      ];
     };
   };
 
   options.flake.modules.homeManager.gaming = lib.mkOption {
     type = lib.types.deferredModule;
-    default = { ... }: {
+    default = { pkgs, ... }: {
+      # Must run as the user; a global user-tmpfiles rule also runs for greetd.
+      home.file.".local/share/Steam/steam_dev.cfg".source = pkgs.writeText "steam_dev.cfg" ''
+        @nClientDownloadEnableHTTP2PlatformLinux 0
+      '';
       programs.mangohud = {
         enable = true;
         settings = {

@@ -11,7 +11,7 @@ local lock = scripts .. "/lock.sh"
 local shot = scripts .. "/screenshot.sh"
 
 -- Launcher / hub (Serpantinum replacements for rofi + surface-dots hub)
-hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd("bash " .. qs .. " toggle applauncher"))
+hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd("serpantinum msg toggle launcher"))
 hl.bind(mainMod .. " + R", hl.dsp.exec_cmd("bash " .. qs .. " toggle settings"))
 
 -- Apps

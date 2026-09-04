@@ -61,6 +61,32 @@
             exec npm exec --yes --package @earendil-works/pi-coding-agent@latest -- pi "$@"
           '';
         };
+        agentBrowser = pkgs.stdenvNoCC.mkDerivation {
+          pname = "agent-browser";
+          version = "0.34.0";
+          src = pkgs.fetchurl {
+            url = "https://registry.npmjs.org/agent-browser/-/agent-browser-0.34.0.tgz";
+            hash = "sha256-pHRPsYnlmEZ6vPs6zd4HEY2eXLQ9w7MXJ/hpr0651Zg=";
+          };
+          nativeBuildInputs = [ pkgs.makeWrapper pkgs.patchelf ];
+          dontUnpack = true;
+          installPhase = ''
+            mkdir -p "$out/libexec/agent-browser" "$out/bin";
+            tar -xzf "$src" -C "$out/libexec/agent-browser" --strip-components=1;
+            chmod +x "$out/libexec/agent-browser/bin/agent-browser-linux-x64";
+            patchelf --set-interpreter "${pkgs.stdenv.cc.libc}/lib/ld-linux-x86-64.so.2" \
+              "$out/libexec/agent-browser/bin/agent-browser-linux-x64";
+            makeWrapper "$out/libexec/agent-browser/bin/agent-browser.js" "$out/bin/agent-browser" \
+              --prefix PATH : "${pkgs.nodejs_24}/bin";
+          '';
+        };
+        piAgentBrowserDoctor = pkgs.writeShellApplication {
+          name = "pi-agent-browser-doctor";
+          runtimeInputs = [ pkgs.nodejs_22 ];
+          text = ''
+            exec npm exec --yes --package pi-agent-browser-native@0.3.0 -- pi-agent-browser-doctor "$@"
+          '';
+        };
         # Install these manually with: pi install <extension>
         piExtensions = [
           "npm:@ff-labs/pi-fff"
@@ -107,20 +133,21 @@
           htop
           nixfmt
           vim
-          antigravity-ide
           nix-init
           nixd
           yazi
           treefmt
           tmux
           dig
+          procps
           code-cursor
           codex
+          herdr
           ohMyPi
           deepseekHarness
           piAgent
-          codexCliDesktop
-          chntpw
+          agentBrowser
+          piAgentBrowserDoctor
           (vscode-with-extensions.override {
             vscodeExtensions = pkgs.vscode-utils.extensionsFromVscodeMarketplace [
               {

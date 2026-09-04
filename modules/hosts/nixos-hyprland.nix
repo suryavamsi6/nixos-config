@@ -27,6 +27,7 @@
 
       # Desktop
       nixos.hyprland
+      nixos.serpantinum
 
       # Packages
       nixos.gaming
@@ -41,25 +42,36 @@
       nixos.locale
 
       # Host-specific config
-      ({ pkgs, ... }: {
-        # Required to cross-build aarch64 Raspberry Pi SD images on this x86_64 host.
-        boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
-        networking.hostName = "nixos";
+      (
+        {
+          config,
+          lib,
+          pkgs,
+          ...
+        }:
+        {
+          boot.kernelPackages = pkgs.linuxPackages_cachyos;
+          hardware.nvidia.package = lib.mkForce pkgs.linuxPackages_cachyos.nvidiaPackages.cachyos;
 
-        nixpkgs.config.permittedInsecurePackages = [
-          "libxml2-2.13.8"
-          "libsoup-2.74.3"
-        ];
-        services.flatpak.enable = true;
-        services.logind = {
-          settings.Login.HandleLidSwitch = "ignore";
-          settings.Login.HandleLidSwitchExternalPower = "ignore";
-          settings.Login.HandleLidSwitchDocked = "ignore";
-          settings.Login.KillUserProcesses = true;
-        };
 
-        system.stateVersion = "24.11";
-      })
+          networking.hostName = "nixos";
+
+          nixpkgs.config.permittedInsecurePackages = [
+            "libxml2-2.13.8"
+            "libsoup-2.74.3"
+          ];
+          services.flatpak.enable = true;
+          services.logind = {
+            settings.Login.HandleLidSwitch = "ignore";
+            settings.Login.HandleLidSwitchExternalPower = "ignore";
+            settings.Login.HandleLidSwitchDocked = "ignore";
+            settings.Login.KillUserProcesses = true;
+          };
+
+          system.nixos.tags = [ "cachyos" ];
+          system.stateVersion = "24.11";
+        }
+      )
 
       # Home Manager
       inputs.home-manager.nixosModules.home-manager
@@ -71,7 +83,7 @@
           inherit inputs;
           system = "x86_64-linux";
         };
-        home-manager.users.surya = { ... }: {
+        home-manager.users.surya = { pkgs, ... }: {
           imports = with config.flake.modules; [
             homeManager.shell
             homeManager.hyprland
@@ -90,6 +102,8 @@
           home.packages = [
             inputs.zen-browser.packages."x86_64-linux".twilight
             inputs.helium-browser.packages."x86_64-linux".helium
+            pkgs.chromium
+            pkgs.localsend
           ];
         };
       }

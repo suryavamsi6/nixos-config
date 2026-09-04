@@ -50,8 +50,6 @@ let
           wrapProgramShell "$ica/icasessionmgr" \
             --set ICAROOT "$ica" \
             --prefix PATH : "${lib.makeBinPath [ pkgs.firefox ]}" \
-            --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [ pkgs.libpulseaudio ]}" \
-            --set PULSE_LATENCY_MSEC 30 \
             --run "ulimit -c unlimited" \
             --set-default GDK_BACKEND x11 \
             --set-default EGL_PLATFORM x11 \
@@ -80,8 +78,6 @@ let
         if [ -x "$ica/wfica" ] && [ ! -e "$ica/.wfica-wrapped" ]; then
           wrapProgramShell "$ica/wfica" \
             --set ICAROOT "$ica" \
-            --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [ pkgs.libpulseaudio ]}" \
-            --set PULSE_LATENCY_MSEC 30 \
             --set GDK_BACKEND x11 \
             --set EGL_PLATFORM x11 \
             --set QT_QPA_PLATFORM xcb \
@@ -173,8 +169,6 @@ in
                 rm -f "$out/bin/$name"
                 makeWrapper "${citrix}/bin/$name" "$out/bin/$name" \
                   --prefix PATH : "${lib.makeBinPath [ pkgs.firefox ]}" \
-                  --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [ pkgs.libpulseaudio ]}" \
-                  --set PULSE_LATENCY_MSEC 30 \
                   --set GDK_BACKEND x11 \
                   --set QT_QPA_PLATFORM xcb \
                   --unset QT_QPA_PLATFORMTHEME \

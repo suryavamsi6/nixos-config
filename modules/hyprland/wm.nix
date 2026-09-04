@@ -21,6 +21,8 @@
           hyprshutdown
           aquamarine
           wl-clipboard
+          wtype
+          ydotool
           (pkgs.callPackage "${inputs.hyprexpose}/default.nix" { })
           gst_all_1.gstreamer
           gst_all_1.gst-plugins-ugly
@@ -37,6 +39,7 @@
           portalPackage =
             inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland;
         };
+        services.gnome.at-spi2-core.enable = true;
 
         # PAM for hyprlock (HM only installs the binary)
         programs.hyprlock.enable = true;
@@ -50,9 +53,36 @@
       { pkgs, inputs, ... }:
       let
         hyprexpose = pkgs.callPackage "${inputs.hyprexpose}/default.nix" { };
+        arcMidnight = pkgs.runCommand "arc-midnight-cursors" { } ''
+          mkdir -p $out/share/icons
+          ln -s ${pkgs.fetchzip {
+            url = "https://github.com/yeyushengfan258/ArcMidnight-Cursors/archive/refs/heads/main.zip";
+            hash = "sha256-VgOpt0rukW0+rSkLFoF9O0xO/qgwieAchAev1vjaqPE=";
+          }}/dist $out/share/icons/ArcMidnight-Cursors
+        '';
       in
       {
-        home.packages = [ hyprexpose ];
+        home.packages = [ hyprexpose arcMidnight ];
+        home.pointerCursor = {
+          enable = true;
+          gtk.enable = true;
+          x11.enable = true;
+          package = arcMidnight;
+          name = "ArcMidnight-Cursors";
+          size = 24;
+        };
+        systemd.user.services.ydotoold = {
+          Unit = {
+            Description = "ydotool input daemon";
+            After = [ "graphical-session.target" ];
+            PartOf = [ "graphical-session.target" ];
+          };
+          Service = {
+            ExecStart = "${pkgs.ydotool}/bin/ydotoold";
+            Restart = "on-failure";
+          };
+          Install.WantedBy = [ "graphical-session.target" ];
+        };
         systemd.user.services.hyprexpose = {
           Unit = {
             Description = "Workspace overview overlay";
@@ -69,17 +99,14 @@
         # Polkit GUI auth prompts (sudo/pkexec from desktop apps)
         services.hyprpolkitagent.enable = true;
 
-        # Compositor death makes xdph SEGV then Restart=on-failure races
-        # shutdown ("stop job is running for User Manager").
-        systemd.user.services.xdg-desktop-portal-hyprland.Service.Restart = lib.mkForce "no";
 
         services.hypridle = {
           enable = true;
           settings = {
             general = {
-              lock_cmd = "bash ~/.config/hypr/scripts/lock.sh";
+              lock_cmd = "serpantinum lock";
               before_sleep_cmd = "loginctl lock-session";
-              after_sleep_cmd = "hyprctl dispatch 'hl.dsp.dpms(\"on\")'";
+              after_sleep_cmd = "hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })'";
             };
             listener = [
               {
@@ -93,8 +120,8 @@
               }
               {
                 timeout = 360;
-                on-timeout = "hyprctl dispatch 'hl.dsp.dpms(\"off\")'";
-                on-resume = "hyprctl dispatch 'hl.dsp.dpms(\"on\")'";
+                on-timeout = "hyprctl dispatch 'hl.dsp.dpms({ action = \"disable\" })'";
+                on-resume = "hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })'";
               }
             ];
           };

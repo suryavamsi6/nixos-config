@@ -4,6 +4,7 @@
   options.flake.modules.nixos.nvidia = lib.mkOption {
     type = lib.types.deferredModule;
     default = { config, pkgs, ... }: {
+      boot.kernelModules = [ "nvidia_uvm" ];
       services.xserver.videoDrivers = [ "nvidia" ];
 
       hardware.nvidia = {

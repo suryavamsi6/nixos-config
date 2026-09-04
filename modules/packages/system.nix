@@ -31,13 +31,13 @@
     {
       environment.systemPackages = with pkgs; [
         pavucontrol
+        pulseaudio
+        xdg-user-dirs
         superfile
         nautilus
         nautilus-open-any-terminal
         lm_sensors
         p7zip
-        unzip
-        blueman
         cheese
         cameractrls-gtk4
         comfyui
@@ -73,7 +73,14 @@
           OLLAMA_KEEP_ALIVE = "5m";
           OLLAMA_NUM_PARALLEL = "1";
           OLLAMA_MAX_LOADED_MODELS = "1";
+          OLLAMA_LLM_LIBRARY = "cuda_v12";
+          LD_LIBRARY_PATH = "${pkgs.ollama-cuda}/lib/ollama:${pkgs.ollama-cuda}/lib/ollama/cuda_v12:/run/opengl-driver/lib";
         };
+      };
+      systemd.services.ollama.serviceConfig = {
+        CPUQuota = "200%";
+        DeviceAllow = lib.mkAfter [ "/dev/nvidia0 rwm" ];
+        PrivateUsers = lib.mkForce false;
       };
 
       qt.enable = true;
