@@ -1,0 +1,50 @@
+{
+  "theme": "dark",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.6-luna",
+  "packages": [
+    "npm:@ff-labs/pi-fff",
+    "npm:@narumitw/pi-lsp",
+    "npm:pi-subagents",
+    "npm:pi-mcp-adapter",
+    "npm:pi-linehash-edit",
+    "npm:@gotgenes/pi-permission-system",
+    "npm:pi-zentui",
+    "npm:pi-memory",
+    "npm:@sherif-fanous/pi-rtk",
+    "npm:@juicesharp/rpiv-ask-user-question",
+    "npm:pi-background-tasks",
+    "npm:context-mode",
+    "npm:pi-web-access",
+    "npm:@plannotator/pi-extension",
+    "npm:@narumitw/pi-usage",
+    "npm:pi-opencode-free",
+    "npm:@agent-sh/computer-use-linux",
+    "npm:@juicesharp/rpiv-todo",
+    "npm:pi-agent-browser-native",
+    "npm:@henryqw/pi-task-models",
+    "npm:@henryqw/pi-herdr",
+    "npm:@henryqw/pi-herdr-rename",
+    "npm:pi-cache-optimizer",
+    "npm:pi-stats-dashboard",
+    "git:github.com/nagisanzenin/engram"
+  ],
+  "subagents": {
+    "agentOverrides": {
+      "scout": { "model": "opencode-free/muse-spark-1.2-contributor-free", "thinking": "low", "fallbackModels": ["openrouter/nvidia/nemotron-3.5-lightning:free:low"] },
+      "delegate": { "model": "openrouter/minimax/minimax-m3:free", "thinking": "medium", "fallbackModels": ["opencode-free/mimo-v2.5-free:medium"] },
+      "researcher": { "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free", "thinking": "high", "fallbackModels": ["opencode-free/nemotron-3-ultra-free:high"] },
+      "worker": { "model": "opencode-free/mimo-v2.5-free", "thinking": "medium", "fallbackModels": ["openrouter/minimax/minimax-m3:free:medium"] },
+      "reviewer": { "model": "openrouter/nvidia/nemotron-3-super-120b-a12b:free", "thinking": "high", "fallbackModels": ["opencode-free/nemotron-3-ultra-free:high"] },
+      "oracle": { "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free", "thinking": "max", "fallbackModels": ["opencode-free/nemotron-3-ultra-free:max"] },
+      "advisor": { "model": "openrouter/z-ai/glm-5.2:free", "thinking": "high", "fallbackModels": ["openrouter/minimax/minimax-m3:free:high"] }
+    }
+  },
+  "quietStartup": true,
+  "clearOnStart": true,
+  "hideThinkingBlock": true,
+  "ccHeader": { "color": "c", "ver": 1, "grad": true, "lines": true, "pkg": false, "speed": 50, "slogan": "Code something that makes you proud", "sloganOn": true, "sloganColor": true, "disabled": false },
+  "tuiMode": "fullscreen",
+  "showHardwareCursor": false,
+  "terminal": { "showTerminalProgress": false }
+}

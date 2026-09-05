@@ -53,7 +53,6 @@
           boot.kernelPackages = pkgs.linuxPackages_cachyos;
           hardware.nvidia.package = lib.mkForce pkgs.linuxPackages_cachyos.nvidiaPackages.cachyos;
 
-
           networking.hostName = "nixos";
 
           nixpkgs.config.permittedInsecurePackages = [
@@ -102,6 +101,7 @@
           home.packages = [
             inputs.zen-browser.packages."x86_64-linux".twilight
             inputs.helium-browser.packages."x86_64-linux".helium
+            inputs.paseo.packages."x86_64-linux".desktop
             pkgs.chromium
             pkgs.localsend
           ];

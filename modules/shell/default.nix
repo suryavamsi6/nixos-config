@@ -31,6 +31,7 @@
   options.flake.modules.homeManager.shell = lib.mkOption {
     type = lib.types.deferredModule;
     default = { pkgs, ... }: {
+      home.sessionPath = [ "$HOME/.local/bin" ];
       programs.fish = {
         enable = true;
         plugins = [
@@ -69,15 +70,15 @@
         enable = true;
         enableFishIntegration = true;
         settings = lib.mkMerge [
-          (builtins.fromTOML
-            (builtins.readFile "${pkgs.starship}/share/starship/presets/catppuccin-powerline.toml"
-      ))
-      {
-        # here goes my custom configurations
-        palette = lib.mkForce "catppuccin_macchiato";
-      }
-    ];
-  };
+          (builtins.fromTOML (
+            builtins.readFile "${pkgs.starship}/share/starship/presets/catppuccin-powerline.toml"
+          ))
+          {
+            # here goes my custom configurations
+            palette = lib.mkForce "catppuccin_macchiato";
+          }
+        ];
+      };
     };
   };
 

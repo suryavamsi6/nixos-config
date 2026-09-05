@@ -3,52 +3,53 @@
 {
   options.flake.modules.nixos.gaming = lib.mkOption {
     type = lib.types.deferredModule;
-    default = { pkgs, ... }:
-    {
-      # HTTP/2 is disabled in the Steam client through the user config below.
-      environment.systemPackages = with pkgs; [
-        gamescope
-        protonup-ng
-        mangohud
-        trigger-control
-        wine
-        heroic
-        bottles
-        qbittorrent
-        mangojuice
-      ];
+    default =
+      { pkgs, ... }:
+      {
+        # HTTP/2 is disabled in the Steam client through the user config below.
+        environment.systemPackages = with pkgs; [
+          gamescope
+          protonup-ng
+          mangohud
+          trigger-control
+          wine
+          heroic
+          bottles
+          qbittorrent
+          mangojuice
+        ];
 
-      programs = {
-        gamemode = {
-          enable = true;
-          settings = {
-            general = {
-              renice = 0;
-              inhibit_screensaver = 1;
-            };
-            cpu = {
-              park_cores = 0;
-              pin_cores = 0;
+        programs = {
+          gamemode = {
+            enable = true;
+            settings = {
+              general = {
+                renice = 0;
+                inhibit_screensaver = 1;
+              };
+              cpu = {
+                park_cores = 0;
+                pin_cores = 0;
+              };
             };
           };
-        };
-        steam = {
-          enable = true;
-          gamescopeSession.enable = true;
-          package = pkgs.steam.override {
-            extraPkgs = (
-              pkgs: with pkgs; [
-                gamemode
-                mangohud
-              ]
-            );
-            extraProfile = ''
-              export MANGOHUD=1
-            '';
+          steam = {
+            enable = true;
+            gamescopeSession.enable = true;
+            package = pkgs.steam.override {
+              extraPkgs = (
+                pkgs: with pkgs; [
+                  gamemode
+                  mangohud
+                ]
+              );
+              extraProfile = ''
+                export MANGOHUD=1
+              '';
+            };
           };
         };
       };
-    };
   };
 
   options.flake.modules.homeManager.gaming = lib.mkOption {
@@ -61,6 +62,9 @@
       programs.mangohud = {
         enable = true;
         settings = {
+          # Default profile for multiplayer games: lower-latency late limiter.
+          fps_limit = 170;
+          fps_limit_method = "late";
           # Load MangoHud for every Steam game, but keep it hidden until
           # the toggle key is pressed.
           no_display = true;
@@ -78,6 +82,25 @@
           vram = true;
         };
       };
+      # Use with single-player Steam games via launch options:
+      # MANGOHUD_CONFIGFILE=/home/surya/.config/MangoHud/singleplayer.conf %command%
+      home.file.".config/MangoHud/singleplayer.conf".text = ''
+        fps_limit=170
+        fps_limit_method=early
+        no_display
+        toggle_hud=Alt_L+G
+        fps
+        frametime
+        frame_timing
+        cpu_stats
+        cpu_temp
+        gpu_stats
+        gpu_temp
+        gpu_power
+        throttling_status
+        ram
+        vram
+      '';
     };
   };
 }

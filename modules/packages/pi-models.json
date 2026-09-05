@@ -1,0 +1,12 @@
+{
+  "providers": {
+    "openrouter": {
+      "modelOverrides": {
+        "minimax/minimax-m3:free": {
+          "contextWindow": 1048576,
+          "maxTokens": 65536
+        }
+      }
+    }
+  }
+}

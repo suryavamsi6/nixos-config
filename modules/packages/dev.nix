@@ -4,7 +4,13 @@
   options.flake.modules.homeManager.dev = lib.mkOption {
     type = lib.types.deferredModule;
     default =
-      { pkgs, inputs, config, lib, ... }:
+      {
+        pkgs,
+        inputs,
+        config,
+        lib,
+        ...
+      }:
       let
         # pkgs.codex is CLI-only. Super+Space ignores Terminal=true.
         codexCliDesktop = pkgs.makeDesktopItem {
@@ -34,7 +40,11 @@
         # the OAuth provider into the persistent web profile on first launch.
         deepseekHarness = pkgs.writeShellApplication {
           name = "dsh";
-          runtimeInputs = [ pkgs.nodejs_22 pkgs.pnpm pkgs.gnused ];
+          runtimeInputs = [
+            pkgs.nodejs_22
+            pkgs.pnpm
+            pkgs.gnused
+          ];
           text = ''
             # shellcheck disable=SC2016
             exec pnpm dlx --package @deepseek-ai/dsh@0.1.1-rc.2 sh -c '
@@ -61,6 +71,17 @@
             exec npm exec --yes --package @earendil-works/pi-coding-agent@latest -- pi "$@"
           '';
         };
+        piBootstrap = pkgs.writeShellApplication {
+          name = "pi-bootstrap";
+          runtimeInputs = [ pkgs.coreutils ];
+          text = ''
+            set -eu
+            for package in ${lib.escapeShellArgs piPackages}; do
+              echo "Installing or reconciling $package"
+              ${piAgent}/bin/pi install "$package"
+            done
+          '';
+        };
         agentBrowser = pkgs.stdenvNoCC.mkDerivation {
           pname = "agent-browser";
           version = "0.34.0";
@@ -68,7 +89,10 @@
             url = "https://registry.npmjs.org/agent-browser/-/agent-browser-0.34.0.tgz";
             hash = "sha256-pHRPsYnlmEZ6vPs6zd4HEY2eXLQ9w7MXJ/hpr0651Zg=";
           };
-          nativeBuildInputs = [ pkgs.makeWrapper pkgs.patchelf ];
+          nativeBuildInputs = [
+            pkgs.makeWrapper
+            pkgs.patchelf
+          ];
           dontUnpack = true;
           installPhase = ''
             mkdir -p "$out/libexec/agent-browser" "$out/bin";
@@ -84,30 +108,61 @@
           name = "pi-agent-browser-doctor";
           runtimeInputs = [ pkgs.nodejs_22 ];
           text = ''
-            exec npm exec --yes --package pi-agent-browser-native@0.3.0 -- pi-agent-browser-doctor "$@"
+            exec npm exec --yes --package pi-agent-browser-native@latest -- pi-agent-browser-doctor "$@"
           '';
         };
-        # Install these manually with: pi install <extension>
-        piExtensions = [
+        qmd = pkgs.writeShellApplication {
+          name = "qmd";
+          runtimeInputs = [ pkgs.nodejs_22 ];
+          text = ''
+            exec npm exec --yes --package @tobilu/qmd@latest -- qmd "$@"
+          '';
+        };
+        # Always use the latest Feynman research CLI; npm refreshes it when invoked.
+        feynman = pkgs.writeShellApplication {
+          name = "feynman";
+          runtimeInputs = [ pkgs.nodejs_22 ];
+          text = ''
+            exec npm exec --yes --package @companion-ai/feynman@latest -- feynman "$@"
+          '';
+        };
+        # Pi package sources are declared in pi-settings.json and installed by
+        # the `pi-bootstrap` command after the Home Manager generation applies.
+        piPackages = [
           "npm:@ff-labs/pi-fff"
           "npm:@narumitw/pi-lsp"
           "npm:pi-subagents"
-          "npm:@narumitw/pi-plan-mode"
           "npm:pi-mcp-adapter"
           "npm:pi-linehash-edit"
           "npm:@gotgenes/pi-permission-system"
-          "npm:pi-web-access"
+          "npm:pi-zentui"
+          "npm:pi-memory"
           "npm:@juicesharp/rpiv-ask-user-question"
           "npm:pi-background-tasks"
           "npm:context-mode"
-          "npm:pi-hermes-memory"
-          "npm:@zosmaai/pi-llm-wiki"
-          "npm:pi-cc-header"
-          "npm:better-claude-code-ui"
+          "npm:pi-web-access"
+          "npm:@plannotator/pi-extension"
+          "npm:@narumitw/pi-usage"
+          "npm:pi-opencode-free"
+          "npm:@agent-sh/computer-use-linux"
+          "npm:@juicesharp/rpiv-todo"
+          "npm:pi-agent-browser-native"
+          "npm:@henryqw/pi-task-models"
+          "npm:@henryqw/pi-herdr"
+          "npm:@henryqw/pi-herdr-rename"
+          "npm:pi-cache-optimizer"
+          "npm:pi-stats-dashboard"
+          "git:github.com/nagisanzenin/engram"
         ];
       in
       {
         imports = [ inputs.codex-desktop-linux.homeManagerModules.default ];
+        # Copy instead of symlinking: Pi updates settings.json during `pi install`.
+        home.activation.piConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          install -Dm644 ${./pi-settings.json} "$HOME/.pi/agent/settings.json"
+          install -Dm644 ${./pi-models.json} "$HOME/.pi/agent/models.json"
+          install -Dm644 ${./pi-mcp.json} "$HOME/.pi/agent/mcp.json"
+        '';
 
         # ChatGPT desktop app (Chat + Work + Codex UI). cliPackage so the
         # Electron wrapper finds pkgs.codex from Super+Space.
@@ -129,6 +184,8 @@
           superfile
           wget
           git
+          gh
+          rtk
           ghostty
           htop
           nixfmt
@@ -143,11 +200,13 @@
           code-cursor
           codex
           herdr
-          ohMyPi
+          piBootstrap
           deepseekHarness
           piAgent
+          qmd
           agentBrowser
           piAgentBrowserDoctor
+          feynman
           (vscode-with-extensions.override {
             vscodeExtensions = pkgs.vscode-utils.extensionsFromVscodeMarketplace [
               {
@@ -241,6 +300,8 @@
     default =
       { pkgs, ... }:
       {
+        home.packages = [ pkgs.gh ];
+
         programs.nh = {
           enable = true;
           flake = "/Users/suryavamsi/Dotfiles/nixos-config";

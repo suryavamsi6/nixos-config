@@ -46,11 +46,17 @@
     # Official ChatGPT/Codex Linux desktop (Electron). Own nixpkgs on
     # purpose — it wraps the upstream .deb, not our tree.
     codex-desktop-linux.url = "github:ilysenko/codex-desktop-linux";
+    paseo.url = "github:getpaseo/paseo";
   };
 
-  outputs = inputs:
+  outputs =
+    inputs:
     inputs.flake-parts.lib.mkFlake { inherit inputs; } {
-      systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "aarch64-darwin"
+      ];
       imports = [ ./modules ];
     };
 }

@@ -257,10 +257,10 @@
           }
         '';
 
-        services.journald.extraConfig = ''
-          SystemMaxUse=100M
-          RuntimeMaxUse=50M
-        '';
+        services.journald.settings.Journal = {
+          SystemMaxUse = "100M";
+          RuntimeMaxUse = "50M";
+        };
 
         services.redis.servers.unbound = {
           enable = true;

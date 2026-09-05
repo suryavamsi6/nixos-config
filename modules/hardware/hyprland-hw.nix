@@ -39,6 +39,7 @@
         boot.kernelModules = [
           "kvm-amd"
           "r8169"
+          "ntsync"
         ];
         # RTL8125 2.5G: use the maintained in-tree driver for standard
         # kernel reset and power-management handling across reboots.
