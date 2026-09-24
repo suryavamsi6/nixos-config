@@ -116,7 +116,7 @@ Do not run a rebuild, switch, reboot, container update, secret rotation, or dest
 
 Nix is the build/configuration system; use flakes and the repository's pinned inputs. Target systems are `x86_64-linux`, `aarch64-linux`, and `aarch64-darwin`. User shells are Fish; the desktop terminal is Ghostty. Quickshell is the configured desktop shell, wrapped with the required Qt6 QML import paths.
 
-Development tools provided by the configuration include `nixfmt`, `treefmt`, `nixd`, `nix-init`, `git`, and `codex`. Follow existing Nix formatting and module conventions; do not add a new package manager or runtime without a concrete need.
+Development tools provided by the configuration include `nixfmt`, `treefmt`, `nixd`, `nix-init`, and `git`. Follow existing Nix formatting and module conventions; do not add a new package manager or runtime without a concrete need.
 - For file search and content search, use the FFF tools (`fffind`, `ffgrep`, and `fff-multi-grep`) instead of the built-in search tools.
 - Minimize requests to model providers: batch related or independent prompts, tool calls, reviews, and lookups whenever practical.
 - Batch independent reads/checks into one parallel tool call; use `ctx_batch_execute` for three or more related commands.

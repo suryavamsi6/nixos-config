@@ -98,7 +98,6 @@
             homeManager.work
             homeManager.gaming
             homeManager.gridwatch
-            inputs.codex-desktop-linux.homeManagerModules.default
           ];
 
           home.username = "surya";

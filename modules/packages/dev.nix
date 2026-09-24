@@ -240,30 +240,6 @@
           install -Dm644 ${./pi-models.json} "$HOME/.pi/agent/models.json"
           install -Dm644 ${./pi-mcp.json} "$HOME/.pi/agent/mcp.json"
         '';
-        # Code launcher for the Codex CLI. Super+Space ignores Terminal=true,
-        # so the desktop entry launches it explicitly through Ghostty.
-        xdg.desktopEntries.codex-cli = {
-          name = "Codex CLI";
-          comment = "OpenAI Codex in the terminal";
-          exec = "${lib.getExe pkgs.ghostty} --title Codex -e ${lib.getExe pkgs.codex}";
-          icon = "utilities-terminal";
-          categories = [ "Development" ];
-        };
-
-        # Electron wrapper finds pkgs.codex from Super+Space.
-        programs.codexDesktopLinux = {
-          enable = true;
-          cliPackage = pkgs.codex;
-        };
-
-        xdg.desktopEntries.codex = {
-          name = "Codex";
-          comment = "OpenAI Codex desktop";
-          exec = "${config.home.profileDirectory}/bin/codex-desktop";
-          icon = "codex-desktop";
-          categories = [ "Development" ];
-          startupNotify = true;
-        };
 
         home.packages = with pkgs; [
           superfile
@@ -284,7 +260,6 @@
           procps
           ori
           bun
-          codex
           herdr
           piBootstrap
           deepseekHarness

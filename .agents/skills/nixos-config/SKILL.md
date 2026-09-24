@@ -102,9 +102,6 @@ Do not add a tracing hatch to `$plugin/zoom`: `ptrace_scope=1` blocks attaching 
 - RGB: `modules/hardware/openrgb.nix` (`services.hardware.openrgb`, `openrgb-with-all-plugins`, AMD `i2c-piix4`). MSI X670E Mystic Light + ARGB headers + RAM. `JRAINBOW1`/`JRAINBOW2` are 12 LEDs each (`openrgb-sizes.ors`); size 0 hides those zones. Does not drive NuPhy Node 100, MCHOSE K7 Ultra, GCB200, or fan PWM. Do not add `fan_config=msi_alt1` here (that is nct6687d / CoolerControl). Do not add Artemis.
 - Steam DNS: `services.dnsmasq` on 127.0.0.1, NM `dns = "none"`, upstream the LAN Pi-hole `192.168.0.105` (`modules/networking/default.nix`). Local cache + `dns-forward-max=32` so Steam does not saturate Pi-hole (that is what made nix fail to resolve `nix-community.cachix.org`). Do not also set NM `dns = "dnsmasq"`. Do not add public resolvers as extra `server=` entries — dnsmasq will skip a slow Pi-hole and leak ads. `services.resolved` stays off. IPv6 already disabled for Steam's "downgrading to ipv4-only" stall.
 
-## Codex
-
-`pkgs.codex` is the CLI. The GUI is OpenAI’s ChatGPT Linux desktop (`inputs.codex-desktop-linux`, `programs.codexDesktopLinux` in `homeManager.dev`) with `cliPackage = pkgs.codex`. Super+Space **Codex** launches `codex-desktop`; **Codex CLI** is Ghostty. Do not store OpenAI API keys in the flake. Cachix: `codex-desktop-linux.cachix.org`.
 
 ## Secrets / safety
 

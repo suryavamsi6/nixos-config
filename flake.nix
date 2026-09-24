@@ -58,11 +58,7 @@
       url = "github:suryavamsi6/gcb200-linux";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # Official ChatGPT/Codex Linux desktop (Electron). Own nixpkgs on
-    # purpose — it wraps the upstream .deb, not our tree.
-    codex-desktop-linux.url = "github:ilysenko/codex-desktop-linux";
   };
-
   outputs =
     inputs:
     inputs.flake-parts.lib.mkFlake { inherit inputs; } {
