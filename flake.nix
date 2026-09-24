@@ -23,14 +23,29 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-
+    hunk = {
+      url = "github:modem-dev/hunk";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    nix-flatpak = {
+      url = "github:gmodena/nix-flatpak/?ref=v0.6.0";
+    };
     hyprland.url = "github:hyprwm/Hyprland";
     hyprexpose = {
       url = "github:ThiagoAVicente/hyprexpose";
       flake = false;
     };
     chaotic.url = "github:chaotic-cx/nyx/nyxpkgs-unstable";
-    serpantinum.url = "github:ilyamiro/serpantinum";
+    serpantinum.url = "github:ilyamiro/serpantinum/44d33831ab6314e7d2d7f0323c1fc023cb08804c";
+    world-clock = {
+      url = "path:./vendor/world-clock";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.serpantinum.follows = "serpantinum";
+    };
+    gridwatch = {
+      url = "path:./vendor/gridwatch";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     shell-wallpapers = {
       url = "github:ilyamiro/shell-wallpapers";
       flake = false;
@@ -46,7 +61,6 @@
     # Official ChatGPT/Codex Linux desktop (Electron). Own nixpkgs on
     # purpose — it wraps the upstream .deb, not our tree.
     codex-desktop-linux.url = "github:ilysenko/codex-desktop-linux";
-    paseo.url = "github:getpaseo/paseo";
   };
 
   outputs =

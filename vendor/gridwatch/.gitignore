@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.bun/
+target/
+result
+*.db
+*.db-shm
+*.db-wal

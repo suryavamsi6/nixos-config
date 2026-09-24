@@ -3,7 +3,7 @@ local M = {}
 
 M.mainMod = "SUPER"
 M.terminal = "ghostty"
-M.fileManager = "nautilus"
+M.fileManager = "ghostty -e superfile"
 M.browser = "zen-twilight"
 
 return M

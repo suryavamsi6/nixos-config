@@ -5,6 +5,5 @@
     ./serpantinum.nix
     ./wallpapers.nix
     ./greetd.nix
-    ./gnome.nix
   ];
 }

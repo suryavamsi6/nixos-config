@@ -30,10 +30,23 @@
   # Home-manager-level shell config (Linux)
   options.flake.modules.homeManager.shell = lib.mkOption {
     type = lib.types.deferredModule;
-    default = { pkgs, ... }: {
-      home.sessionPath = [ "$HOME/.local/bin" ];
-      programs.fish = {
-        enable = true;
+    default = { pkgs, config, ... }:
+      let
+        matugenGhostty = pkgs.writeShellApplication {
+          name = "serpantinum-matugen-ghostty";
+          runtimeInputs = [ pkgs.python3 ];
+          text = ''
+            exec ${pkgs.python3}/bin/python3 ${./matugen-ghostty.py} \
+              "${config.xdg.stateHome}/serpantinum/qs_matugen_colors.json" \
+              "${config.xdg.configHome}/ghostty/matugen.conf" \
+              "${config.xdg.configHome}/starship.toml" \
+              "${config.xdg.configHome}/starship-matugen.toml"
+          '';
+        };
+      in {
+        home.sessionVariables.STARSHIP_CONFIG = lib.mkForce "${config.xdg.configHome}/starship-matugen.toml";
+        programs.fish = {
+          enable = true;
         plugins = [
           {
             name = "tide";
@@ -57,6 +70,8 @@
         enable = true;
         enableFishIntegration = true;
         settings = {
+          # The generated file is refreshed whenever Serpantinum regenerates Matugen colors.
+          "config-file" = "${config.xdg.configHome}/ghostty/matugen.conf";
           font-family = "JetBrains Mono";
           font-size = 13;
           background-opacity = 1.0;
@@ -64,6 +79,23 @@
           scrollback-limit = 2000;
           shell-integration-features = "no-cursor";
         };
+      };
+      systemd.user.services.serpantinum-matugen-ghostty = {
+        Unit = {
+          Description = "Generate Ghostty colors from Serpantinum Matugen output";
+          After = [ "graphical-session.target" ];
+        };
+        Service = {
+          Type = "oneshot";
+          ExecStart = "${matugenGhostty}/bin/serpantinum-matugen-ghostty";
+        };
+      };
+      systemd.user.paths.serpantinum-matugen-ghostty = {
+        Path = {
+          PathChanged = "${config.xdg.stateHome}/serpantinum/qs_matugen_colors.json";
+          Unit = "serpantinum-matugen-ghostty.service";
+        };
+        Install.WantedBy = [ "default.target" ];
       };
 
       programs.starship = {

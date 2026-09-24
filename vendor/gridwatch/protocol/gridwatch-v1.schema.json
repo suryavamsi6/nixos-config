@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gridwatch.local/protocol/v1",
+  "title": "Gridwatch protocol v1 newline-delimited message",
+  "type": "object",
+  "required": ["version", "kind", "payload"],
+  "properties": {
+    "version": { "const": 1 },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "ping",
+        "status",
+        "history",
+        "events",
+        "settings",
+        "set-settings",
+        "action",
+        "error",
+        "alert"
+      ]
+    },
+    "requestId": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "payload": { "type": "object", "maxProperties": 32, "additionalProperties": true }
+  },
+  "additionalProperties": false
+}

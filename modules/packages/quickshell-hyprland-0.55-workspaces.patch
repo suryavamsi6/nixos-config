@@ -1,0 +1,24 @@
+diff --git a/src/wayland/hyprland/ipc/connection.cpp b/src/wayland/hyprland/ipc/connection.cpp
+--- a/src/wayland/hyprland/ipc/connection.cpp
++++ b/src/wayland/hyprland/ipc/connection.cpp
+@@ -634 +634,3 @@ void HyprlandIpc::refreshWorkspaces(bool canCreate) {
+-			auto id = object.value("id").toInt();
++			auto idValue = object.value("id");
++			auto id = idValue.isValid() ? idValue.toInt()
++			                            : object.value("address").toString().toInt();
+diff --git a/src/wayland/hyprland/ipc/monitor.cpp b/src/wayland/hyprland/ipc/monitor.cpp
+--- a/src/wayland/hyprland/ipc/monitor.cpp
++++ b/src/wayland/hyprland/ipc/monitor.cpp
+@@ -31 +31,3 @@ void HyprlandMonitor::updateFromObject(QVariantMap object) {
+-	auto activeWorkspaceId = activeWorkspaceObj.value("id").value<qint32>();
++	auto activeWorkspaceIdValue = activeWorkspaceObj.value("id");
++	auto activeWorkspaceId = activeWorkspaceIdValue.isValid() ? activeWorkspaceIdValue.toInt()
++	                                                            : activeWorkspaceObj.value("address").toString().toInt();
+diff --git a/src/wayland/hyprland/ipc/workspace.cpp b/src/wayland/hyprland/ipc/workspace.cpp
+--- a/src/wayland/hyprland/ipc/workspace.cpp
++++ b/src/wayland/hyprland/ipc/workspace.cpp
+@@ -54 +54,3 @@ void HyprlandWorkspace::updateFromObject(QVariantMap object) {
+-		this->bId = object.value("id").value<qint32>();
++		auto idValue = object.value("id");
++		this->bId = idValue.isValid() ? idValue.toInt()
++		                                    : object.value("address").toString().toInt();

@@ -12,15 +12,6 @@
         ...
       }:
       let
-        # pkgs.codex is CLI-only. Super+Space ignores Terminal=true.
-        codexCliDesktop = pkgs.makeDesktopItem {
-          name = "codex-cli";
-          desktopName = "Codex CLI";
-          comment = "OpenAI Codex in the terminal";
-          exec = "${lib.getExe pkgs.ghostty} --title Codex -e ${lib.getExe pkgs.codex}";
-          icon = "utilities-terminal";
-          categories = [ "Development" ];
-        };
         ohMyPi = pkgs.stdenvNoCC.mkDerivation {
           pname = "oh-my-pi";
           version = "18.0.6";
@@ -35,29 +26,123 @@
             patchelf --set-interpreter ${pkgs.stdenv.cc.libc}/lib/ld-linux-x86-64.so.2 "$out/bin/omp"
           '';
         };
-        # DeepSeek Harness is published as an npm CLI. pnpm is required here
-        # because the package's plugin bundles use peer dependencies. Install
-        # the OAuth provider into the persistent web profile on first launch.
-        deepseekHarness = pkgs.writeShellApplication {
-          name = "dsh";
+        # Ori is intentionally rolling rather than pinned in the Nix store.
+        # The launcher bootstraps the latest stable binary into user state;
+        # Ori's own `ori update` command can then update that mutable copy.
+        ori = pkgs.writeShellApplication {
+          name = "ori";
           runtimeInputs = [
-            pkgs.nodejs_22
-            pkgs.pnpm
-            pkgs.gnused
+            pkgs.coreutils
+            pkgs.curl
+            pkgs.gnugrep
+            pkgs.patchelf
+            pkgs.util-linux
           ];
           text = ''
-            # shellcheck disable=SC2016
-            exec pnpm dlx --package @deepseek-ai/dsh@0.1.1-rc.2 sh -c '
-              shim=$(command -v dsh)
-              script=$(sed -n "s/^# cmd-shim-target=//p" "$shim")
-              profile="$HOME/.dsh/profiles/web"
-              if [ ! -e "$profile/node_modules/dsh-openai-oauth" ]; then
-                node --expose-internals "$script" plugin --profile web add dsh-openai-oauth
+            state_root="''${XDG_DATA_HOME:-$HOME/.local/share}/ori"
+            bin_dir="$state_root/bin"
+            binary="$bin_dir/ori"
+            expected_interpreter="${pkgs.stdenv.cc.libc}/lib/ld-linux-x86-64.so.2"
+            release_base="https://github.com/OpenRouterLabs/ori-releases/releases/latest/download"
+            tmp_dir=""
+
+            cleanup() {
+              if [[ -n "$tmp_dir" ]]; then
+                rm -rf "$tmp_dir"
               fi
-              exec node --expose-internals "$script" "$@"
-            ' dsh "$@"
+            }
+            trap cleanup EXIT
+
+            mkdir -p "$bin_dir"
+            exec 9>"$state_root/install.lock"
+            flock 9
+
+            if [[ ! -x "$binary" ]]; then
+              tmp_dir="$(mktemp -d)"
+              curl --fail --location --silent --show-error --proto '=https' \
+                "$release_base/ori-linux-x64" -o "$tmp_dir/ori-linux-x64"
+              curl --fail --location --silent --show-error --proto '=https' \
+                "$release_base/SHA256SUMS" -o "$tmp_dir/SHA256SUMS"
+
+              checksum_line="$(grep -E '^[[:xdigit:]]{64}[[:space:]]+\*?ori-linux-x64$' "$tmp_dir/SHA256SUMS" || true)"
+              if [[ -z "$checksum_line" ]]; then
+                echo "ori: latest release has no checksum for ori-linux-x64" >&2
+                exit 1
+              fi
+              (
+                cd "$tmp_dir"
+                printf '%s\n' "$checksum_line" | sha256sum --check --status -
+              )
+
+              patchelf --set-interpreter "$expected_interpreter" "$tmp_dir/ori-linux-x64"
+              install -m755 "$tmp_dir/ori-linux-x64" "$binary"
+              rm -rf "$tmp_dir"
+              tmp_dir=""
+            fi
+
+            current_interpreter="$(patchelf --print-interpreter "$binary" 2>/dev/null || true)"
+            if [[ "$current_interpreter" != "$expected_interpreter" ]]; then
+              patched_binary="$(mktemp "$bin_dir/.ori-patched.XXXXXX")"
+              cp "$binary" "$patched_binary"
+              chmod u+w "$patched_binary"
+              patchelf --set-interpreter "$expected_interpreter" "$patched_binary"
+              chmod 755 "$patched_binary"
+              mv -f "$patched_binary" "$binary"
+            fi
+
+            flock -u 9
+            exec env PATH="$bin_dir:''${PATH:-}" "$binary" "$@"
           '';
         };
+        orcaProfileBin = "${config.home.profileDirectory}/bin/orca-ide";
+        orcaDesktopItem = pkgs.makeDesktopItem {
+          name = "orca-ide";
+          desktopName = "Orca IDE";
+          comment = "AI-native development environment";
+          # Use the Nix FHS wrapper directly; Orca's CLI installer otherwise
+          # creates a host-side symlink to the raw AppImage Electron binary.
+          exec = "${orcaProfileBin} %U";
+          categories = [ "Development" "IDE" ];
+          startupNotify = true;
+        };
+        orca = pkgs.appimageTools.wrapType2 {
+          pname = "orca-ide";
+          version = "1.4.197";
+          src = pkgs.fetchurl {
+            url = "https://github.com/stablyai/orca/releases/download/v1.4.197/orca-linux.AppImage";
+            hash = "sha256-S8hGLRUf8BD6pUxka7FtzFR0v2ZO7V7FAoGC15kmQWs=";
+          };
+          extraInstallCommands = ''
+            install -Dm644 ${orcaDesktopItem}/share/applications/orca-ide.desktop $out/share/applications/orca-ide.desktop
+          '';
+        };
+        emdashDesktopItem = pkgs.makeDesktopItem {
+          name = "emdash";
+          desktopName = "Emdash";
+          comment = "Open-source agentic development environment";
+          exec = "${config.home.profileDirectory}/bin/emdash %U";
+          icon = "applications-development";
+          categories = [ "Development" "IDE" ];
+          startupNotify = true;
+        };
+        emdash = pkgs.appimageTools.wrapType2 {
+          pname = "emdash";
+          version = "1.2.4";
+          src = pkgs.fetchurl {
+            url = "https://github.com/generalaction/emdash/releases/download/v1.2.4/emdash-x86_64.AppImage";
+            hash = "sha256-8+UhbYn6OE7R+6hyR0mx0h6n5H+3i+TWyIsEsbNa4Fs=";
+          };
+          extraInstallCommands = ''
+            install -Dm644 ${emdashDesktopItem}/share/applications/emdash.desktop $out/share/applications/emdash.desktop
+          '';
+        };
+        # because the package's plugin bundles use peer dependencies. Install
+        # the OAuth provider into the persistent web profile on first launch.
+        deepseekHarness = pkgs.writeShellScriptBin "deepseek-harness" ''
+          export XDG_DATA_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}/deepseek-harness"
+          export NODE_PATH="${pkgs.pnpm}/lib/node_modules"
+          exec ${pkgs.pnpm}/bin/pnpm dlx --package deepseek-harness@latest deepseek-harness "$@"
+        '';
         piAgent = pkgs.writeShellApplication {
           name = "pi";
           runtimeInputs = [
@@ -82,35 +167,8 @@
             done
           '';
         };
-        agentBrowser = pkgs.stdenvNoCC.mkDerivation {
-          pname = "agent-browser";
-          version = "0.34.0";
-          src = pkgs.fetchurl {
-            url = "https://registry.npmjs.org/agent-browser/-/agent-browser-0.34.0.tgz";
-            hash = "sha256-pHRPsYnlmEZ6vPs6zd4HEY2eXLQ9w7MXJ/hpr0651Zg=";
-          };
-          nativeBuildInputs = [
-            pkgs.makeWrapper
-            pkgs.patchelf
-          ];
-          dontUnpack = true;
-          installPhase = ''
-            mkdir -p "$out/libexec/agent-browser" "$out/bin";
-            tar -xzf "$src" -C "$out/libexec/agent-browser" --strip-components=1;
-            chmod +x "$out/libexec/agent-browser/bin/agent-browser-linux-x64";
-            patchelf --set-interpreter "${pkgs.stdenv.cc.libc}/lib/ld-linux-x86-64.so.2" \
-              "$out/libexec/agent-browser/bin/agent-browser-linux-x64";
-            makeWrapper "$out/libexec/agent-browser/bin/agent-browser.js" "$out/bin/agent-browser" \
-              --prefix PATH : "${pkgs.nodejs_24}/bin";
-          '';
-        };
-        piAgentBrowserDoctor = pkgs.writeShellApplication {
-          name = "pi-agent-browser-doctor";
-          runtimeInputs = [ pkgs.nodejs_22 ];
-          text = ''
-            exec npm exec --yes --package pi-agent-browser-native@latest -- pi-agent-browser-doctor "$@"
-          '';
-        };
+        # Code search & document retrieval. Resolve qmd lazily through npm so it
+        # is available from the Nix profile without a global mutable install.
         qmd = pkgs.writeShellApplication {
           name = "qmd";
           runtimeInputs = [ pkgs.nodejs_22 ];
@@ -118,16 +176,23 @@
             exec npm exec --yes --package @tobilu/qmd@latest -- qmd "$@"
           '';
         };
-        # Always use the latest Feynman research CLI; npm refreshes it when invoked.
-        feynman = pkgs.writeShellApplication {
-          name = "feynman";
-          runtimeInputs = [ pkgs.nodejs_22 ];
-          text = ''
-            exec npm exec --yes --package @companion-ai/feynman@latest -- feynman "$@"
-          '';
-        };
-        # Pi package sources are declared in pi-settings.json and installed by
-        # the `pi-bootstrap` command after the Home Manager generation applies.
+        # Local browser automation harness. Distributed as an npm CLI and
+        # resolved through pnpm to keep peer-dependency resolution consistent
+        # with the other node CLIs in this module.
+        agentBrowser = pkgs.writeShellScriptBin "agent-browser" ''
+          exec ${pkgs.pnpm}/bin/pnpm dlx --package agent-browser@latest agent-browser "$@"
+        '';
+        # Hermes Desktop worker diagnostics. Run via pnpm so it shares the
+        # same version resolver as the rest of the agent CLIs.
+        piAgentBrowserDoctor = pkgs.writeShellScriptBin "pi-agent-browser-doctor" ''
+          exec ${pkgs.pnpm}/bin/pnpm dlx --package @mariozechner/pi-agent-browser-doctor@latest pi-agent-browser-doctor "$@"
+        '';
+        # Feynman is an end-to-end coding agent CLI. It is published as an
+        # npm bundle; we run it through pnpm so its optional peer
+        # dependencies are installed on demand.
+        feynman = pkgs.writeShellScriptBin "feynman" ''
+          exec ${pkgs.pnpm}/bin/pnpm dlx --package feynman-coding-agent@latest feynman "$@"
+        '';
         piPackages = [
           "npm:@ff-labs/pi-fff"
           "npm:@narumitw/pi-lsp"
@@ -156,15 +221,35 @@
         ];
       in
       {
-        imports = [ inputs.codex-desktop-linux.homeManagerModules.default ];
-        # Copy instead of symlinking: Pi updates settings.json during `pi install`.
+        home.activation.orcaCliLink = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          # Orca's built-in CLI installer may recreate this link on launch. It
+          # points at resources/bin/orca-ide, which bypasses appimageTools' FHS
+          # wrapper and triggers NixOS' dynamic-linker stub. Remove only that
+          # known stale store link; do not disturb an unrelated user command.
+          if [ -L "$HOME/.local/bin/orca-ide" ]; then
+            target="$(readlink "$HOME/.local/bin/orca-ide")"
+            case "$target" in
+              /nix/store/*-orca-ide-*/resources/bin/orca-ide)
+                rm "$HOME/.local/bin/orca-ide"
+                ;;
+            esac
+          fi
+        '';
         home.activation.piConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
           install -Dm644 ${./pi-settings.json} "$HOME/.pi/agent/settings.json"
           install -Dm644 ${./pi-models.json} "$HOME/.pi/agent/models.json"
           install -Dm644 ${./pi-mcp.json} "$HOME/.pi/agent/mcp.json"
         '';
+        # Code launcher for the Codex CLI. Super+Space ignores Terminal=true,
+        # so the desktop entry launches it explicitly through Ghostty.
+        xdg.desktopEntries.codex-cli = {
+          name = "Codex CLI";
+          comment = "OpenAI Codex in the terminal";
+          exec = "${lib.getExe pkgs.ghostty} --title Codex -e ${lib.getExe pkgs.codex}";
+          icon = "utilities-terminal";
+          categories = [ "Development" ];
+        };
 
-        # ChatGPT desktop app (Chat + Work + Codex UI). cliPackage so the
         # Electron wrapper finds pkgs.codex from Super+Space.
         programs.codexDesktopLinux = {
           enable = true;
@@ -197,7 +282,8 @@
           tmux
           dig
           procps
-          code-cursor
+          ori
+          bun
           codex
           herdr
           piBootstrap
@@ -207,40 +293,11 @@
           agentBrowser
           piAgentBrowserDoctor
           feynman
-          (vscode-with-extensions.override {
-            vscodeExtensions = pkgs.vscode-utils.extensionsFromVscodeMarketplace [
-              {
-                name = "nix-ide";
-                publisher = "jnoortheen";
-                version = "0.4.2";
-                sha256 = "sha256-WOzHHQZlTdDoVB90GYhuEORNPLyv/lWZBNMrIzBTWW8=";
-              }
-              {
-                name = "catppuccin-vsc";
-                publisher = "Catppuccin";
-                version = "3.16.0";
-                sha256 = "sha256-eZwi5qONiH+XVZj7u2cjJm+Liv1q07AEd8d4nXEQgLw=";
-              }
-              {
-                name = "catppuccin-vsc-icons";
-                publisher = "Catppuccin";
-                version = "1.17.0";
-                sha256 = "sha256-CSAIDlZNrelBf891ztK4n9IaRdtXqpeXnI00hG0/nfA=";
-              }
-              {
-                name = "geminicodeassist";
-                publisher = "Google";
-                version = "2.27.4";
-                sha256 = "sha256-RHePV7ziovUSyxIIjVSKCXxVBRfJ6vvbO6t7S2B/P7U=";
-              }
-              {
-                name = "remote-ssh";
-                publisher = "ms-vscode-remote";
-                version = "0.121.2025050915";
-                sha256 = "sha256-lDt3ADiiIc7pHhytbxIBXkEoBmCOf36z2TPMhYOzyA0=";
-              }
-            ];
-          })
+          emdash
+          t3code
+          orca
+          inputs.hunk.packages.${pkgs.stdenv.hostPlatform.system}.hunk
+          opencode
         ];
 
         programs.git = {
@@ -260,34 +317,6 @@
           };
         };
 
-        home.file.".config/Code/User/settings.json" = {
-          text = ''
-            {
-                "window.commandCenter" : true,
-                "editor.defaultFormatter" :"jnoortheen.nix-ide",
-                "editor.formatOnSave" :true,
-                "nix.enableLanguageServer" :true,
-                "files.autoSave" :"afterDelay",
-                "nix.serverPath" :"nixd",
-                "nix.serverSettings" : {
-                  "nixpkgs" :{
-                    "expr" :"(builtins.getFlake \"/home/surya/Dotfiles/nixos-config\").inputs.nixpkgs {}",
-                  },
-                  "formatting" :{
-                    "command" :[ "nixfmt" ],
-                  },
-                  "options" :{
-                    "nixos" :{
-                      "expr" :"(builtins.getFlake \"/home/surya/Dotfiles/nixos-config\").nixosConfigurations.nixos.options",
-                    },
-                  },
-                },
-                "workbench.colorTheme": "Catppuccin Mocha",
-                "workbench.iconTheme": "catppuccin-mocha",
-
-            }
-          '';
-        };
         home.file.".agents/git-ops.md" = {
           source = ../../.agents/git-ops.md;
         };

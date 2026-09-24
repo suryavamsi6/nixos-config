@@ -7,6 +7,7 @@
     ./shell
     ./hyprland
     ./desktop
+    ./mangowm
     ./darwin
     ./networking
     ./nix-settings

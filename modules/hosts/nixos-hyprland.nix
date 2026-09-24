@@ -8,11 +8,14 @@
       system = "x86_64-linux";
     };
     modules = with config.flake.modules; [
+      inputs.nix-flatpak.nixosModules.nix-flatpak
       # Hardware
       nixos.hardwareHyprland
       nixos.nvidia
       nixos.gcb200
       nixos.openrgb
+      nixos.coolercontrol
+      nixos.gridwatch
 
       # Core system
       nixos.boot
@@ -50,8 +53,11 @@
           ...
         }:
         {
-          boot.kernelPackages = pkgs.linuxPackages_cachyos;
-          hardware.nvidia.package = lib.mkForce pkgs.linuxPackages_cachyos.nvidiaPackages.cachyos;
+          # Allow this x86_64 desktop to build Raspberry Pi closures locally.
+          boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
+          boot.kernelPackages = pkgs.linuxPackages_cachyos-bore;
+          hardware.nvidia.package =
+            lib.mkForce config.boot.kernelPackages.nvidiaPackages.new_feature;
 
           networking.hostName = "nixos";
 
@@ -91,6 +97,8 @@
             homeManager.dev
             homeManager.work
             homeManager.gaming
+            homeManager.gridwatch
+            inputs.codex-desktop-linux.homeManagerModules.default
           ];
 
           home.username = "surya";
@@ -101,7 +109,6 @@
           home.packages = [
             inputs.zen-browser.packages."x86_64-linux".twilight
             inputs.helium-browser.packages."x86_64-linux".helium
-            inputs.paseo.packages."x86_64-linux".desktop
             pkgs.chromium
             pkgs.localsend
           ];

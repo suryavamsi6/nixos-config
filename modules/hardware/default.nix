@@ -6,5 +6,8 @@
     ./hyprland-hw.nix
     ./gcb200.nix
     ./openrgb.nix
+    ./coolercontrol.nix
+    ./ups.nix
+    ./gridwatch.nix
   ];
 }

@@ -87,6 +87,13 @@ hl.window_rule({ match = { title = "^(Create New Folder)$" }, size = "450 200" }
 hl.window_rule({ match = { title = "^(Properties)$" }, size = "500 600" })
 hl.window_rule({ match = { modal = true }, float = true, center = true, rounding = 10 })
 
+-- Controller input does not reset Hyprland's idle timer. Keep DPMS awake while
+-- a Steam game or gamescope window is focused, without inhibiting when alt-tabbed.
+hl.window_rule({
+  match = { class = "^(steam_app_[0-9]+|gamescope)$" },
+  idle_inhibit = "focus",
+})
+
 -- Citrix Workspace: keep the ICA session fully opaque and out of
 -- workspace transition animations on XWayland.
 hl.window_rule({

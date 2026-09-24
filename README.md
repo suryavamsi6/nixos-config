@@ -1,13 +1,13 @@
 # NixOS-Config
 
-NixOS (Hyprland / GNOME) and macOS (nix-darwin) flake configuration.
+NixOS (Hyprland / MangoWM) and macOS (nix-darwin) flake configuration.
 
 Flake hosts:
 
 | Attribute | Desktop | Notes |
-|-----------|---------|--------|
+|-----------|---------|-------|
 | `#nixos` | Hyprland | Primary Linux host (ext4 + Limine + Windows chainload) |
-| `#plasma` | GNOME | Alternate Linux host |
+| `#mango` | MangoWM | Experimental scrolling-tags host; see `docs/mangowm.md` |
 | `#macbook-air` | nix-darwin | MacBook M4 Air |
 
 ---
@@ -193,7 +193,6 @@ sudo nixos-rebuild switch --flake .#nixos
 # or: nh os switch
 ```
 
-GNOME variant: `.#plasma`.
 
 ### Controlled gaming-kernel trial
 

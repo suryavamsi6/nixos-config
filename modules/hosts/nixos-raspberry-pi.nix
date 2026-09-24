@@ -13,6 +13,9 @@
 
       ({ pkgs, lib, ... }: {
         boot.loader.generic-extlinux-compatible.enable = true;
+        # This Seagate bridge repeatedly wedges under UAS and takes the media
+        # filesystem offline. Force the device-specific Bulk-Only fallback.
+        boot.kernelParams = [ "usb-storage.quirks=0bc2:ab24:u" ];
         boot.kernel.sysctl."vm.swappiness" = 100;
         hardware.enableRedistributableFirmware = true;
 
@@ -25,18 +28,18 @@
         fileSystems."/mnt/media" = {
           device = "/dev/disk/by-uuid/a37619e1-b6dd-44f0-b07c-5f94698ba69b";
           fsType = "ext4";
-        };
-        fileSystems."/var/lib/AdGuardHome" = {
-          device = "/mnt/media/adguard-home/native";
-          fsType = "none";
-          options = [ "bind" ];
-        };
-        fileSystems."/var/lib/redis-unbound" = {
-          device = "/mnt/media/unbound/redis";
-          fsType = "none";
-          options = [ "bind" ];
+          # DNS lives on the root filesystem, so a missing media disk must not
+          # block the Pi from booting. Media-backed services require the mount.
+          options = [
+            "nofail"
+            "x-systemd.device-timeout=10s"
+          ];
         };
         networking.hostName = "pi";
+
+        # Permit the administrator to upload locally built, unsigned closures.
+        # This is required for desktop-build/remote-activation deployments.
+        nix.settings.trusted-users = [ "suryavamsi" ];
         networking.networkmanager.enable = true;
         # LAN-facing services; native Nginx owns port 80.
         networking.firewall.allowedTCPPorts = [ 22 53 80 82 9119 8096 ];
@@ -268,11 +271,9 @@
           port = 6379;
           unixSocket = null;
           appendOnly = false;
-          save = [
-            [ 900 1 ]
-            [ 300 10 ]
-            [ 60 10000 ]
-          ];
+          # Unbound's Redis cache is disposable. Avoid periodic writes to disk
+          # and let systemd keep its small state directory on the Pi root.
+          save = [];
           settings = {
             maxmemory = "128mb";
             maxmemory-policy = "allkeys-lru";
@@ -329,32 +330,53 @@
           };
         };
 
-        systemd.tmpfiles.rules = [
-          "d /mnt/media/jellyfin 0755 root root -"
-          "d /mnt/media/jellyfin/config 0755 1000 1000 -"
-          "d /mnt/media/jellyfin/cache 0755 1000 1000 -"
-          "d /mnt/media/media 0755 root root -"
-          "d /mnt/media/media/Anime 0755 suryavamsi users -"
-          "d /mnt/media/paperless 0755 root root -"
-          "d /mnt/media/paperless/data 0755 1000 1000 -"
-          "d /mnt/media/paperless/media 0755 1000 1000 -"
-          "d /mnt/media/paperless/consume 0775 1000 1000 -"
-          "d /mnt/media/paperless/export 0755 1000 1000 -"
-          "d /mnt/media/nextcloud 0755 root root -"
-          "d /mnt/media/nextcloud/html 0755 33 33 -"
-          "d /mnt/media/nextcloud/data 0750 33 33 -"
-          "d /mnt/media/open-webui 0755 root root -"
-          "d /mnt/media/open-webui/data 0755 1000 1000 -"
-          "d /mnt/media/speedtest-tracker 0755 root root -"
-          "d /mnt/media/speedtest-tracker/config 0755 1000 1000 -"
-          "d /mnt/media/unbound/redis 0700 redis-unbound redis-unbound -"
-          "Z /mnt/media/unbound/redis 0700 redis-unbound redis-unbound -"
-        ];
+        # Only create media paths after the external filesystem is mounted.
+        # tmpfiles would otherwise create them on the SD card when it is absent.
+        systemd.services.media-directories = {
+          description = "Prepare external media directories";
+          wantedBy = [ "multi-user.target" ];
+          requires = [ "mnt-media.mount" ];
+          after = [ "mnt-media.mount" ];
+          before = [
+            "paperless-secret.service"
+            "speedtest-tracker-secret.service"
+            "podman-mariadb.service"
+            "podman-nextcloud.service"
+            "podman-open-webui.service"
+            "podman-booklore.service"
+            "podman-jellyfin.service"
+            "podman-redis-paperless.service"
+            "podman-paperless.service"
+            "podman-speedtest-tracker.service"
+          ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+          };
+          script = ''
+            ${pkgs.coreutils}/bin/install -d -m 0755 -o root -g root \
+              /mnt/media/jellyfin /mnt/media/media /mnt/media/paperless \
+              /mnt/media/nextcloud /mnt/media/open-webui /mnt/media/speedtest-tracker
+            ${pkgs.coreutils}/bin/install -d -m 0755 -o 1000 -g 1000 \
+              /mnt/media/jellyfin/config /mnt/media/jellyfin/cache \
+              /mnt/media/paperless/data /mnt/media/paperless/media \
+              /mnt/media/paperless/export /mnt/media/open-webui/data \
+              /mnt/media/speedtest-tracker/config
+            ${pkgs.coreutils}/bin/install -d -m 0775 -o 1000 -g 1000 \
+              /mnt/media/paperless/consume
+            ${pkgs.coreutils}/bin/install -d -m 0755 -o suryavamsi -g users \
+              /mnt/media/media/Anime
+            ${pkgs.coreutils}/bin/install -d -m 0755 -o 33 -g 33 \
+              /mnt/media/nextcloud/html
+            ${pkgs.coreutils}/bin/install -d -m 0750 -o 33 -g 33 \
+              /mnt/media/nextcloud/data
+          '';
+        };
         systemd.services.paperless-secret = {
           description = "Create the persistent Paperless secret key";
           wantedBy = [ "multi-user.target" ];
-          after = [ "mnt-media.mount" ];
-          requires = [ "mnt-media.mount" ];
+          after = [ "media-directories.service" ];
+          requires = [ "media-directories.service" ];
           before = [ "podman-paperless.service" ];
           serviceConfig = {
             Type = "oneshot";
@@ -372,8 +394,8 @@
         systemd.services.speedtest-tracker-secret = {
           description = "Create the persistent Speedtest Tracker app key";
           wantedBy = [ "multi-user.target" ];
-          after = [ "mnt-media.mount" ];
-          requires = [ "mnt-media.mount" ];
+          after = [ "media-directories.service" ];
+          requires = [ "media-directories.service" ];
           before = [ "podman-speedtest-tracker.service" ];
           serviceConfig = {
             Type = "oneshot";
@@ -388,33 +410,44 @@
             ${pkgs.coreutils}/bin/chmod 600 /mnt/media/speedtest-tracker/speedtest.env
           '';
         };
+        # On the first reboot after this change, migrate AdGuard while it is
+        # stopped. The media mount is optional after that initial copy.
         systemd.services.adguardhome-data = {
-          description = "Prepare persistent AdGuard Home data";
+          description = "Prepare root-backed AdGuard Home data";
           wantedBy = [ "multi-user.target" ];
-          after = [ "mnt-media.mount" ];
-          requires = [ "mnt-media.mount" ];
+          after = [ "local-fs.target" "mnt-media.mount" ];
           before = [ "adguardhome.service" ];
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
           };
           script = ''
-            ${pkgs.coreutils}/bin/mkdir -p /mnt/media/adguard-home/native
-            if ! ${pkgs.coreutils}/bin/test -s /mnt/media/adguard-home/native/AdGuardHome.yaml; then
-              ${pkgs.coreutils}/bin/cp /mnt/media/adguard-home/config/AdGuardHome.yaml /mnt/media/adguard-home/native/AdGuardHome.yaml
-              ${pkgs.coreutils}/bin/cp -a /mnt/media/adguard-home/work/. /mnt/media/adguard-home/native/
+            target=/var/lib/AdGuardHome
+            media=/mnt/media/adguard-home/native
+            ${pkgs.coreutils}/bin/install -d -m 0750 -o adguardhome -g adguardhome "$target"
+            if ! ${pkgs.coreutils}/bin/test -s "$target/AdGuardHome.yaml"; then
+              if ${pkgs.coreutils}/bin/test -s "$media/AdGuardHome.yaml"; then
+                ${pkgs.coreutils}/bin/cp -a "$media/." "$target/"
+              else
+                echo "No AdGuard Home state is available to migrate" >&2
+                exit 1
+              fi
             fi
-            ${pkgs.coreutils}/bin/chown -R adguardhome:adguardhome /mnt/media/adguard-home/native
+            ${pkgs.coreutils}/bin/chown -R adguardhome:adguardhome "$target"
           '';
         };
 
-        systemd.services.adguardhome.serviceConfig = {
-          DynamicUser = lib.mkForce false;
-          User = "adguardhome";
-          Group = "adguardhome";
-          StateDirectory = lib.mkForce null;
-          Environment = "STATE_DIRECTORY=/var/lib/AdGuardHome";
-          ReadWritePaths = [ "/var/lib/AdGuardHome" ];
+        systemd.services.adguardhome = {
+          after = [ "adguardhome-data.service" ];
+          requires = [ "adguardhome-data.service" ];
+          serviceConfig = {
+            DynamicUser = lib.mkForce false;
+            User = "adguardhome";
+            Group = "adguardhome";
+            StateDirectory = lib.mkForce null;
+            Environment = "STATE_DIRECTORY=/var/lib/AdGuardHome";
+            ReadWritePaths = [ "/var/lib/AdGuardHome" ];
+          };
         };
         systemd.services.pi-podman-network = {
           description = "Create the shared Podman network for Pi services";
@@ -437,6 +470,41 @@
             ${pkgs.podman}/bin/podman network inspect pi_net >/dev/null 2>&1 || \
               ${pkgs.podman}/bin/podman network create --subnet 172.18.0.0/16 --gateway 172.18.0.1 pi_net
           '';
+        };
+
+        # Never let media-backed containers start against an empty /mnt/media
+        # directory on the Pi's SD card.
+        systemd.services.podman-mariadb = {
+          requires = [ "media-directories.service" ];
+          after = [ "media-directories.service" ];
+        };
+        systemd.services.podman-nextcloud = {
+          requires = [ "media-directories.service" ];
+          after = [ "media-directories.service" ];
+        };
+        systemd.services.podman-open-webui = {
+          requires = [ "media-directories.service" ];
+          after = [ "media-directories.service" ];
+        };
+        systemd.services.podman-booklore = {
+          requires = [ "media-directories.service" ];
+          after = [ "media-directories.service" ];
+        };
+        systemd.services.podman-jellyfin = {
+          requires = [ "media-directories.service" ];
+          after = [ "media-directories.service" ];
+        };
+        systemd.services.podman-redis-paperless = {
+          requires = [ "media-directories.service" ];
+          after = [ "media-directories.service" ];
+        };
+        systemd.services.podman-paperless = {
+          requires = [ "media-directories.service" ];
+          after = [ "media-directories.service" ];
+        };
+        systemd.services.podman-speedtest-tracker = {
+          requires = [ "media-directories.service" ];
+          after = [ "media-directories.service" ];
         };
 
         users.users.suryavamsi = {

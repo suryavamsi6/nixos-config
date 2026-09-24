@@ -40,9 +40,11 @@ let
                     -e 's/^VirtualDriver = .*/&, ZoomMedia/' \
                     -e '/^VDSCAN *= *On/a ZoomMedia=On' \
                     -e 's/^EnableAdaptiveAudio=TRUE$/EnableAdaptiveAudio=FALSE/' \
+                    -e 's/^AudioRedirectionV4=TRUE$/AudioRedirectionV4=FALSE/' \
                     "$f"
                   printf '\n[ZoomMedia]\nDriverName=ZoomMedia.so\n' >> "$f"
                 done
+
 
                 # icasessionmgr execs $ICAROOT/wfica, not PATH. Keep it on this tree.
                 # Firefox stays on PATH only so links opened from the store UI resolve;
@@ -204,6 +206,36 @@ in
           pkgs.zoom-us
           citrixX11
         ];
+        home.activation.citrixUserPreferences =
+          lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+            regions="$HOME/.ICAClient/All_Regions.ini"
+            if [ -f "$regions" ]; then
+              # Prefer EDT, but retain TCP fallback when the gateway or network
+              # blocks UDP. A specific All_Regions value overrides the
+              # downloaded ICA files, which currently force HDXoverUDP=Off.
+              $DRY_RUN_CMD sed -i \
+                -e '/^\[Virtual Channels\\Keyboard\]$/,/^\[/ s/^TransparentKeyPassthrough=.*/TransparentKeyPassthrough=Local/' \
+                -e '/^\[Network\\UDT\]$/,/^\[/ s/^HDXoverUDP=.*/HDXoverUDP=Preferred/' \
+                "$regions"
+            fi
+
+            wfclient="$HOME/.ICAClient/wfclient.ini"
+            if [ -f "$wfclient" ]; then
+              # Citrix 2601+ can rediscover the path MTU instead of retaining
+              # a stale value after a gateway/path change.
+              if grep -q '^MtuRediscovery=' "$wfclient"; then
+                $DRY_RUN_CMD sed -i 's/^MtuRediscovery=.*/MtuRediscovery=On/' "$wfclient"
+              else
+                $DRY_RUN_CMD sed -i '/^\[WFClient\]$/a MtuRediscovery=On' "$wfclient"
+              fi
+              # Legacy audio redirection uses one stable input/output pair.
+              # Pin both to the headset so its microphone remains available.
+              $DRY_RUN_CMD sed -i \
+                -e 's/^PreferredInputDevice=.*/PreferredInputDevice=ACCENTUM Plus/' \
+                -e 's/^PreferredOutputDevice=.*/PreferredOutputDevice=ACCENTUM Plus/' \
+                "$wfclient"
+            fi
+          '';
       };
   };
 }

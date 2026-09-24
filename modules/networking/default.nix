@@ -28,8 +28,14 @@
           no-resolv = true;
           cache-size = 10000;
           min-cache-ttl = 3600;
-          # Try Pi AdGuard first, then fall back to Cloudflare on failure.
-          server = [ "192.168.0.105" "1.1.1.1" ];
+          # Keep home.arpa pinned to the Pi. If AdGuard is offline, do not
+          # ask Cloudflare and cache IANA's week-long NXDOMAIN response.
+          # Public names still fall back to Cloudflare in strict order.
+          server = [
+            "/home.arpa/192.168.0.105"
+            "192.168.0.105"
+            "1.1.1.1"
+          ];
           strict-order = true;
           # Cap in-flight forwards so a cold Steam cache cannot knock
           # the Pi over (default 150). Local hits do not count.

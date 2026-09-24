@@ -25,16 +25,8 @@
           };
         };
 
-        # The desktop has no public interface; allow these services only on
-        # the wired LAN. Router and SSH credentials still gate access.
-        services.ollama = {
-          enable = true;
-          host = "0.0.0.0";
-        };
-        networking.firewall.interfaces.enp14s0.allowedTCPPorts = [
-          22
-          11434
-        ];
+        # The desktop has no public interface; allow SSH only on the wired LAN.
+        networking.firewall.interfaces.enp14s0.allowedTCPPorts = [ 22 ];
 
         users.users.surya.openssh.authorizedKeys.keys = [
           # The local-terminal profile uses this key by default. Keep it

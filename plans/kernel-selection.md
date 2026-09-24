@@ -9,7 +9,7 @@ The trial configuration is:
 - Primary kernel: CachyOS default `7.2.2` build (EEVDF, 1000 Hz, `PREEMPT_DYNAMIC`, Clang ThinLTO, AutoFDO/Propeller).
 - NVIDIA: the Chaotic-Nyx matching open `config.boot.kernelPackages.nvidiaPackages.cachyos`, currently `610.57.04`, because nixpkgs production `595.99.02` cannot build against the cached CachyOS development tree (missing module-signing key).
 - Boot fallback: stock nixpkgs `pkgs.linuxPackages`, currently `6.18.48`, as `specialisation.stock-kernel`.
-- Scope: `nixosConfigurations.nixos` only. `nixosConfigurations.plasma` remains on stock `6.18.48` and its existing NVIDIA beta package.
+- Scope: `nixosConfigurations.nixos` only; the Mango trial remains a separate optional host.
 - Scheduler: leave the in-kernel EEVDF scheduler active. Do not enable an SCX userspace scheduler during this trial.
 
 Keep CachyOS only if every applicable functional gate passes and controlled A/B measurements show a meaningful frame-time improvement. If the results are within run-to-run noise, stock remains the preferred kernel because it has the lowest support and upgrade risk.
@@ -52,7 +52,7 @@ Keep CachyOS only if every applicable functional gate passes and controlled A/B 
 - No flake input or `flake.lock` update.
 - No kernel patching or custom kernel derivation.
 - No sysctl, CPU governor, SCX, IRQ, scheduler, or GameMode tuning during the kernel comparison.
-- No changes to `#plasma`, `#macbook-air`, or Raspberry Pi hosts.
+- No changes to `#mango`, `#macbook-air`, or Raspberry Pi hosts.
 - No new container runtime merely to manufacture a test surface.
 - No suspend or power-off test: this desktop is the Hermes worker and must not be suspended or powered off. Reboots required for the kernel A/B are the only lifecycle operations.
 - No use of `NIXPKGS_ALLOW_BROKEN=1` or other overrides to force a broken closure.
@@ -79,9 +79,9 @@ specialisation.stock-kernel.configuration = { lib, pkgs, ... }: {
 
 Why here:
 
-- The Chaotic-Nyx module is imported by `#nixos` but not by `#plasma`.
-- `modules/hardware/nvidia.nix` and `modules/hardware/hyprland-hw.nix` are shared by both Linux hosts.
-- A host-local override avoids unintentionally moving `#plasma` to CachyOS or changing its NVIDIA branch.
+- The Chaotic-Nyx module is imported by `#nixos`; Mango is a separate optional host.
+- `modules/hardware/nvidia.nix` and `modules/hardware/hyprland-hw.nix` are shared by the desktop hosts.
+- A host-local override avoids unintentionally moving Mango to CachyOS or changing its NVIDIA branch.
 - The parent trial driver is pinned to the Chaotic CachyOS package, while the specialisation uses an explicit lower-priority override for stock production NVIDIA. This avoids re-evaluating a CachyOS-only package in the stock package set.
 
 ### `README.md`
@@ -137,15 +137,12 @@ nix eval --raw .#nixosConfigurations.nixos.config.boot.kernelPackages.kernel.ver
 nix eval --raw .#nixosConfigurations.nixos.config.hardware.nvidia.package.version
 nix eval --raw '.#nixosConfigurations.nixos.config.specialisation.stock-kernel.configuration.boot.kernelPackages.kernel.version'
 nix eval --raw '.#nixosConfigurations.nixos.config.specialisation.stock-kernel.configuration.hardware.nvidia.package.version'
-nix eval --raw .#nixosConfigurations.plasma.config.boot.kernelPackages.kernel.version
-nix eval --raw .#nixosConfigurations.plasma.config.hardware.nvidia.package.version
 ```
 
 Expected values at the current lock:
 
 - `#nixos`: kernel `7.2.2`, NVIDIA `610.57.04`.
 - `#nixos` `stock-kernel`: kernel `6.18.48`, NVIDIA `595.99.02`.
-- `#plasma`: kernel `6.18.48`, NVIDIA beta `595.45.04` (unchanged).
 
 Also evaluate tags and top-level derivation paths so the main and fallback closures are distinct and named `cachyos-trial` and `stock-kernel`.
 

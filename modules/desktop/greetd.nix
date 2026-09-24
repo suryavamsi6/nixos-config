@@ -3,44 +3,45 @@
 {
   options.flake.modules.nixos.greetd = lib.mkOption {
     type = lib.types.deferredModule;
-    default = { pkgs, config, lib, ... }:
-    let
-      tuigreet = "${pkgs.tuigreet}/bin/tuigreet";
-      baseSessionsDir = "${config.services.displayManager.sessionData.desktops}";
-      xSessions = "${baseSessionsDir}/share/xsessions";
-      waylandSessions = "${baseSessionsDir}/share/wayland-sessions";
-      tuigreetOptions = [
-        "--remember"
-        "--remember-session"
-        "--sessions ${waylandSessions}:${xSessions}"
-        "--time"
-        "--cmd start-hyprland"
-      ];
-      flags = lib.concatStringsSep " " tuigreetOptions;
-    in
-    {
-      services.greetd = {
-        enable = true;
-        settings = {
-          default_session = {
-            command = "${tuigreet} ${flags}";
-            user = "greeter";
+    default =
+      { pkgs, config, lib, ... }:
+      let
+        tuigreet = "${pkgs.tuigreet}/bin/tuigreet";
+        baseSessionsDir = "${config.services.displayManager.sessionData.desktops}";
+        xSessions = "${baseSessionsDir}/share/xsessions";
+        waylandSessions = "${baseSessionsDir}/share/wayland-sessions";
+        tuigreetOptions = [
+          "--remember"
+          "--remember-session"
+          "--sessions ${waylandSessions}:${xSessions}"
+          "--time"
+          "--cmd start-hyprland"
+        ];
+        flags = lib.concatStringsSep " " tuigreetOptions;
+      in
+      {
+        services.greetd = {
+          enable = true;
+          settings = {
+            default_session = {
+              command = "${tuigreet} ${flags}";
+              user = "greeter";
+            };
           };
         };
-      };
-      services.xserver.enable = true;
+        services.xserver.enable = true;
 
-      hardware.bluetooth = {
-        enable = true;
-        powerOnBoot = true;
-      };
+        hardware.bluetooth = {
+          enable = true;
+          powerOnBoot = true;
+        };
 
-      services.printing.enable = true;
+        services.printing.enable = true;
 
-      programs.appimage = {
-        enable = true;
-        binfmt = true;
+        programs.appimage = {
+          enable = true;
+          binfmt = true;
+        };
       };
-    };
   };
 }

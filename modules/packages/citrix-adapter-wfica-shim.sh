@@ -65,4 +65,8 @@ if [[ -n "$display" ]]; then
   export DISPLAY="$display"
 fi
 
+# Preserve a useful stack trace if a future vendor wfica build still crashes.
+# The store launch path bypasses the icasessionmgr wrapper that sets this limit.
+ulimit -c unlimited 2>/dev/null || true
+
 exec "$icaroot/wfica" -icaroot "$icaroot" "$icafile"

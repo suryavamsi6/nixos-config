@@ -1,0 +1,48 @@
+import type { UpsTelemetry } from '../../domain/ups'
+
+export function demoTelemetry(now = Date.now(), tick = 0): UpsTelemetry {
+  const wave = Math.sin(tick / 8)
+  return {
+    timestamp: now,
+    model: 'Back-UPS RS 1500G-IN',
+    serial: 'DEMO-0B2504G08071',
+    firmware: '901.L11.I USB FW:L1',
+    status: 'online',
+    rawStatus: 'ONLINE',
+    lineVoltage: 237 + wave * 1.8,
+    loadPercent: 20 + wave * 5,
+    batteryPercent: 100,
+    runtimeMinutes: 10.7 - wave * 0.4,
+    batteryVoltage: 27.1,
+    nominalPowerWatts: 865,
+    nominalBatteryVoltage: 24,
+    transfers: 0,
+    lastTransfer: 'No transfers since turnon',
+    onBatterySeconds: 0,
+    batteryDate: '2025-06-29',
+    selfTest: 'NO',
+    sensitivity: 'Medium',
+    lowTransferVoltage: 170,
+    highTransferVoltage: 294,
+    stale: false,
+    source: 'demo',
+    capabilities: [],
+    capabilityReason: 'Demo mode uses the guarded manual calibration workflow.',
+    maintenance: {
+      phase: 'idle',
+      operation: null,
+      progress: 0,
+      message: 'No maintenance operation is active.',
+      scheduledAt: null,
+      stableSince: null,
+      preparedAt: null,
+      challengeExpiresAt: null,
+      startedAt: null,
+      updatedAt: now,
+      cooldownUntil: null,
+      baselineRuntimeMinutes: null,
+      resultRuntimeMinutes: null,
+      seenOnBattery: false,
+    },
+  }
+}

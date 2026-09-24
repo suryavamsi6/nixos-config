@@ -4,11 +4,12 @@
 
 Nix flake configuration for:
 
-- `#nixos`: primary NixOS host using Hyprland.
-- `#plasma`: alternate Linux host using GNOME.
+- `#nixos`: primary x86_64 Linux host using Hyprland.
+- `#mango`: experimental x86_64 Linux host using MangoWM.
+- `#raspberry-pi`: aarch64 NixOS server (`hostname = "pi"`, user `suryavamsi`).
 - `#macbook-air`: nix-darwin configuration for the MacBook Air.
 
-The repository manages system modules, Home Manager user configuration, Hyprland Lua, Quickshell/Serpantinum desktop UI, hardware, networking, audio, and packaged work applications.
+The repository manages desktop systems, the Raspberry Pi server, Home Manager user configuration, Hyprland Lua, Quickshell/Serpantinum, hardware, networking, audio, containers, DNS, storage, and packaged applications.
 
 ## Architecture & Data Flow
 
@@ -19,7 +20,8 @@ Primary flow:
 ```text
 flake inputs -> modules registry -> host selection -> system configuration
                                       -> Home Manager user files/services
-                                      -> Hyprland Lua + Quickshell runtime
+                                      -> Hyprland/MangoWM + Quickshell runtime
+                                      -> Raspberry Pi services + Podman containers
 ```
 
 NixOS system configuration and Home Manager/user-runtime configuration are separate layers. A module definition is not enabled until the appropriate host imports it.
@@ -33,9 +35,9 @@ NixOS system configuration and Home Manager/user-runtime configuration are separ
 
 ## Key Directories
 
-- `modules/hosts/`: `#nixos`, `#plasma`, and `#macbook-air` composition.
+- `modules/hosts/`: `#nixos`, `#mango`, `#raspberry-pi`, and `#macbook-air` composition.
 - `modules/hyprland/lua/`: Lua configuration loaded by Hyprland 0.55+.
-- `modules/desktop/`: Serpantinum/Quickshell, GNOME, greetd, and wallpapers.
+- `modules/desktop/`: Serpantinum/Quickshell, greetd, and wallpapers.
 - `modules/packages/`: custom derivations and application wrappers, including Citrix and Zoom VDI.
 - `modules/hardware/`: GPU, disks, RGB, and device-specific configuration.
 - `modules/shell/`: Fish, Ghostty, Starship, and shell abbreviations.
@@ -51,8 +53,8 @@ nh os switch
 # Equivalent explicit target
 sudo nixos-rebuild switch --flake .#nixos
 
-# GNOME host
-sudo nixos-rebuild switch --flake .#plasma
+# Raspberry Pi NixOS host (run on the Pi unless deliberately remote-building)
+sudo nixos-rebuild switch --flake .#raspberry-pi
 
 # nix-darwin
 nix run nix-darwin -- switch --flake .#macbook-air
@@ -62,7 +64,7 @@ darwin-rebuild switch --flake .#macbook-air
 systemctl --user restart quickshell
 ```
 
-Do not run a rebuild, switch, reboot, or destructive disk/install command unless explicitly requested. For reinstall work, match disks by `MODEL`, not `nvmeN`; the README's disk commands are hardware-specific.
+Do not run a rebuild, switch, reboot, container update, secret rotation, or destructive disk/install command unless explicitly requested. For reinstall work, match disks by `MODEL`, not `nvmeN`; the README's disk commands are hardware-specific.
 
 ## Code Conventions & Common Patterns
 
@@ -82,7 +84,8 @@ Do not run a rebuild, switch, reboot, or destructive disk/install command unless
 - `flake.nix`: inputs and system output entry point.
 - `modules/default.nix`: module-family imports.
 - `modules/hosts/nixos-hyprland.nix`: primary `#nixos` host and Home Manager wiring.
-- `modules/hosts/nixos-gnome.nix`: `#plasma` host.
+- `modules/hosts/nixos-mango.nix`: experimental `#mango` host.
+- `modules/hosts/nixos-raspberry-pi.nix`: complete `#raspberry-pi` server configuration.
 - `modules/hosts/darwin-macbook-air.nix`: `#macbook-air` host.
 - `modules/hyprland/wm.nix`: Hyprland module and Lua file wiring.
 - `modules/hyprland/lua/autostart.lua`: desktop process startup.
@@ -91,6 +94,15 @@ Do not run a rebuild, switch, reboot, or destructive disk/install command unless
 - `modules/packages/work.nix`: Citrix/work integration.
 - `modules/packages/zoomvdi-universal-plugin.nix`: pinned Zoom VDI derivation.
 - `README.md`: installation, rebuild, boot, and hardware workflows.
+
+## Raspberry Pi NixOS Server
+
+- `#raspberry-pi` is an `aarch64-linux` NixOS host named `pi`, administered as `suryavamsi`; its configuration currently lives in `modules/hosts/nixos-raspberry-pi.nix`.
+- Core services include SSH, Tailscale, Nginx, Cockpit, AdGuard Home, Unbound, and Redis-backed DNS caching.
+- Podman is the OCI backend; Docker is disabled. Managed containers include MariaDB, Nextcloud, Open WebUI, Booklore, Jellyfin, Paperless-ngx, Redis for Paperless, and Speedtest Tracker.
+- Persistent storage includes `/mnt/media`, `/var/lib/AdGuardHome`, and `/var/lib/redis-unbound`. Preserve mount ordering, ownership, container dependencies, network wiring, and firewall/reverse-proxy behavior.
+- Runtime secrets and credentials belong in the referenced external `.env` files or generated state, never in this repository. Do not expose secret contents in logs, diffs, prompts, or URLs.
+- Do not update mutable container tags, regenerate secrets, modify DNS/firewall exposure, or restart/rebuild the Pi unless explicitly requested. Validate mounts, environment files, service dependencies, and data paths before deploying.
 
 ## Hermes Desktop Worker
 
@@ -102,10 +114,16 @@ Do not run a rebuild, switch, reboot, or destructive disk/install command unless
 
 ## Runtime/Tooling Preferences
 
-Nix is the build/configuration system; use flakes and the repository's pinned inputs. The target systems are `x86_64-linux` and `aarch64-darwin`. User shell is Fish; terminal is Ghostty. Quickshell is the configured desktop shell, wrapped with the required Qt6 QML import paths.
+Nix is the build/configuration system; use flakes and the repository's pinned inputs. Target systems are `x86_64-linux`, `aarch64-linux`, and `aarch64-darwin`. User shells are Fish; the desktop terminal is Ghostty. Quickshell is the configured desktop shell, wrapped with the required Qt6 QML import paths.
 
 Development tools provided by the configuration include `nixfmt`, `treefmt`, `nixd`, `nix-init`, `git`, and `codex`. Follow existing Nix formatting and module conventions; do not add a new package manager or runtime without a concrete need.
 - For file search and content search, use the FFF tools (`fffind`, `ffgrep`, and `fff-multi-grep`) instead of the built-in search tools.
+- Minimize requests to model providers: batch related or independent prompts, tool calls, reviews, and lookups whenever practical.
+- Batch independent reads/checks into one parallel tool call; use `ctx_batch_execute` for three or more related commands.
+- Reuse existing results and local context; do not ask a provider to repeat information already available.
+- Prefer deterministic local tools, caches, and local models when reliable. Delegate only work that benefits from delegation.
+- Avoid polling and redundant status requests; use notifications or bounded waits where available.
+- When batching would reduce correctness or safety, make the smallest number of focused provider requests necessary.
 
 ## Testing & QA
 

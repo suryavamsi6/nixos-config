@@ -50,9 +50,97 @@
   options.flake.modules.homeManager.hyprland = lib.mkOption {
     type = lib.types.deferredModule;
     default =
-      { pkgs, inputs, ... }:
+      { config, pkgs, inputs, ... }:
       let
+        home = config.home.homeDirectory;
         hyprexpose = pkgs.callPackage "${inputs.hyprexpose}/default.nix" { };
+        hyprlandPackage = inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland;
+        dpmsWake = pkgs.writeShellApplication {
+          name = "hypr-dpms-wake";
+          runtimeInputs = [
+            hyprlandPackage
+            pkgs.coreutils
+            pkgs.jq
+            pkgs.util-linux
+          ];
+          text = ''
+            lock_file="''${XDG_RUNTIME_DIR:-/tmp}/hypr-dpms-wake.lock"
+            exec 9>"$lock_file"
+            if ! flock -n 9; then
+              exit 0
+            fi
+
+            log() {
+              logger -t hypr-dpms-wake -- "$*"
+            }
+
+            run_hyprctl() {
+              timeout 5s hyprctl "$@" >/dev/null 2>&1
+            }
+
+            monitor_ready() {
+              local connector
+              local connector_ready=false
+
+              for connector in /sys/class/drm/card*-HDMI-A-*; do
+                if [[ -r "$connector/status" ]] &&
+                  [[ "$(< "$connector/status")" == "connected" ]] &&
+                  [[ "$(< "$connector/enabled")" == "enabled" ]] &&
+                  [[ "$(< "$connector/dpms")" == "On" ]]; then
+                  connector_ready=true
+                  break
+                fi
+              done
+
+              "$connector_ready" || return 1
+              timeout 5s hyprctl monitors -j 2>/dev/null \
+                | jq -e 'any(.[]; (((.description // "") | test("MAG 341C"; "i")) and (.dpmsStatus == true) and (.width == 3440) and (.height == 1440)))' \
+                  >/dev/null
+            }
+
+            log "requesting HDMI DPMS wake"
+            run_hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })' \
+              || log "initial DPMS-on request failed"
+
+            sleep 2
+            if monitor_ready; then
+              log "HDMI output recovered after DPMS enable"
+              exit 0
+            fi
+
+            # Reapply the unchanged Lua monitor profile only when the direct wake
+            # did not restore the link. This gives silent HDMI/FRL failures a
+            # second modeset without reloading Hyprland on every normal resume.
+            run_hyprctl reload || log "monitor configuration reload failed"
+            sleep 1
+            run_hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })' \
+              || log "post-reload DPMS-on request failed"
+            sleep 2
+
+            if monitor_ready; then
+              log "HDMI output recovered after monitor reload"
+              exit 0
+            fi
+
+            # If the connector or compositor still reports no active output, perform
+            # at most two bounded power cycles instead of leaving the session headless.
+            for attempt in 1 2; do
+              log "HDMI output is not ready; recovery attempt $attempt of 2"
+              run_hyprctl dispatch 'hl.dsp.dpms({ action = "disable" })' || true
+              sleep 1
+              run_hyprctl reload || true
+              run_hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })' || true
+              sleep "$((attempt * 2))"
+
+              if monitor_ready; then
+                log "HDMI output recovered on attempt $attempt"
+                exit 0
+              fi
+            done
+
+            log "HDMI output did not recover after two retries"
+          '';
+        };
         arcMidnight = pkgs.runCommand "arc-midnight-cursors" { } ''
           mkdir -p $out/share/icons
           ln -s ${pkgs.fetchzip {
@@ -63,6 +151,10 @@
       in
       {
         home.packages = [ hyprexpose arcMidnight ];
+        home.sessionVariables.NH_OS_FLAKE = "${home}/Dotfiles/nixos-config#nixos";
+        programs.fish.shellInit = ''
+          set -gx NH_OS_FLAKE "${home}/Dotfiles/nixos-config#nixos"
+        '';
         home.pointerCursor = {
           enable = true;
           gtk.enable = true;
@@ -104,6 +196,8 @@
           enable = true;
           settings = {
             general = {
+              # Respect GameMode's D-Bus screensaver inhibition; keep normal idle/DPMS timeouts unchanged.
+              ignore_dbus_inhibit = false;
               lock_cmd = "serpantinum lock";
               before_sleep_cmd = "loginctl lock-session";
               after_sleep_cmd = "hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })'";
@@ -121,7 +215,7 @@
               {
                 timeout = 360;
                 on-timeout = "hyprctl dispatch 'hl.dsp.dpms({ action = \"disable\" })'";
-                on-resume = "hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })'";
+                on-resume = "${lib.getExe dpmsWake}";
               }
             ];
           };

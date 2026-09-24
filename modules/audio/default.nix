@@ -48,14 +48,12 @@
         alsa.support32Bit = true;
         pulse.enable = true;
 
-        # Citrix opens a capture stream on session start. HFP/headset
-        # autoswitch tears down A2DP and drops Qualcomm headsets
-        # (ACCENTUM Plus). A2DP only; use the webcam mic for calls.
-        # Skip LE Audio (BAP) — it reconnect-loops on this chip.
-        # Keep aptX HD. Games request Pulse quantum 32 against a 44.1 kHz
-        # HD sink while the graph is locked to 48 kHz, so WirePlumber
-        # underruns and kills the transport. Allow 44.1 kHz and pin the
-        # Bluetooth node quantum; do not cap the codec.
+        # Keep the ACCENTUM Plus on aptX HD until an application actually
+        # records from its microphone. WirePlumber then switches it to mSBC
+        # HFP for full-duplex audio and restores A2DP after capture ends.
+        # Skip LE Audio (BAP) — it reconnect-loops on this chip. Games request
+        # Pulse quantum 32 against a 44.1 kHz HD sink while the graph is locked
+        # to 48 kHz, so allow 44.1 kHz and pin the Bluetooth node quantum.
         extraConfig.pipewire."51-clock-rates" = {
           "context.properties" = {
             "default.clock.allowed-rates" = [
@@ -67,12 +65,18 @@
         wireplumber.extraConfig."51-bluez-headset" = {
           "wireplumber.settings" = {
             "bluetooth.autoswitch-to-headset-profile" = true;
+            # Do not restore a stale HFP state after a failed transport; the
+            # active capture stream will request HFP again when it is needed.
+            "bluetooth.use-persistent-storage" = false;
           };
           "monitor.bluez.properties" = {
             "bluez5.hfphsp-backend" = "native";
             "bluez5.enable-sbc-xq" = true;
             "bluez5.enable-msbc" = true;
             "bluez5.enable-hw-volume" = true;
+            # Keep both role directions available for PipeWire's BlueZ
+            # profile negotiation; only the auto-connect list below is
+            # restricted so HFP is opened strictly on microphone demand.
             "bluez5.roles" = [
               "a2dp_sink"
               "a2dp_source"
@@ -85,8 +89,11 @@
               matches = [ { "device.name" = "~bluez_card.*"; } ];
               actions = {
                 update-props = {
-                  "bluez5.auto-connect" = [ "a2dp_sink" "hfp_hf" "hfp_ag" ];
-                  "bluez5.hw-volume" = [ "a2dp_sink" "hfp_hf" "hfp_ag" ];
+                  # Connect playback only. The autoswitch policy opens the
+                  # headset's HFP role on demand when its microphone is used;
+                  # eagerly connecting HFP races A2DP and churns both nodes.
+                  "bluez5.auto-connect" = [ "a2dp_sink" ];
+                  "bluez5.hw-volume" = [ "a2dp_sink" "hfp_hf" ];
                 };
               };
             }

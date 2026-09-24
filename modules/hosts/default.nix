@@ -3,7 +3,7 @@
 {
   imports = [
     ./nixos-hyprland.nix
-    ./nixos-gnome.nix
+    ./nixos-mango.nix
     ./nixos-raspberry-pi.nix
     ./darwin-macbook-air.nix
   ];

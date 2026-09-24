@@ -12,8 +12,7 @@ paths:
 
 # This flake
 
-Primary Linux host is `nixosConfigurations.nixos` (hostname `nixos`, user `surya`).
-GNOME alt is `#plasma`. Darwin is `#macbook-air` (user `suryavamsi`). Default work
+Primary Linux host is `nixosConfigurations.nixos` (hostname `nixos`, user `surya`). Mango is the optional `#mango` trial host. Darwin is `#macbook-air` (user `suryavamsi`). Default work
 target is **Hyprland `#nixos`** unless the user says otherwise.
 
 Read [modules.md](modules.md) before adding a new module or guessing import paths.
