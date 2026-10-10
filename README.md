@@ -193,6 +193,10 @@ sudo nixos-rebuild switch --flake .#nixos
 # or: nh os switch
 ```
 
+### Gaming Mode (SteamOS-style gamescope session)
+
+`#nixos` also installs a **Gaming Mode (Steam)** session that appears next to Hyprland in the greeter. It runs Steam's Deck UI on a gamescope compositor that owns the display, is remembered by `tuigreet --remember-session`, and changes nothing about the default Hyprland desktop. Details, tuning knobs and rollback: `docs/gaming-mode.md`.
+
 
 ### Controlled gaming-kernel trial
 

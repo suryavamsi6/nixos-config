@@ -18,7 +18,7 @@ Each leaf file **declares** `options.flake.modules.*`. Hosts **select** which to
 | Change | File |
 |---|---|
 | Packages (system) | `modules/packages/system.nix` |
-| Packages (dev / HM) | `modules/packages/dev.nix` |
+| Packages (dev / HM) | `modules/packages/dev.nix` (agent CLIs; ZCode + AutoClaw wrappers, managed `zcode.desktop`) |
 | Citrix / Zoom / Zoom VDI plugin | `modules/packages/work.nix`, `citrix-adapter-wfica-shim.sh`, `zoomvdi-universal-plugin.nix` (gnome-keyring for CLStore; `gcr-ssh-agent` off) |
 | PipeWire, BlueZ | `modules/audio/default.nix` (Intel `btusb`; A2DP-only) |
 | Limine, Windows chainload | `modules/boot/default.nix` |

@@ -8,5 +8,6 @@
     ./social.nix
     ./system.nix
     ./hermes-desktop.nix
+    ./comfyui.nix
   ];
 }

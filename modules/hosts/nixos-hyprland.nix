@@ -26,11 +26,15 @@
       nixos.shell
       nixos.fonts
       nixos.audio
+      # Import Windows' Bluetooth pairing keys so dual-boot devices stay paired.
+      nixos.bluetoothDualboot
       nixos.greetd
 
       # Desktop
       nixos.hyprland
       nixos.serpantinum
+      # Parallel SteamOS-style gamescope session, selectable at greetd.
+      nixos.gamingMode
 
       # Packages
       nixos.gaming
@@ -61,6 +65,8 @@
 
           networking.hostName = "nixos";
 
+          # ComfyUI and KoboldCpp use their own prebuilt CUDA artifacts; keeping
+          # CUDA disabled in nixpkgs avoids compiling CUDA dependencies system-wide.
           nixpkgs.config.permittedInsecurePackages = [
             "libxml2-2.13.8"
             "libsoup-2.74.3"
@@ -98,6 +104,8 @@
             homeManager.work
             homeManager.gaming
             homeManager.gridwatch
+            homeManager.comfyui
+            homeManager.zenBrowser
           ];
 
           home.username = "surya";
@@ -106,7 +114,9 @@
           programs.home-manager.enable = true;
 
           home.packages = [
-            inputs.zen-browser.packages."x86_64-linux".twilight
+            # homeManager.zenBrowser installs Zen: it wraps the package with the
+            # Sine bootloader, so adding the plain twilight package here would
+            # put a second, Sine-less zen-twilight on PATH.
             inputs.helium-browser.packages."x86_64-linux".helium
             pkgs.chromium
             pkgs.localsend

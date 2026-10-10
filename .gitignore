@@ -4,3 +4,4 @@
 /result-*
 /.direnv
 /.pi/
+__pycache__/

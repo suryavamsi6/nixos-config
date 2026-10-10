@@ -175,7 +175,7 @@ in
               if [ -e "${citrix}/bin/$name" ]; then
                 rm -f "$out/bin/$name"
                 makeWrapper "${citrix}/bin/$name" "$out/bin/$name" \
-                  --prefix PATH : "${lib.makeBinPath [ pkgs.firefox ]}" \
+                  --prefix PATH : "${lib.makeBinPath [ pkgs.firefox-bin ]}" \
                   --set GDK_BACKEND x11 \
                   --set QT_QPA_PLATFORM xcb \
                   --unset QT_QPA_PLATFORMTHEME \

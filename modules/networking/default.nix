@@ -1,6 +1,11 @@
 # Networking — NetworkManager (NixOS)
 { lib, ... }:
 {
+  imports = [
+    # Shares Bluetooth pairing keys with the Windows install on the other disk.
+    ./dualboot-bluetooth.nix
+  ];
+
   options.flake.modules.nixos.networking = lib.mkOption {
     type = lib.types.deferredModule;
     default = { ... }: {

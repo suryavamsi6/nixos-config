@@ -10,6 +10,7 @@
           experimental-features = [ "nix-command" "flakes" ];
           auto-optimise-store = true;
           substituters = [
+            "https://cache.nixos.org"
             "https://hyprland.cachix.org"
             "https://nix-community.cachix.org"
           ];
@@ -51,6 +52,29 @@
               });
             })
           ];
+        })
+        # `makeBinaryWrapper` now rejects a `--prefix`/`--suffix` value that is
+        # empty or begins/ends with the separator (GHSA-p7v3-pr2c-8584): such a
+        # segment makes shells, execvp() and the dynamic loader search the
+        # current directory. `lazarus` wraps its launcher with
+        # `--prefix NIX_LDFLAGS ' ' "$(echo "$NIX_LDFLAGS" | sed -re 's/-rpath
+        # [^ ]+//g')"`, and stdenv's `_addRpathPrefix` puts the self-rpath
+        # first, so stripping it leaves a leading space and the check aborts
+        # `lazarus-qt6` in installPhase with `#error --prefix NIX_LDFLAGS would
+        # introduce an empty PATH-like segment`. That takes `goverlay` (which
+        # builds against lazarus-qt6) with it.
+        # Upstream fixed it in d02c4b3f3dbc ("lazarus: fix build", nixpkgs
+        # master 2026-10-01) by trimming that residue; the locked
+        # nixos-unstable rev c59305b predates the fix. Remove this overlay
+        # after the next nixpkgs bump. `lazarus`/`lazarus-qt5` carry the same
+        # line, but nothing here uses them.
+        (final: prev: {
+          lazarus-qt6 = prev.lazarus-qt6.overrideAttrs (old: {
+            postInstall = builtins.replaceStrings
+              [ ''$(echo "$NIX_LDFLAGS" | sed -re 's/-rpath [^ ]+//g')'' ]
+              [ ''$(echo "$NIX_LDFLAGS" | sed -re 's/-rpath [^ ]+//g' | sed -re 's/(^ *| *$)//g;')'' ]
+              old.postInstall;
+          });
         })
       ];
     };

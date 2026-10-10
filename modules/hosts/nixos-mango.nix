@@ -97,6 +97,7 @@
             homeManager.work
             homeManager.gaming
             homeManager.gridwatch
+            homeManager.zenBrowser
           ];
 
           home.username = "surya";
@@ -105,7 +106,7 @@
           programs.home-manager.enable = true;
 
           home.packages = [
-            inputs.zen-browser.packages."x86_64-linux".twilight
+            # Zen comes from homeManager.zenBrowser (Sine-wrapped); see zen.nix.
             inputs.helium-browser.packages."x86_64-linux".helium
             pkgs.chromium
             pkgs.localsend

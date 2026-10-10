@@ -5,12 +5,71 @@
     type = lib.types.deferredModule;
     default =
       { pkgs, ... }:
+      let
+        # `libgamemodeauto.so.0` is the LD_PRELOAD shim `gamemoderun` installs.
+        # It dlopens the real library (`libgamemode.so.0`, falling back to
+        # `libgamemode.so`), but nixpkgs only gives an rpath to `gamemoded` and
+        # `gamemode-simulate-game` (pkgs/by-name/ga/gamemode/package.nix). The shim
+        # instead leaned on the wrapper's `LD_LIBRARY_PATH`, which Steam discards:
+        # inside its pressure-vessel container the runtime rewrites `LD_PRELOAD` to
+        # a captured copy of the shim and replaces `LD_LIBRARY_PATH` with its own
+        # override dirs, so the dlopen fails with
+        # `gamemodeauto: dlopen failed - libgamemode.so: cannot open shared object
+        # file` in every process of the game tree, and those processes miss
+        # GameMode's scheduling changes. `/nix/store` stays visible inside that
+        # container, so an rpath to the shim's own lib dir resolves it in both.
+        patchShim = gamemode: gamemode.overrideAttrs (old: {
+          postFixup = (old.postFixup or "") + ''
+            # Prepend the shim's own directory, keeping the rpath nixpkgs set
+            # for the NEEDED libs (glibc), so the dlopen resolves next to
+            # whichever copy was actually loaded.
+            for f in "$lib"/lib/libgamemodeauto.so.*.*; do
+              [ -f "$f" ] && [ ! -L "$f" ] || continue
+              rpath="$(patchelf --print-rpath "$f")"
+              case ":$rpath:" in
+                *":$lib/lib:"*) ;;
+                *) patchelf --set-rpath "$lib/lib''${rpath:+:$rpath}" "$f" ;;
+              esac
+            done
+          '';
+        });
+
+        # `gamemoderun` hardcodes the 32-bit library path for 32-bit apps, and
+        # that reference is how the 32-bit shim reaches the Steam FHS environment,
+        # so the wrapper has to be rebuilt to point at a patched 32-bit copy.
+        gamemodePatched = patchShim (pkgs.gamemode.override {
+          pkgsi686Linux = pkgs.pkgsi686Linux // {
+            gamemode = patchShim pkgs.pkgsi686Linux.gamemode;
+          };
+        });
+
+        # Steam keys a compat tool by the name written in its
+        # `compatibilitytool.vdf`, but the tool list it scans — and therefore both
+        # the Properties → Compatibility dropdown and the `CompatToolMapping`
+        # string Steam persists — is keyed by the *directory* name, which nixpkgs
+        # derives from the release (`GE-Proton11-7`). nixpkgs' `proton-ge-bin`
+        # deliberately collapses every release onto the internal name "GE-Proton"
+        # (`steamDisplayName`), so the two names disagree and a second installed
+        # release also collides on that one name. When they disagree, picking the
+        # tool stores a name Steam cannot resolve; the per-app mapping then falls
+        # back to the `native` tool, Steam drops the compat wrapper, and the game's
+        # `.exe` is exec'd directly on Linux with
+        #   REDprelauncher.exe: cannot execute binary file
+        # (The Witcher 3, observed 2026-10-02.) Naming each release after itself
+        # keeps the registry name, the directory name and the mapping string equal.
+        protonGeBin = pkgs.proton-ge-bin.overrideAttrs (old: {
+          steamDisplayName = old.version;
+        });
+      in
       {
         # HTTP/2 is disabled in the Steam client through the user config below.
         environment.systemPackages = with pkgs; [
           gamescope
           protonup-ng
           mangohud
+          # Qt front-end for MangoHud's config file; the overlay itself comes
+          # from `mangohud` above.
+          goverlay
           trigger-control
           wine
           heroic
@@ -37,6 +96,27 @@
           ];
         };
 
+        # GameMode's helpers run as root through pkexec, but its own polkit
+        # policy ships `<allow_any>no</allow_any><allow_inactive>no</allow_inactive>
+        # <allow_active>no</allow_active>` for every action, so polkit denies
+        # outright and no authentication agent can help — `gamemoded` logs
+        # `pkexec ... cpugovctl set performance: Not authorized` in every session,
+        # Game Mode or desktop. NixOS ships no rule for it either. This grants
+        # the two CPU helpers to active local `wheel` users, which is what other
+        # distributions do; the GPU and /proc/sys helpers stay denied and are
+        # unused here.
+        security.polkit.extraConfig = ''
+          polkit.addRule(function(action, subject) {
+            if ((action.id == "com.feralinteractive.GameMode.governor-helper" ||
+                 action.id == "com.feralinteractive.GameMode.cpu-helper") &&
+                subject.isInGroup("wheel") &&
+                subject.local &&
+                subject.active) {
+              return polkit.Result.YES;
+            }
+          });
+        '';
+
         programs = {
           gamemode = {
             enable = true;
@@ -60,15 +140,18 @@
           };
           steam = {
             enable = true;
+            # Bare nixpkgs session, kept for hosts that do not import
+            # nixos.gamingMode (`#nixos` replaces it with a configured
+            # SteamOS-style entry, see modules/desktop/gaming-mode.nix).
             gamescopeSession.enable = true;
             extraCompatPackages = [
               pkgs.proton-cachyos
-              pkgs.proton-ge-bin
+              protonGeBin
             ];
             package = pkgs.steam.override {
               extraPkgs = (
                 pkgs: with pkgs; [
-                  gamemode
+                  gamemodePatched
                   mangohud
                   # Wine's Media Foundation bridge needs these for H.264 game videos.
                   gst_all_1.gstreamer
@@ -79,6 +162,11 @@
                   gst_all_1.gst-libav
                 ]
               );
+              # `MANGOHUD=1` is what the Vulkan layer's `enable_environment`
+              # (`MangoHud.x86_64.json`) gates on, so it is also what makes the
+              # per-game `MANGOHUD_CONFIGFILE` launch options take effect — in
+              # Game Mode too, where gamescope's --mangoapp reads that same
+              # config file for its own overlay.
               extraProfile = ''
                 export MANGOHUD=1
               '';

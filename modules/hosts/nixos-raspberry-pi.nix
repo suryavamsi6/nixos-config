@@ -17,7 +17,34 @@
         # filesystem offline. Force the device-specific Bulk-Only fallback.
         boot.kernelParams = [ "usb-storage.quirks=0bc2:ab24:u" ];
         boot.kernel.sysctl."vm.swappiness" = 100;
-        hardware.enableRedistributableFirmware = true;
+        # NixOS pulls the ZFS kernel module, the zfs-zed daemon and the zfs
+        # userspace tools into the closure unconditionally. This host boots
+        # from an ext4 SD card and has no ZFS pools, so drop ZFS support.
+        # boot.zfs.enabled itself is read-only; the supported-filesystem set
+        # is the lever (see the example in nixos/modules/tasks/filesystems.nix).
+        boot.supportedFilesystems.zfs = lib.mkForce false;
+
+        # enableRedistributableFirmware installs the whole linux-firmware tree
+        # (808 MB, dominated by qcom/intel/nvidia/mellanox blobs a Pi 4 can
+        # never load). Keep only what the BCM43455 WiFi/BT combo chip and the
+        # wireless regulatory database actually need (~25 MB).
+        # lib.mkForce is required: the sd-card profile pulls in
+        # nixos/modules/hardware/all-hardware.nix, which sets this to true.
+        hardware.enableRedistributableFirmware = lib.mkForce false;
+        hardware.wirelessRegulatoryDatabase = true;
+        hardware.firmware = [
+          # NVRAM/CLM blobs shipped by the Raspberry Pi firmware tree.
+          pkgs.raspberrypiWirelessFirmware
+          # brcmfmac blobs plus the CLM blob. linux-firmware's brcm/ tree is
+          # full of symlinks into ../cypress/ (e.g. brcmfmac43455-sdio.bin ->
+          # ../cypress/cyfmac43455-sdio.bin), so both directories must be
+          # copied together or the links dangle and the firmware fixup aborts.
+          (pkgs.runCommandLocal "linux-firmware-brcm" { } ''
+            mkdir -p $out/lib/firmware
+            cp -a ${pkgs.linux-firmware}/lib/firmware/brcm $out/lib/firmware/brcm
+            cp -a ${pkgs.linux-firmware}/lib/firmware/cypress $out/lib/firmware/cypress
+          '')
+        ];
 
         zramSwap = {
           enable = true;
@@ -30,9 +57,14 @@
           fsType = "ext4";
           # DNS lives on the root filesystem, so a missing media disk must not
           # block the Pi from booting. Media-backed services require the mount.
+          # x-systemd.automount keeps a re-plug self-healing: without it the
+          # mount unit stays dead and an attached-but-unmounted disk sits unused
+          # until someone starts the unit by hand (which is exactly what happened
+          # between 2026-09-15 and today).
           options = [
             "nofail"
             "x-systemd.device-timeout=10s"
+            "x-systemd.automount"
           ];
         };
         networking.hostName = "pi";
@@ -40,6 +72,43 @@
         # Permit the administrator to upload locally built, unsigned closures.
         # This is required for desktop-build/remote-activation deployments.
         nix.settings.trusted-users = [ "suryavamsi" ];
+
+        # NixOS pins the evaluated nixpkgs flake in /etc/nix/registry.json by
+        # default, which drags the entire ~485 MB nixpkgs source tree into the
+        # system closure. This host is deployed from the desktop against a
+        # path flake, so it needs no registry.
+        nix.registry = lib.mkForce { };
+
+        # Allow on-Pi flake commands (nixos-rebuild --flake, nix shell, ...).
+        nix.settings.experimental-features = [ "nix-command" "flakes" ];
+
+        # Nothing was collecting garbage: the store had reached 18 GB against
+        # a 1.9 GB live closure.
+        nix.gc = {
+          automatic = true;
+          dates = "weekly";
+          options = "--delete-older-than 30d";
+        };
+
+        # Hermes bootstraps prebuilt generic-Linux binaries into
+        # ~/.hermes/tools (its own `uv` and CPython). NixOS ships only a stub
+        # loader at /lib/ld-linux-aarch64.so.1, which refuses them with exit
+        # 127, so `hermes update` fails while staging its package manager.
+        # nix-ld supplies a real loader plus the shared libraries those
+        # prebuilt tools expect. The default library set already covers uv
+        # (zlib, zstd, libgcc/libstdc++, openssl, xz); the additions below
+        # cover a prebuilt CPython.
+        programs.nix-ld = {
+          enable = true;
+          libraries = with pkgs; [
+            libffi
+            sqlite
+            ncurses
+            readline
+            expat
+            libxcrypt
+          ];
+        };
         networking.networkmanager.enable = true;
         # LAN-facing services; native Nginx owns port 80.
         networking.firewall.allowedTCPPorts = [ 22 53 80 82 9119 8096 ];
@@ -527,6 +596,9 @@
           git
           htop
           tailscale
+          # Fallback for installing Python deps when Hermes' own bootstrapped
+          # uv cannot run, and for manual `uv pip install -e .` in its venv.
+          uv
         ];
 
         system.stateVersion = "24.11";

@@ -57,20 +57,31 @@
           terminal = false;
           categories = [ "Development" "Education" ];
         };
-        koboldcppCuda =
-          (pkgs.koboldcpp.override {
-            # RTX 5080 (Blackwell, compute capability 12.0).
-            config = pkgs.config // { cudaSupport = true; };
-            cublasSupport = true;
-            cudaArches = [ "sm_120" ];
-          }).overrideAttrs (old: {
-            nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.patchelf ];
-            postFixup = (old.postFixup or "") + ''
-              # Nixpkgs removes -lcuda at link time, but current KoboldCpp calls the
-              # CUDA driver API directly. Load the real NixOS driver at runtime.
-              patchelf --add-needed libcuda.so.1 "$out/bin/koboldcpp_cublas.so"
-            '';
-          });
+        koboldcpp = pkgs.writeShellApplication {
+          name = "koboldcpp";
+          runtimeInputs = [
+            pkgs.coreutils
+            pkgs.curl
+          ];
+          text = ''
+            version="1.118.1"
+            state_dir="''${XDG_DATA_HOME:-$HOME/.local/share}/koboldcpp"
+            binary="$state_dir/koboldcpp-linux-x64"
+            tmp="$binary.tmp"
+            mkdir -p "$state_dir"
+
+            if [[ ! -x "$binary" ]]; then
+              echo "Downloading KoboldCpp $version (prebuilt CUDA binary)..." >&2
+              curl --fail --location --retry 3 --retry-all-errors \
+                "https://github.com/LostRuins/koboldcpp/releases/download/v$version/koboldcpp-linux-x64" \
+                --output "$tmp"
+              chmod 0755 "$tmp"
+              mv "$tmp" "$binary"
+            fi
+
+            exec "$binary" "$@"
+          '';
+        };
       in {
         environment.systemPackages = with pkgs; [
           pavucontrol
@@ -87,8 +98,7 @@
           cameractrls-gtk4
           unslothDesktop
           unslothDesktopEntry
-          koboldcppCuda
-          comfyui
+          koboldcpp
           nodejs
           obsidian
           bitwarden-desktop
@@ -115,6 +125,26 @@
         # Keep idle/background pages from being pushed into swap aggressively.
         # This avoids kswapd churn and zram write failures on the 32 GiB desktop.
         boot.kernel.sysctl."vm.swappiness" = 10;
+        # Desktop sessions run several Chromium/Electron-class file watchers at
+        # once (Emdash, Steam's CEF, Zen, editors) and each one adds its own
+        # inotify watch per directory. The budget is per UID and counts
+        # (instance, inode) pairs, while watches on unlinked inodes stay charged
+        # until the owning process exits -- so a few apps over a $HOME-sized
+        # tree, plus any stale watches, exhaust it. When that happens `nom`
+        # aborts `nh os switch` with
+        #   nom: addWatch: resource exhausted (No space left on device)
+        # and every other file watcher in the session fails with it. Overrides
+        # nixpkgs' lib.mkDefault 524288 (nixos/modules/config/sysctl.nix), which
+        # is the value the desktop was saturating. A watch costs roughly 1 KiB of
+        # kernel memory, so this ceiling is only reached by a watcher that is
+        # itself misbehaving; the scratchpad note records the command that names
+        # the top holders.
+        boot.kernel.sysctl = {
+          "fs.inotify.max_user_watches" = 2097152;
+          # Raised from the 16384 default so event bursts are not silently
+          # dropped (dropped events look like an editor missing file changes).
+          "fs.inotify.max_queued_events" = 65536;
+        };
         systemd.oomd = {
           enable = true;
           enableRootSlice = true;

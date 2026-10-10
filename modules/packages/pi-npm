@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Wrapper for pi's `npmCommand` setting (see modules/packages/pi-settings.json).
+#
+# pi invokes the configured command as: pi-npm npm <npm args...>
+# This forwards to the real npm unchanged — stdout and exit code must stay
+# byte-identical because pi parses npm's output (e.g. `npm view <spec> version`)
+# — and then repairs what npm just undid for pi's extension packages:
+#
+#   * host-deps-patch.mjs — npm rewrites extension manifests from the registry,
+#     putting host-provided packages back into `dependencies`.
+#   * pi-host-links     — npm prunes the node_modules/@earendil-works/<pkg>
+#     symlinks that let extensions resolve pi's own copies, which breaks
+#     extensions that import those packages dynamically.
+#
+# Both run after every invocation, not just install/uninstall: any npm operation
+# can reify and prune ~/.pi/agent/npm.
+#
+# Installed to ~/.pi/agent/bin/pi-npm by modules/packages/dev.nix.
+set -uo pipefail
+
+if [[ "${1-}" == "npm" ]]; then
+  shift
+fi
+
+if ! command -v npm >/dev/null 2>&1; then
+  echo "pi-npm: npm not found in PATH" >&2
+  exit 127
+fi
+
+npm "$@"
+status=$?
+
+node "$HOME/.pi/agent/bin/host-deps-patch.mjs" >/dev/null 2>&1 || true
+
+# Prefer the implementation shipped by the Nix `pi` wrapper; fall back to the
+# copy in ~/.pi/agent/bin when pi was launched outside that wrapper.
+if command -v pi-host-links >/dev/null 2>&1; then
+  pi-host-links >/dev/null || true
+else
+  node "$HOME/.pi/agent/bin/pi-host-links.mjs" >/dev/null || true
+fi
+
+exit "$status"
