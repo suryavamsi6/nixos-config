@@ -12,7 +12,15 @@
         };
         casks = [
           "1password"
+          "citrix-workspace"
+          "cursor"
+          "grok-bot"
+          "grok-build"
+          "localsend"
+          "tailscale-app"
+          "thebrowsercompany-dia"
           "visual-studio-code"
+          "zoom"
         ];
       };
     };

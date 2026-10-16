@@ -35,6 +35,7 @@
         home-manager.users.suryavamsi = { lib, ... }: {
           imports = with config.flake.modules; [
             homeManager.shellDarwin
+            homeManager.pi
             homeManager.devDarwin
           ];
 

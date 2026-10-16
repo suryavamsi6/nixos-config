@@ -583,6 +583,9 @@
           extraGroups = [ "wheel" ];
           openssh.authorizedKeys.keys = [
             "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAwDnZy6d9YyrDiuySUorML1iFnmeqy1Lwq0qqQaIJ4+ surya@nixos"
+            # MacBook Air, so this machine can deploy #raspberry-pi.
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdi9zBb7cch8s8Gc6167hd8fkccFFHLg+j1IoJnnFrw suryavamsi6@users.noreply.github.com"
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMusYxP9HC82z/wagX2SQFMFkAC8K0gvjLQK5Q3KVcZN d.suryavamsi@gmail.com"
           ];
         };
         users.groups.adguardhome = {};

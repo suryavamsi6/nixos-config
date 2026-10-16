@@ -1,6 +1,175 @@
 # Dev tools (home-manager)
 { lib, ... }:
+let
+  # Shared with the NixOS dev module below. The Mac imports this on its own.
+  piModule =
+    { pkgs, lib, ... }:
+    let
+      # pi's extension packages must resolve the host-provided packages
+      # (pi-ai, pi-agent-core, pi-coding-agent, pi-tui) from the pi
+      # installation that is actually running. npm reifies
+      # ~/.pi/agent/npm from the registry and prunes those links as
+      # extraneous, so both the `pi` wrapper and the npmCommand shim
+      # re-create them. See modules/packages/pi-host-links.mjs.
+      piHostLinks = pkgs.writeShellApplication {
+        name = "pi-host-links";
+        runtimeInputs = [ pkgs.nodejs_22 ];
+        text = ''
+          exec node ${./pi-host-links.mjs} "$@"
+        '';
+      };
+      # `npm exec` exports every resolved npm configuration value as
+      # npm_config_* into the child environment. Left in place, pi and every
+      # process it spawns inherit them. npm_config_package is the damaging
+      # one: a nested `npx <pkg>` then reads the package spec as the command
+      # to run and dies with "command not found", which is what broke the
+      # canva stdio MCP server (`npx -y mcp-remote@latest <url>`). Strip the
+      # variables so pi runs with the environment a plain terminal gives it.
+      piCleanEnv = pkgs.writeShellApplication {
+        name = "pi-clean-env";
+        runtimeInputs = [ pkgs.coreutils ];
+        text = ''
+          names=()
+          while IFS='=' read -r name _; do
+            if [[ "$name" == npm_config_* ]]; then
+              names+=("$name")
+            fi
+          done < <(env)
+          if (( "''${#names[@]}" > 0 )); then
+            unset "''${names[@]}"
+          fi
+          exec pi "$@"
+        '';
+      };
+      piAgent = pkgs.writeShellApplication {
+        name = "pi";
+        runtimeInputs = [
+          pkgs.nodejs_22
+          pkgs.pnpm
+          pkgs.gnumake
+          pkgs.gcc
+          pkgs.python3
+          piHostLinks
+          piCleanEnv
+        ];
+        text = ''
+          # Repair host-provided dependency links before pi loads extensions,
+          # so a pruned ~/.pi/agent/npm never surfaces as a load error.
+          pi-host-links >/dev/null || true
+
+          # Do not exec: the wrapper re-runs the repair after pi exits, which
+          # is what creates the links the first time after a fresh npx
+          # install of pi-coding-agent.
+          #
+          # pi-clean-env strips the npm_config_* variables `npm exec` exports
+          # into the child environment before starting pi (see its definition).
+          pi_status=0
+          npm exec --yes --package @earendil-works/pi-coding-agent@latest -- pi-clean-env "$@" || pi_status=$?
+          pi-host-links >/dev/null || true
+          exit "$pi_status"
+        '';
+      };
+      piBootstrap = pkgs.writeShellApplication {
+        name = "pi-bootstrap";
+        runtimeInputs = [ pkgs.coreutils ];
+        text = ''
+          set -eu
+          for package in ${lib.escapeShellArgs piPackages}; do
+            echo "Installing or reconciling $package"
+            ${piAgent}/bin/pi install "$package"
+          done
+        '';
+      };
+
+      # Hermes Desktop worker diagnostics. Run via pnpm so it shares the
+      # same version resolver as the rest of the agent CLIs.
+      piAgentBrowserDoctor = pkgs.writeShellScriptBin "pi-agent-browser-doctor" ''
+        exec ${pkgs.pnpm}/bin/pnpm dlx --package @mariozechner/pi-agent-browser-doctor@latest pi-agent-browser-doctor "$@"
+      '';
+
+      piPackages = [
+        "npm:@ff-labs/pi-fff"
+        "npm:@narumitw/pi-lsp"
+        "npm:pi-subagents"
+        "npm:pi-linehash-edit"
+        "npm:@gotgenes/pi-permission-system"
+        "npm:pi-zentui"
+        "npm:pi-memory"
+        "npm:@sherif-fanous/pi-rtk"
+        "npm:@juicesharp/rpiv-ask-user-question"
+        "npm:pi-background-tasks"
+        "npm:context-mode"
+        "npm:pi-web-access"
+        "npm:@plannotator/pi-extension"
+        "npm:@narumitw/pi-usage"
+        "npm:pi-opencode-free"
+        "npm:@agent-sh/computer-use-linux"
+        "npm:@juicesharp/rpiv-todo"
+        "npm:pi-agent-browser-native"
+        "npm:@henryqw/pi-task-models"
+        "npm:@henryqw/pi-herdr"
+        "npm:@henryqw/pi-herdr-rename"
+        "npm:pi-cache-optimizer"
+        "npm:pi-stats-dashboard"
+        "npm:billion-context"
+        "npm:pi-goal-x"
+        "git:github.com/nagisanzenin/engram"
+      ];
+    in
+    {
+      home.activation.piConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        piSettings="$HOME/.pi/agent/settings.json"
+        # /model and /thinking persist the defaults saved with Ctrl+S into
+        # this same file, so copying the template over it wholesale resets the
+        # default model on every switch. The template stays authoritative for
+        # flake-managed keys (packages, subagents, UI prefs); only the
+        # pi-owned keys below carry over from the live file. Deliberately not
+        # listed here: anything the flake declares, e.g. defaultModel lives
+        # only in the live file now — see modules/packages/pi-settings.json.
+        piOwnedKeys='["defaultProvider","defaultModel","defaultThinkingLevel","modelThinkingLevels","enabledModels","lastChangelogVersion"]'
+        if [ -f "$piSettings" ]; then
+          piMerged="$(${pkgs.jq}/bin/jq -s --argjson keys "$piOwnedKeys" \
+            '.[0] + (.[1] | with_entries(select(.key as $k | $keys | index($k))))' \
+            ${./pi-settings.json} "$piSettings" 2>/dev/null || true)"
+          if [ -n "$piMerged" ]; then
+            printf '%s\n' "$piMerged" > "$piSettings.new"
+            mv "$piSettings.new" "$piSettings"
+          else
+            install -Dm644 ${./pi-settings.json} "$piSettings"
+          fi
+        else
+          install -Dm644 ${./pi-settings.json} "$piSettings"
+        fi
+        rm -f "$piSettings.new"
+        install -Dm644 ${./pi-models.json} "$HOME/.pi/agent/models.json"
+        # MCP servers are pi's own now (`~/.pi/agent/mcp.json`, see
+        # docs/mcp.md). The `pi-mcp-adapter` extension that used to own this
+        # file is gone, so write the server list where pi core reads it and
+        # drop the adapter's copy.
+        install -Dm644 ${./pi-mcp.json} "$HOME/.pi/agent/mcp.json"
+        rm -f "$HOME/.pi/agent/mcp-adapter.json"
+        # The npmCommand shim and the host-dependency repairs it drives are
+        # referenced by ~/.pi/agent/settings.json, so keep them in sync with
+        # the flake rather than as hand-edited files.
+        install -Dm755 ${./pi-npm} "$HOME/.pi/agent/bin/pi-npm"
+        install -Dm755 ${./host-deps-patch.mjs} "$HOME/.pi/agent/bin/host-deps-patch.mjs"
+        install -Dm755 ${./pi-host-links.mjs} "$HOME/.pi/agent/bin/pi-host-links.mjs"
+      '';
+
+      home.packages = [
+        piBootstrap
+        piAgent
+        piHostLinks
+        piAgentBrowserDoctor
+      ];
+    };
+in
 {
+  options.flake.modules.homeManager.pi = lib.mkOption {
+    type = lib.types.deferredModule;
+    default = piModule;
+  };
+
   options.flake.modules.homeManager.dev = lib.mkOption {
     type = lib.types.deferredModule;
     default =
@@ -277,81 +446,6 @@
           export NODE_PATH="${pkgs.pnpm}/lib/node_modules"
           exec ${pkgs.pnpm}/bin/pnpm dlx --package deepseek-harness@latest deepseek-harness "$@"
         '';
-        # pi's extension packages must resolve the host-provided packages
-        # (pi-ai, pi-agent-core, pi-coding-agent, pi-tui) from the pi
-        # installation that is actually running. npm reifies
-        # ~/.pi/agent/npm from the registry and prunes those links as
-        # extraneous, so both the `pi` wrapper and the npmCommand shim
-        # re-create them. See modules/packages/pi-host-links.mjs.
-        piHostLinks = pkgs.writeShellApplication {
-          name = "pi-host-links";
-          runtimeInputs = [ pkgs.nodejs_22 ];
-          text = ''
-            exec node ${./pi-host-links.mjs} "$@"
-          '';
-        };
-        # `npm exec` exports every resolved npm configuration value as
-        # npm_config_* into the child environment. Left in place, pi and every
-        # process it spawns inherit them. npm_config_package is the damaging
-        # one: a nested `npx <pkg>` then reads the package spec as the command
-        # to run and dies with "command not found", which is what broke the
-        # canva stdio MCP server (`npx -y mcp-remote@latest <url>`). Strip the
-        # variables so pi runs with the environment a plain terminal gives it.
-        piCleanEnv = pkgs.writeShellApplication {
-          name = "pi-clean-env";
-          runtimeInputs = [ pkgs.coreutils ];
-          text = ''
-            names=()
-            while IFS='=' read -r name _; do
-              if [[ "$name" == npm_config_* ]]; then
-                names+=("$name")
-              fi
-            done < <(env)
-            if (( "''${#names[@]}" > 0 )); then
-              unset "''${names[@]}"
-            fi
-            exec pi "$@"
-          '';
-        };
-        piAgent = pkgs.writeShellApplication {
-          name = "pi";
-          runtimeInputs = [
-            pkgs.nodejs_22
-            pkgs.pnpm
-            pkgs.gnumake
-            pkgs.gcc
-            pkgs.python3
-            piHostLinks
-            piCleanEnv
-          ];
-          text = ''
-            # Repair host-provided dependency links before pi loads extensions,
-            # so a pruned ~/.pi/agent/npm never surfaces as a load error.
-            pi-host-links >/dev/null || true
-
-            # Do not exec: the wrapper re-runs the repair after pi exits, which
-            # is what creates the links the first time after a fresh npx
-            # install of pi-coding-agent.
-            #
-            # pi-clean-env strips the npm_config_* variables `npm exec` exports
-            # into the child environment before starting pi (see its definition).
-            pi_status=0
-            npm exec --yes --package @earendil-works/pi-coding-agent@latest -- pi-clean-env "$@" || pi_status=$?
-            pi-host-links >/dev/null || true
-            exit "$pi_status"
-          '';
-        };
-        piBootstrap = pkgs.writeShellApplication {
-          name = "pi-bootstrap";
-          runtimeInputs = [ pkgs.coreutils ];
-          text = ''
-            set -eu
-            for package in ${lib.escapeShellArgs piPackages}; do
-              echo "Installing or reconciling $package"
-              ${piAgent}/bin/pi install "$package"
-            done
-          '';
-        };
         # Code search & document retrieval. Resolve qmd lazily through npm so it
         # is available from the Nix profile without a global mutable install.
         qmd = pkgs.writeShellApplication {
@@ -367,11 +461,6 @@
         agentBrowser = pkgs.writeShellScriptBin "agent-browser" ''
           exec ${pkgs.pnpm}/bin/pnpm dlx --package agent-browser@latest agent-browser "$@"
         '';
-        # Hermes Desktop worker diagnostics. Run via pnpm so it shares the
-        # same version resolver as the rest of the agent CLIs.
-        piAgentBrowserDoctor = pkgs.writeShellScriptBin "pi-agent-browser-doctor" ''
-          exec ${pkgs.pnpm}/bin/pnpm dlx --package @mariozechner/pi-agent-browser-doctor@latest pi-agent-browser-doctor "$@"
-        '';
         # Feynman is an end-to-end coding agent CLI. It is published as an
         # npm bundle; we run it through pnpm so its optional peer
         # dependencies are installed on demand.
@@ -379,36 +468,10 @@
           exec ${pkgs.pnpm}/bin/pnpm dlx --package feynman-coding-agent@latest feynman "$@"
         '';
 
-        piPackages = [
-          "npm:@ff-labs/pi-fff"
-          "npm:@narumitw/pi-lsp"
-          "npm:pi-subagents"
-          "npm:pi-linehash-edit"
-          "npm:@gotgenes/pi-permission-system"
-          "npm:pi-zentui"
-          "npm:pi-memory"
-          "npm:@sherif-fanous/pi-rtk"
-          "npm:@juicesharp/rpiv-ask-user-question"
-          "npm:pi-background-tasks"
-          "npm:context-mode"
-          "npm:pi-web-access"
-          "npm:@plannotator/pi-extension"
-          "npm:@narumitw/pi-usage"
-          "npm:pi-opencode-free"
-          "npm:@agent-sh/computer-use-linux"
-          "npm:@juicesharp/rpiv-todo"
-          "npm:pi-agent-browser-native"
-          "npm:@henryqw/pi-task-models"
-          "npm:@henryqw/pi-herdr"
-          "npm:@henryqw/pi-herdr-rename"
-          "npm:pi-cache-optimizer"
-          "npm:pi-stats-dashboard"
-          "npm:billion-context"
-          "npm:pi-goal-x"
-          "git:github.com/nagisanzenin/engram"
-        ];
       in
       {
+        imports = [ piModule ];
+
         home.activation.orcaCliLink = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
           # Orca's built-in CLI installer may recreate this link on launch. It
           # points at resources/bin/orca-ide, which bypasses appimageTools' FHS
@@ -422,44 +485,6 @@
                 ;;
             esac
           fi
-        '';
-        home.activation.piConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-          piSettings="$HOME/.pi/agent/settings.json"
-          # /model and /thinking persist the defaults saved with Ctrl+S into
-          # this same file, so copying the template over it wholesale resets the
-          # default model on every switch. The template stays authoritative for
-          # flake-managed keys (packages, subagents, UI prefs); only the
-          # pi-owned keys below carry over from the live file. Deliberately not
-          # listed here: anything the flake declares, e.g. defaultModel lives
-          # only in the live file now — see modules/packages/pi-settings.json.
-          piOwnedKeys='["defaultProvider","defaultModel","defaultThinkingLevel","modelThinkingLevels","enabledModels","lastChangelogVersion"]'
-          if [ -f "$piSettings" ]; then
-            piMerged="$(${pkgs.jq}/bin/jq -s --argjson keys "$piOwnedKeys" \
-              '.[0] + (.[1] | with_entries(select(.key as $k | $keys | index($k))))' \
-              ${./pi-settings.json} "$piSettings" 2>/dev/null || true)"
-            if [ -n "$piMerged" ]; then
-              printf '%s\n' "$piMerged" > "$piSettings.new"
-              mv "$piSettings.new" "$piSettings"
-            else
-              install -Dm644 ${./pi-settings.json} "$piSettings"
-            fi
-          else
-            install -Dm644 ${./pi-settings.json} "$piSettings"
-          fi
-          rm -f "$piSettings.new"
-          install -Dm644 ${./pi-models.json} "$HOME/.pi/agent/models.json"
-          # MCP servers are pi's own now (`~/.pi/agent/mcp.json`, see
-          # docs/mcp.md). The `pi-mcp-adapter` extension that used to own this
-          # file is gone, so write the server list where pi core reads it and
-          # drop the adapter's copy.
-          install -Dm644 ${./pi-mcp.json} "$HOME/.pi/agent/mcp.json"
-          rm -f "$HOME/.pi/agent/mcp-adapter.json"
-          # The npmCommand shim and the host-dependency repairs it drives are
-          # referenced by ~/.pi/agent/settings.json, so keep them in sync with
-          # the flake rather than as hand-edited files.
-          install -Dm755 ${./pi-npm} "$HOME/.pi/agent/bin/pi-npm"
-          install -Dm755 ${./host-deps-patch.mjs} "$HOME/.pi/agent/bin/host-deps-patch.mjs"
-          install -Dm755 ${./pi-host-links.mjs} "$HOME/.pi/agent/bin/pi-host-links.mjs"
         '';
 
         # AutoClaw's only Linux build is the mainland (zhipuai.cn) one and it
@@ -516,13 +541,9 @@
           ori
           bun
           herdr
-          piBootstrap
           deepseekHarness
-          piAgent
-          piHostLinks
           qmd
           agentBrowser
-          piAgentBrowserDoctor
           feynman
           emdash
           zcode

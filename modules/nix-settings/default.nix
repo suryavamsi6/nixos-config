@@ -85,6 +85,9 @@
     default = { pkgs, ... }: {
       nix = {
         package = pkgs.nix;
+        # aarch64-linux builds run in a local Linux VM on this ARM Mac.
+        # The Pi deploy then copies that closure instead of compiling on the Pi.
+        linux-builder.enable = true;
         settings = {
           experimental-features = [ "nix-command" "flakes" ];
           # Performance: use all cores for builds
