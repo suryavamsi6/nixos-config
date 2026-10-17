@@ -131,6 +131,8 @@
           # Add nix-darwin and nix profile paths
           fish_add_path --move --path /run/current-system/sw/bin
           fish_add_path --move --path /nix/var/nix/profiles/default/bin
+          # Hermes setup appends this itself, then aborts when this file is a Nix store symlink.
+          fish_add_path --move --path "$HOME/.local/bin"
         '';
       };
 

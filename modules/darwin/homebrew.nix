@@ -14,11 +14,10 @@
           "1password"
           "citrix-workspace"
           "cursor"
-          "grok-bot"
           "grok-build"
-          "localsend"
+          "hermes-desktop"
           "tailscale-app"
-          "thebrowsercompany-dia"
+          "t3-code"
           "visual-studio-code"
           "zoom"
         ];

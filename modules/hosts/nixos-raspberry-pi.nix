@@ -279,7 +279,8 @@
             "speedtest.home.arpa" = "http://127.0.0.1:8081";
             "nextcloud.home.arpa" = "http://127.0.0.1:8082";
             "openwebui.home.arpa" = "http://127.0.0.1:8083";
-            "hermes.home.arpa" = "http://192.168.0.105:9119";
+            # Dashboard binds 127.0.0.1:9119. Hermes Desktop on the Mac uses this name.
+            "hermes.home.arpa" = "http://127.0.0.1:9119";
           };
         };
         services.cockpit = {
