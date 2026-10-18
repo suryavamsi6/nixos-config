@@ -41,7 +41,6 @@
       nixos.social
       nixos.system
       nixos.work
-      nixos.hermesDesktop
 
       # External modules
       inputs.chaotic.nixosModules.default
@@ -60,8 +59,41 @@
           # Allow this x86_64 desktop to build Raspberry Pi closures locally.
           boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
           boot.kernelPackages = pkgs.linuxPackages_cachyos-bore;
-          hardware.nvidia.package =
-            lib.mkForce config.boot.kernelPackages.nvidiaPackages.new_feature;
+
+          # Hermes Desktop's bootstrap stages prebuilt generic-Linux binaries
+          # (uv-managed CPython, Node toolchain pieces, browser helpers). NixOS
+          # ships only a stub loader at /lib64/ld-linux-x86-64.so.2, which
+          # refuses them with exit 127; nix-ld supplies a real loader plus the
+          # shared libraries those prebuilt tools expect. Mirrors the
+          # #raspberry-pi block (that one is aarch64).
+          programs.nix-ld = {
+            enable = true;
+            libraries = with pkgs; [
+              libffi
+              sqlite
+              ncurses
+              readline
+              expat
+              libxcrypt
+              # Hermes's cua-driver (computer-use helper, prebuilt) needs the
+              # X11 stack at verification time.
+              xorg.libX11
+              xorg.libXext
+              xorg.libXrandr
+              xorg.libXrender
+              xorg.libXi
+              xorg.libxcb
+              libxkbcommon
+              wayland
+            ];
+          };
+
+          # Generic-Linux prebuilt binaries (Hermes's staged CPython among
+          # them) resolve the OpenSSL default CA file at /etc/ssl/cert.pem,
+          # which NixOS does not ship. Point it at the system bundle so
+          # certificate verification works out of the box for such tools.
+          environment.etc."ssl/cert.pem".source = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+          hardware.nvidia.package = lib.mkForce config.boot.kernelPackages.nvidiaPackages.new_feature;
 
           networking.hostName = "nixos";
 
@@ -105,6 +137,8 @@
             homeManager.gaming
             homeManager.gridwatch
             homeManager.comfyui
+            homeManager.hermesDesktop
+            homeManager.capy
             homeManager.zenBrowser
           ];
 

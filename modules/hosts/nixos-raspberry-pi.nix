@@ -90,14 +90,13 @@
           options = "--delete-older-than 30d";
         };
 
-        # Hermes bootstraps prebuilt generic-Linux binaries into
-        # ~/.hermes/tools (its own `uv` and CPython). NixOS ships only a stub
-        # loader at /lib/ld-linux-aarch64.so.1, which refuses them with exit
-        # 127, so `hermes update` fails while staging its package manager.
-        # nix-ld supplies a real loader plus the shared libraries those
-        # prebuilt tools expect. The default library set already covers uv
-        # (zlib, zstd, libgcc/libstdc++, openssl, xz); the additions below
-        # cover a prebuilt CPython.
+        # Hermes and other tools stage prebuilt generic-Linux binaries (their
+        # uv/Python/Node toolchain pieces, browser helpers, etc.). NixOS
+        # ships only a stub loader at /lib/ld-linux-aarch64.so.1, which
+        # refuses them with exit 127. nix-ld supplies a real loader plus the
+        # shared libraries those prebuilt tools expect. The default library
+        # set already covers uv (zlib, zstd, libgcc/libstdc++, openssl, xz);
+        # the additions below cover a prebuilt CPython.
         programs.nix-ld = {
           enable = true;
           libraries = with pkgs; [
@@ -109,9 +108,16 @@
             libxcrypt
           ];
         };
+
+        # Generic-Linux prebuilt binaries (Hermes's staged CPython among
+        # them) resolve the OpenSSL default CA file at /etc/ssl/cert.pem,
+        # which NixOS does not ship. Point it at the system bundle so
+        # certificate verification works out of the box for such tools.
+        environment.etc."ssl/cert.pem".source = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+
         networking.networkmanager.enable = true;
         # LAN-facing services; native Nginx owns port 80.
-        networking.firewall.allowedTCPPorts = [ 22 53 80 82 9119 8096 ];
+        networking.firewall.allowedTCPPorts = [ 22 53 80 82 8096 ];
         networking.firewall.allowedUDPPorts = [ 53 7359 ];
 
         services.openssh = {
@@ -597,11 +603,14 @@
 
         environment.systemPackages = with pkgs; [
           curl
+          gh
           git
           htop
           tailscale
-          # Fallback for installing Python deps when Hermes' own bootstrapped
-          # uv cannot run, and for manual `uv pip install -e .` in its venv.
+          # Node for Hermes tooling on the Pi (gateway PATH + skills).
+          nodejs
+          # General-purpose Python/uv tooling for agent-managed venvs and
+          # ad-hoc scripts.
           uv
         ];
 

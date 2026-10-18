@@ -11,14 +11,16 @@ Each leaf file **declares** `options.flake.modules.*`. Hosts **select** which to
 | `mango` | `nixos-mango.nix` | MangoWM + Serpantinum |
 | `macbook-air` | `darwin-macbook-air.nix` | nix-darwin |
 
-`#nixos` HM user `surya` currently imports: `shell`, `hyprland`, `serpantinum`, `wallpapers`, `dev`, `work`.
+`#nixos` HM user `surya` currently imports: `shell`, `hyprland`, `serpantinum`, `wallpapers`, `dev`, `work`, `gaming`, `gridwatch`, `comfyui`, `hermesDesktop`, `capy`, `zenBrowser`. `#mango` also imports `capy`.
 
 ## Where to edit
 
 | Change | File |
 |---|---|
 | Packages (system) | `modules/packages/system.nix` |
-| Packages (dev / HM) | `modules/packages/dev.nix` (agent CLIs; ZCode + AutoClaw wrappers, managed `zcode.desktop`) |
+| Packages (dev / HM) | `modules/packages/dev.nix` (agent CLIs; OpenResearch/Epic-launcher wrappers) |
+| Hermes Desktop (Electron shell for Hermes) | `modules/packages/hermes-desktop.nix` (pinned `install.sh` → `~/.hermes/hermes-agent`; electron-builder `--dir` → `linux-unpacked/{h,H}ermes` via FHS env runner; `#nixos` host carries the `programs.nix-ld` block) |
+| Capy desktop | `modules/packages/capy.nix` (`homeManager.capy` on `#nixos` and `#mango`). Pinned `downloads.capy.ai` **tarball**, not the AppImage. Same-length `APPIMAGE` → `CAPY_BIN` patch in `app.asar`; do not set `APPIMAGE` |
 | Citrix / Zoom / Zoom VDI plugin | `modules/packages/work.nix`, `citrix-adapter-wfica-shim.sh`, `zoomvdi-universal-plugin.nix` (gnome-keyring for CLStore; `gcr-ssh-agent` off) |
 | PipeWire, BlueZ | `modules/audio/default.nix` (Intel `btusb`; A2DP-only) |
 | Limine, Windows chainload | `modules/boot/default.nix` |

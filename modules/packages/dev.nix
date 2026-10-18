@@ -182,22 +182,43 @@ in
       }:
       let
         opencodeUpstream = inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.opencode;
-        opencodeV2 = (opencodeUpstream.override {
-          # v2.0.15's upstream node_modules hash is stale; use the hash
-          # produced by the pinned source and Bun toolchain.
-          node_modules = opencodeUpstream.node_modules.overrideAttrs (_: {
-            outputHash = "sha256-H9G54uuDIuPaQ3d9db/LmdtJ/OUDQodIkqdy6AHtPWo=";
-          });
-        }).overrideAttrs (_: {
-          # v2.0.15's completion subcommand is broken in the Nix build sandbox.
-          postInstall = "";
+        # The nix packaging takes src from a fileset filter that omits the
+        # repo-root script/ dir, but packages/cli/script/build.ts imports
+        # ../../../script/native-arch. Build from the unfiltered flake source
+        # instead. (The v2.0.15-era node_modules hash and completion-subcommand
+        # overrides are obsolete and were removed.)
+        opencodeV2 = opencodeUpstream.overrideAttrs (_: {
+          src = inputs.opencode.outPath;
         });
+        # T3 Code (t3.codes) is not pinned by this flake: it is nixpkgs'
+        # `pkgs.t3code`, which is still 0.0.45. Upstream shipped stable v0.1.0
+        # after the locked nixpkgs revision, and the nixpkgs bump PR
+        # (NixOS/nixpkgs#575132) is open but unmerged, so bump it here instead.
+        # Both hashes come from NixOS/nixpkgs#575132: the fetchFromGitHub tree
+        # hash and the fetchPnpmDeps output hash. Drop this override once the
+        # bump reaches the pinned nixpkgs.
+        t3code = pkgs.t3code.override {
+          t3code-unwrapped =
+            (pkgs.callPackage "${pkgs.path}/pkgs/by-name/t3/t3code/unwrapped.nix" { }).overrideAttrs
+              (old: {
+                version = "0.1.0";
+                src = pkgs.fetchFromGitHub {
+                  owner = "pingdotgg";
+                  repo = "t3code";
+                  tag = "v0.1.0";
+                  hash = "sha256-P82DqoY1E9wtROwu5Nr7MB/I1PdmZHWXXR4nRa4GWXM=";
+                };
+                pnpmDeps = old.pnpmDeps.overrideAttrs (_: {
+                  outputHash = "sha256-oX4tOu20tYO3ci7VvSEL8eFgxAYWp5HlQFSfAWJGJmg=";
+                });
+              });
+        };
         ohMyPi = pkgs.stdenvNoCC.mkDerivation {
           pname = "oh-my-pi";
-          version = "18.0.6";
+          version = "18.12.0";
           src = pkgs.fetchurl {
-            url = "https://github.com/can1357/oh-my-pi/releases/download/v18.0.6/omp-linux-x64";
-            hash = "sha256-nLx4vpumNXtTpqBVyYrXr+5MANIKMg1Ru3apSbilpEQ=";
+            url = "https://github.com/can1357/oh-my-pi/releases/download/v18.12.0/omp-linux-x64";
+            hash = "sha256-RMkhA3J50FcjkMBaEfNgjnZCLZaudyM74Q+x5j4vSH8=";
           };
           nativeBuildInputs = [ pkgs.patchelf ];
           dontUnpack = true;
@@ -287,10 +308,10 @@ in
         };
         orca = pkgs.appimageTools.wrapType2 {
           pname = "orca-ide";
-          version = "1.4.197";
+          version = "1.4.229";
           src = pkgs.fetchurl {
-            url = "https://github.com/stablyai/orca/releases/download/v1.4.197/orca-linux.AppImage";
-            hash = "sha256-S8hGLRUf8BD6pUxka7FtzFR0v2ZO7V7FAoGC15kmQWs=";
+            url = "https://github.com/stablyai/orca/releases/download/v1.4.229/orca-linux.AppImage";
+            hash = "sha256-Az6Uflnd9PZrdRiIJX3XmPiDRttzCvGG/slKblUdfaA=";
           };
           extraInstallCommands = ''
             install -Dm644 ${orcaDesktopItem}/share/applications/orca-ide.desktop $out/share/applications/orca-ide.desktop
@@ -307,10 +328,10 @@ in
         };
         emdash = pkgs.appimageTools.wrapType2 {
           pname = "emdash";
-          version = "1.2.4";
+          version = "1.2.8";
           src = pkgs.fetchurl {
-            url = "https://github.com/generalaction/emdash/releases/download/v1.2.4/emdash-x86_64.AppImage";
-            hash = "sha256-8+UhbYn6OE7R+6hyR0mx0h6n5H+3i+TWyIsEsbNa4Fs=";
+            url = "https://github.com/generalaction/emdash/releases/download/v1.2.8/emdash-x86_64.AppImage";
+            hash = "sha256-zYlzjgu8zICn+/AJ3eyyvRuMb9hYsU11seTHwfLu5/U=";
           };
           extraInstallCommands = ''
             install -Dm644 ${emdashDesktopItem}/share/applications/emdash.desktop $out/share/applications/emdash.desktop
@@ -322,10 +343,10 @@ in
         # env below, because its Electron binary wants
         # /lib64/ld-linux-x86-64.so.2 — on the desktop hosts that is NixOS'
         # stub-ld, not a real loader.
-        zcodeVersion = "3.14.4";
+        zcodeVersion = "3.15.3";
         zcodeSrc = pkgs.fetchurl {
           url = "https://cdn-zcode.z.ai/zcode/electron/releases/${zcodeVersion}/linux-x64/ZCode-${zcodeVersion}-linux-x64.AppImage";
-          hash = "sha256-S0YxmHFy/ZdaofhfoNwfVawcdWsmvYqxjWhZLtk5EYI=";
+          hash = "sha256-Ltx5ZQ/P9yNYZwr0/7+/fZebqVR2YRqArRFR1XfpD+M=";
         };
         # Exactly the arguments wrapType2 extracts internally, so this is that
         # same derivation: the icons installed below come for free instead of
@@ -384,57 +405,319 @@ in
           startupNotify = true;
         };
         # AutoClaw is Z.ai's other desktop agent: an Electron shell around a
-        # bundled OpenClaw gateway. Linux is published as a .deb only, so
-        # unpack it the way its own postinst does and run the tree inside the
-        # same FHS environment the AppImage apps above get from appimageTools'
-        # defaults — Electron's interpreter/loader expectations are the same
-        # problem wrapType2 solves for them. Linux builds are x86_64-only.
-        autoclawVersion = "1.18.5";
-        autoclawDeb = pkgs.fetchurl {
-          url = "https://autoglm.oss-cn-beijing.aliyuncs.com/autoclaw/updates/autoclaw_${autoclawVersion}_amd64.deb";
-          hash = "sha256-fCu3V9Qs3ifYhzyQrzItb5Q6nx5ylzzC76NPjMKwR78=";
+        # bundled agent runtime. Since 2.x Linux ships only as an AppImage,
+        # and its custom runtime ignores --appimage-extract (running it
+        # self-installs into ~/.cache/appimage-run instead), unpack it
+        # offline: a type-2 AppImage is an ELF runtime with a squashfs
+        # appended, so unsquashfs can read the tree straight from the
+        # superblock offset without executing anything. The tree then runs
+        # inside the same FHS environment the AppImage apps above get from
+        # appimageTools' defaults — Electron's interpreter/loader
+        # expectations are the same problem wrapType2 solves for them. The
+        # zwork runtime is pre-extracted under resources/app/vendor (bun,
+        # dotnet, node, ripgrep), so nothing needs the deb-era gateway.tar
+        # unpack. Linux builds are x86_64-only.
+        autoclawVersion = "2.0.3";
+        # The update channel serves the in-app updater, not a stable URL, so
+        # the AppImage stays a manual download. Pure flake eval cannot read
+        # ~/Downloads, so resolve it from the store via requireFile: after
+        # downloading, run once (and again for every new version, updating
+        # name/sha256 here):
+        #   nix-store --add-fixed sha256 ~/Downloads/AutoClaw-2.0.3-x64.AppImage
+        autoclawAppImage = pkgs.requireFile {
+          name = "AutoClaw-2.0.3-x64.AppImage";
+          sha256 = "1v5bwcxp5jxaakq2xs1bgd8n843sxwzj56yrgvip06fr3rabjqy6";
+          url = "https://autoclaw.z.ai/";
         };
         autoclawUnpacked = pkgs.runCommand "autoclaw-${autoclawVersion}-unpacked" {
-          nativeBuildInputs = [ pkgs.dpkg ];
+          nativeBuildInputs = [ pkgs.squashfsTools ];
         } ''
-          dpkg-deb -x ${autoclawDeb} $out
-          # The deb carries the 500M gateway runtime as a single tar and its
-          # postinst unpacks it here (60k files would otherwise make dpkg
-          # fsync forever). The app starts with a broken gateway without this.
-          tar -xf $out/opt/AutoClaw/resources/gateway.tar \
-            -C $out/opt/AutoClaw/resources --no-same-owner
-          rm -f $out/opt/AutoClaw/resources/gateway.tar
+          # The magic scan can hit false matches inside the runtime ELF, so
+          # try each occurrence until one validates as a real superblock and
+          # yields the app tree.
+          extracted=
+          for offset in $(grep -abo 'hsqs' ${autoclawAppImage} | cut -d: -f1); do
+            rm -rf root
+            if unsquashfs -q -n -o "$offset" -d root ${autoclawAppImage} >/dev/null 2>&1 && [ -x root/AppRun ]; then
+              extracted=1
+              break
+            fi
+          done
+          if [ -z "$extracted" ]; then
+            echo "autoclaw: no valid squashfs superblock found in the AppImage" >&2
+            exit 1
+          fi
+          mv root $out
         '';
         autoclawDesktopItem = pkgs.makeDesktopItem {
           name = "autoclaw";
           desktopName = "AutoClaw";
-          comment = "Desktop AI Cowork Platform powered by OpenClaw Gateway";
+          comment = "AutoClaw desktop AI product";
           exec = "${config.home.profileDirectory}/bin/autoclaw %U";
           icon = "autoclaw";
+          # Upstream registers the zwork:// deep link; the handler exists as
+          # soon as this desktop file lands in the profile.
+          mimeTypes = [ "x-scheme-handler/zwork" ];
           categories = [ "Utility" ];
           startupNotify = true;
+          startupWMClass = "AutoClaw";
         };
         autoclaw = pkgs.buildFHSEnv (
           pkgs.appimageTools.defaultFhsEnvArgs
           // {
             name = "autoclaw";
-            runScript = "${autoclawUnpacked}/opt/AutoClaw/autoclaw";
-            # The deb's Depends beyond that chroot list: libsecret for the
-            # keyring (nss, libxtst, xdg-utils, at-spi and libnotify are
-            # already provided there).
+            # What wrapType2 runs: appimage-exec.sh -w execs the AppRun of
+            # the extracted tree with APPDIR set; AppRun itself probes user
+            # namespaces and passes --no-sandbox to Electron when they are
+            # unavailable.
+            runScript = "appimage-exec.sh -w ${autoclawUnpacked} --";
+            # libsecret for the keyring. nss, libxtst, xdg-utils, at-spi and
+            # libnotify are already in the default chroot list.
             targetPkgs =
-              p: pkgs.appimageTools.defaultFhsEnvArgs.targetPkgs p ++ (with p; [ libsecret ]);
+              p:
+              [ pkgs.appimageTools.appimage-exec ]
+              ++ pkgs.appimageTools.defaultFhsEnvArgs.targetPkgs p
+              ++ (with p; [ libsecret ]);
             extraInstallCommands = ''
               install -Dm644 ${autoclawDesktopItem}/share/applications/autoclaw.desktop $out/share/applications/autoclaw.desktop
-              # Upstream ships 16/32/128 only.
-              for size in 16x16 32x32 128x128; do
-                install -Dm644 ${autoclawUnpacked}/usr/share/icons/hicolor/$size/apps/autoclaw.png \
-                  $out/share/icons/hicolor/$size/apps/autoclaw.png
-              done
+              # 2.x ships a single 512x512 icon named after the AutoClaw2 binary.
+              install -Dm644 ${autoclawUnpacked}/usr/share/icons/hicolor/512x512/apps/AutoClaw2.png \
+                $out/share/icons/hicolor/512x512/apps/autoclaw.png
             '';
             meta = {
-              description = "AI cowork desktop app powered by the OpenClaw gateway";
+              description = "AutoClaw desktop AI product";
               homepage = "https://autoclaw.z.ai/";
+              platforms = [ "x86_64-linux" ];
+            };
+          }
+        );
+        # OpenResearch (openresearch.sh, alphaXiv) is an agentic ML research
+        # desktop whose Linux build is an AppImage wrapping an `orx` GUI
+        # (AppRun ignores argv and always launches `orx app`). The bundled
+        # binary wants /lib64/ld-linux-x86-64.so.2 — NixOS' stub-ld here — so
+        # the extracted tree runs in a buildFHSEnv, like zcode/autoclaw. The
+        # runScript must unset APPIMAGE: orx classifies its install from that
+        # variable, and with it set the app treats itself as a self-updating
+        # AppImage — it rewrites the desktop entry to the store AppImage path
+        # (which cannot start on NixOS) and downloads itself a new AppImage.
+        # Unset, the /nix/store path lands in InstallChannel::Nix and updates
+        # stay with this flake. Agents drive the separate static-musl `orx`
+        # CLI from the same release (below); GUI and CLI share
+        # ~/.config/openresearch. Bump: version + both fetchurl hashes.
+        openresearchVersion = "0.2.19";
+        openresearchSrc = pkgs.fetchurl {
+          url = "https://github.com/alphaXiv/OpenResearch/releases/download/v${openresearchVersion}/OpenResearch-x86_64.AppImage";
+          hash = "sha256-+mWINFT8JrLMTid8aaICEdks6VZnHdXBa+s+rXDQxDw=";
+        };
+        openresearchContents = pkgs.appimageTools.extract {
+          pname = "openresearch";
+          version = openresearchVersion;
+          src = openresearchSrc;
+        };
+        openresearchRun = pkgs.writeShellScript "openresearch-run" ''
+          # See above: APPIMAGE would flip orx into AppImage self-update mode.
+          unset APPIMAGE
+          exec appimage-exec.sh -w ${openresearchContents} -- "$@"
+        '';
+        openresearchDesktopItem = pkgs.makeDesktopItem {
+          name = "openresearch";
+          desktopName = "OpenResearch";
+          comment = "Automated ML research with your coding agents";
+          exec = "${config.home.profileDirectory}/bin/openresearch %U";
+          icon = "OpenResearch";
+          categories = [ "Development" ];
+          startupWMClass = "OpenResearch";
+        };
+        openresearch = pkgs.buildFHSEnv (
+          pkgs.appimageTools.defaultFhsEnvArgs
+          // {
+            name = "openresearch";
+            runScript = "${openresearchRun}";
+            targetPkgs =
+              p:
+              [ pkgs.appimageTools.appimage-exec ]
+              ++ pkgs.appimageTools.defaultFhsEnvArgs.targetPkgs p;
+            extraInstallCommands = ''
+              install -Dm644 ${openresearchDesktopItem}/share/applications/openresearch.desktop $out/share/applications/openresearch.desktop
+              install -Dm644 ${openresearchContents}/usr/share/icons/hicolor/256x256/apps/OpenResearch.png \
+                $out/share/icons/hicolor/256x256/apps/OpenResearch.png
+            '';
+            meta = {
+              description = "OpenResearch desktop for automated ML research";
+              homepage = "https://openresearch.sh/";
+              platforms = [ "x86_64-linux" ];
+            };
+          }
+        );
+        orx = pkgs.runCommand "orx-${openresearchVersion}" {
+          nativeBuildInputs = [ pkgs.xz ];
+          meta = {
+            description = "OpenResearch CLI (orx) for automated ML research";
+            homepage = "https://openresearch.sh/";
+            platforms = [ "x86_64-linux" ];
+          };
+        } ''
+          mkdir orx
+          tar -xJf ${
+            pkgs.fetchurl {
+              url = "https://github.com/alphaXiv/OpenResearch/releases/download/v${openresearchVersion}/openresearch-cli-x86_64-unknown-linux-musl.tar.xz";
+              hash = "sha256-fkc8ILTJa/pDxgRG/w9l47L05XKY1isL/X2/JlfiC7Y=";
+            }
+          } -C orx
+          install -Dm755 orx/openresearch-cli-x86_64-unknown-linux-musl/orx $out/bin/orx
+        '';
+        # Eigent is an open-source multi-agent workforce desktop app whose
+        # Linux distribution is only an AppImage. Reuse the AutoClaw
+        # approach: extract the squashfs offline and run its AppRun through
+        # appimage-exec.sh inside a buildFHSEnv chroot. The ~700 MB payload
+        # is mostly the bundled terminal runtime (resources/prebuilt: uv,
+        # bun, a full cpython-3.10.19 and a terminal venv) which the app
+        # provisions into $HOME at first run. The app also rewrites
+        # resources/prebuilt/terminal_venv/pyvenv.cfg and drops a
+        # .terminal_venv_fixed marker beside it at every startup, and its
+        # dependency check hard-fails on EROFS (the UI then hangs on
+        # "starting up"), so it must run from a writable mirror of the
+        # unpacked tree (eigentRun below), never straight from the store.
+        eigentVersion = "1.0.6";
+        # v1.0.6 publishes the AppImage on GitHub releases, so a plain
+        # fetchurl replaces the old eigent.ai requireFile manual download.
+        eigentAppImage = pkgs.fetchurl {
+          name = "Eigent-1.0.6.AppImage";
+          url = "https://github.com/eigent-ai/eigent/releases/download/v1.0.6/Eigent-1.0.6.AppImage";
+          hash = "sha256-+Hzwvrd3GCHlnlCyUpvBg5g8pQfHOIECKwzCMrNgkMU=";
+        };
+        eigentUnpacked = pkgs.runCommand "eigent-${eigentVersion}-unpacked" {
+          nativeBuildInputs = [ pkgs.squashfsTools ];
+        } ''
+          # Same magic-scan dance as autoclaw: the first hsqs match sits
+          # inside the runtime ELF, so keep offsets until one validates as a
+          # real superblock and yields the app tree.
+          extracted=
+          for offset in $(grep -abo 'hsqs' ${eigentAppImage} | cut -d: -f1); do
+            rm -rf root
+            if unsquashfs -q -n -o "$offset" -d root ${eigentAppImage} >/dev/null 2>&1 && [ -x root/AppRun ]; then
+              extracted=1
+              break
+            fi
+          done
+          if [ -z "$extracted" ]; then
+            echo "eigent: no valid squashfs superblock found in the AppImage" >&2
+            exit 1
+          fi
+          mv root $out
+        '';
+        # The store tree is read-only, but the app writes into its own
+        # resources/prebuilt at startup (see comment above). Mirror the
+        # unpacked tree into ~/.local/share/eigent-app once and run from
+        # there; refresh the mirror when the package version changes.
+        eigentRun = pkgs.writeShellScript "eigent-run" ''
+          APP_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}/eigent-app"
+          STAMP="$APP_HOME/.nix-eigent-stamp"
+          if ! [ -x "$APP_HOME/AppRun" ] || ! [ "$(cat "$STAMP" 2>/dev/null)" = "${eigentVersion}" ]; then
+            ${pkgs.coreutils}/bin/rm -rf "$APP_HOME"
+            ${pkgs.coreutils}/bin/mkdir -p "$APP_HOME"
+            ${pkgs.coreutils}/bin/cp -a "${eigentUnpacked}/." "$APP_HOME/"
+            ${pkgs.coreutils}/bin/chmod -R u+w "$APP_HOME"
+            ${pkgs.coreutils}/bin/printf '%s\n' "${eigentVersion}" > "$STAMP"
+          fi
+          exec appimage-exec.sh -w "$APP_HOME" -- --no-sandbox "$@"
+        '';
+        eigentDesktopItem = pkgs.makeDesktopItem {
+          name = "eigent";
+          desktopName = "Eigent";
+          comment = "Eigent multi-agent workforce desktop";
+          exec = "${config.home.profileDirectory}/bin/eigent %U";
+          icon = "eigent";
+          # Upstream registers the eigent:// deep link.
+          mimeTypes = [ "x-scheme-handler/eigent" ];
+          categories = [ "Development" ];
+          startupNotify = true;
+          startupWMClass = "Eigent";
+        };
+        eigent = pkgs.buildFHSEnv (
+          pkgs.appimageTools.defaultFhsEnvArgs
+          // {
+            name = "eigent";
+            # Upstream's desktop entry execs `AppRun --no-sandbox %U`, so
+            # pass the flag the same way (NixOS chrome-sandbox is not
+            # setuid-root either).
+            runScript = "${eigentRun}";
+            targetPkgs =
+              p:
+              [ pkgs.appimageTools.appimage-exec ]
+              ++ pkgs.appimageTools.defaultFhsEnvArgs.targetPkgs p
+              ++ (with p; [
+                libsecret
+                # The AppRun updater prompts through zenity when present and
+                # skips silently otherwise.
+                zenity
+              ]);
+            extraInstallCommands = ''
+              install -Dm644 ${eigentDesktopItem}/share/applications/eigent.desktop $out/share/applications/eigent.desktop
+              # Upstream ships a single top-level eigent.png (the 0x0
+              # hicolor dir it also has is unusable).
+              install -Dm644 ${eigentUnpacked}/eigent.png $out/share/icons/hicolor/512x512/apps/eigent.png
+            '';
+            meta = {
+              description = "Eigent multi-agent workforce desktop";
+              homepage = "https://eigent.ai/";
+              platforms = [ "x86_64-linux" ];
+            };
+          }
+        );
+        # Grok Bot desktop agent (electron-builder .deb, the Cursor "sand"
+        # agent rebranded). Same FHS-env treatment as the eigent AppImage:
+        # extract the deb and run the electron binary directly. The deb
+        # layout lives under /opt on regular distros (root-owned), so the
+        # app is not written to write into its resources and needs no
+        # writable mirror. NixOS's chrome-sandbox is not setuid-root either,
+        # so pass --no-sandbox like upstream's own desktop entry.
+        grokBotVersion = "0.71.2";
+        grokBotDeb = pkgs.requireFile {
+          name = "grok-bot_${grokBotVersion}_amd64.deb";
+          sha256 = "0j33n15b166avvl2qqs3s2l8albamb1rp207wmcyslp8ldsnslm0";
+          message = ''
+            Copy grok-bot_${grokBotVersion}_amd64.deb into ~/Downloads so it
+            can be imported into the nix store.
+          '';
+        };
+        grokBotUnpacked = pkgs.runCommand "grok-bot-${grokBotVersion}-unpacked" { } ''
+          ${pkgs.dpkg}/bin/dpkg-deb -x ${grokBotDeb} $out
+        '';
+        grokBotDesktopItem = pkgs.makeDesktopItem {
+          name = "grok-bot";
+          desktopName = "Grok Bot";
+          comment = "Grok Bot desktop agent";
+          exec = "${config.home.profileDirectory}/bin/grok-bot %U";
+          icon = "grok-bot";
+          # Upstream registers grokbot:// and the legacy sand:// deep link.
+          mimeTypes = [ "x-scheme-handler/grokbot" "x-scheme-handler/sand" ];
+          categories = [ "Development" ];
+          startupNotify = true;
+          startupWMClass = "grok-bot";
+        };
+        grokBot = pkgs.buildFHSEnv (
+          pkgs.appimageTools.defaultFhsEnvArgs
+          // {
+            name = "grok-bot";
+            runScript = "${pkgs.writeShellScript "grok-bot-run" ''
+              exec "${grokBotUnpacked}/opt/Grok Bot/grok-bot" --no-sandbox "$@"
+            ''}";
+            targetPkgs =
+              p:
+              pkgs.appimageTools.defaultFhsEnvArgs.targetPkgs p
+              ++ (with p; [
+                libsecret
+                xdg-utils
+              ]);
+            extraInstallCommands = ''
+              install -Dm644 ${grokBotDesktopItem}/share/applications/grok-bot.desktop $out/share/applications/grok-bot.desktop
+              # The deb ships a complete hicolor set for grok-bot.
+              ${pkgs.coreutils}/bin/mkdir -p $out/share/icons
+              ${pkgs.coreutils}/bin/cp -r --no-preserve=mode ${grokBotUnpacked}/usr/share/icons/hicolor $out/share/icons/hicolor
+            '';
+            meta = {
+              description = "Grok Bot desktop agent";
               platforms = [ "x86_64-linux" ];
             };
           }
@@ -461,11 +744,27 @@ in
         agentBrowser = pkgs.writeShellScriptBin "agent-browser" ''
           exec ${pkgs.pnpm}/bin/pnpm dlx --package agent-browser@latest agent-browser "$@"
         '';
-        # Feynman is an end-to-end coding agent CLI. It is published as an
-        # npm bundle; we run it through pnpm so its optional peer
-        # dependencies are installed on demand.
+        # Feynman is an end-to-end coding agent CLI. Two separate
+        # distributions exist: `feynman-coding-agent` is the standalone CLI
+        # published as a pnpm-run bundle, while `@companion-ai/feynman` is the
+        # Pi-based agent that also ships a Pi extension/prompts/skills bundle
+        # (installed through piPackages in piModule).
         feynman = pkgs.writeShellScriptBin "feynman" ''
           exec ${pkgs.pnpm}/bin/pnpm dlx --package feynman-coding-agent@latest feynman "$@"
+        '';
+        # The Pi-based Feynman distribution, same pnpm-run shape and pinned to
+        # the package the piPackages entry installs so the CLI and the Pi
+        # extension stay on one version.
+        feynmanPi = pkgs.writeShellScriptBin "feynman-pi" ''
+          exec ${pkgs.pnpm}/bin/pnpm dlx --package @companion-ai/feynman@latest feynman "$@"
+        '';
+        # Grok Build (grok.com/build) is xAI's terminal coding agent. The
+        # npm wrapper @xai-official/grok resolves a platform package whose
+        # bin/grok.br brotli-decompresses into a statically linked Rust
+        # binary, so it runs on NixOS without an FHS env or interpreter
+        # patching. Resolved through pnpm like the other agent CLIs.
+        grok = pkgs.writeShellScriptBin "grok" ''
+          exec ${pkgs.pnpm}/bin/pnpm dlx --package @xai-official/grok@latest grok "$@"
         '';
 
       in
@@ -487,23 +786,24 @@ in
           fi
         '';
 
-        # AutoClaw's only Linux build is the mainland (zhipuai.cn) one and it
-        # seeds a Simplified-Chinese UI; the language lives in the app's own
-        # settings file. The same build ships en-US, so pin it here — with the
-        # app running the file can be rewritten from memory, hence an
+        # AutoClaw 2.x keeps its settings in the profile the app derives from
+        # its build flavor — ~/.config/AutoClaw-oversea-official for this
+        # official/overseas build, not the mainland build's
+        # ~/.config/autoclaw. Pin the app's own settings file to en-US; with
+        # the app running the file can be rewritten from memory, hence an
         # activation rather than a one-off edit. Drop this block to let the
         # in-app Settings → Appearance choice win instead.
         home.activation.autoclawLanguage = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-          autoclawSettings="$HOME/.config/autoclaw/settings.json"
+          autoclawSettings="$HOME/.config/AutoClaw-oversea-official/settings.json"
           if [ -f "$autoclawSettings" ]; then
             if ${pkgs.jq}/bin/jq '.appearance.language = "en-US"' "$autoclawSettings" > "$autoclawSettings.new"; then
               mv "$autoclawSettings.new" "$autoclawSettings"
             fi
             rm -f "$autoclawSettings.new"
           else
-            # Seed a fresh install so the first launch is English too; the app
-            # fills in its remaining defaults on start.
-            mkdir -p "$HOME/.config/autoclaw"
+            # Seed a fresh profile so the first launch is English too; the
+            # app fills in its remaining defaults on start.
+            mkdir -p "$HOME/.config/AutoClaw-oversea-official"
             printf '%s\n' '{"appearance":{"language":"en-US"}}' > "$autoclawSettings"
           fi
         '';
@@ -521,11 +821,22 @@ in
           force = true;
         };
 
+        # OpenResearch only rewrites its desktop entry in AppImage mode (the
+        # unset APPIMAGE above prevents that), but an entry it wrote during a
+        # manual upstream AppImage run would shadow the profile's entry via
+        # XDG_DATA_HOME and point at the store AppImage. force = true
+        # overwrites any such stale file instead of aborting activation.
+        xdg.dataFile."applications/openresearch.desktop" = {
+          source = "${openresearchDesktopItem}/share/applications/openresearch.desktop";
+          force = true;
+        };
+
         home.packages = with pkgs; [
           superfile
           wget
           git
           gh
+          jujutsu
           rtk
           ghostty
           htop
@@ -545,9 +856,15 @@ in
           qmd
           agentBrowser
           feynman
+          feynmanPi
+          grok
           emdash
           zcode
           autoclaw
+          eigent
+          openresearch
+          orx
+          grokBot
           t3code
           orca
           inputs.hunk.packages.${pkgs.stdenv.hostPlatform.system}.hunk
@@ -571,6 +888,14 @@ in
           };
         };
 
+        programs.jujutsu = {
+          enable = true;
+          settings = {
+            user.name = "Surya Vamsi";
+            user.email = "d.suryavamsi@gmail.com";
+          };
+        };
+
         home.file.".agents/git-ops.md" = {
           source = ../../.agents/git-ops.md;
         };
@@ -583,7 +908,10 @@ in
     default =
       { pkgs, ... }:
       {
-        home.packages = [ pkgs.gh ];
+        home.packages = [
+          pkgs.gh
+          pkgs.jujutsu
+        ];
 
         programs.nh = {
           enable = true;
@@ -594,6 +922,14 @@ in
           enable = true;
           settings.user.name = "Surya Vamsi";
           settings.user.email = "d.suryavamsi@gmail.com";
+        };
+
+        programs.jujutsu = {
+          enable = true;
+          settings = {
+            user.name = "Surya Vamsi";
+            user.email = "d.suryavamsi@gmail.com";
+          };
         };
       };
   };

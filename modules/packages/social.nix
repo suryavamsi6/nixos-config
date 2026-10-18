@@ -7,6 +7,7 @@
       environment.systemPackages = with pkgs; [
         element-desktop
         discord
+        telegram-desktop
       ];
     };
   };

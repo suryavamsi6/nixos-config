@@ -7,7 +7,8 @@
     ./gaming.nix
     ./social.nix
     ./system.nix
-    ./hermes-desktop.nix
     ./comfyui.nix
+    ./hermes-desktop.nix
+    ./capy.nix
   ];
 }

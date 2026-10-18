@@ -35,7 +35,6 @@
       nixos.social
       nixos.system
       nixos.work
-      nixos.hermesDesktop
       inputs.chaotic.nixosModules.default
       nixos.locale
 
@@ -59,7 +58,8 @@
           hardware.nvidia.package = lib.mkForce pkgs.linuxPackages_cachyos-bore.nvidiaPackages.cachyos;
 
           networking.hostName = "mango";
-          services.greetd.settings.default_session.command = lib.mkForce "${tuigreet} --remember --remember-session --sessions ${waylandSessions}:${xSessions} --time --cmd mango";
+          services.greetd.settings.default_session.command =
+            lib.mkForce "${tuigreet} --remember --remember-session --sessions ${waylandSessions}:${xSessions} --time --cmd mango";
           nixpkgs.config.permittedInsecurePackages = [
             "libxml2-2.13.8"
             "libsoup-2.74.3"
@@ -72,7 +72,10 @@
             settings.Login.KillUserProcesses = true;
           };
 
-          system.nixos.tags = [ "mango" "cachyos" ];
+          system.nixos.tags = [
+            "mango"
+            "cachyos"
+          ];
           system.stateVersion = "24.11";
         }
       )
@@ -97,6 +100,7 @@
             homeManager.work
             homeManager.gaming
             homeManager.gridwatch
+            homeManager.capy
             homeManager.zenBrowser
           ];
 

@@ -41,10 +41,10 @@
             '';
         unslothDesktop = pkgs.appimageTools.wrapType2 {
           pname = "unsloth-desktop";
-          version = "0.1.806-beta";
+          version = "0.1.908-beta";
           src = pkgs.fetchurl {
-            url = "https://github.com/unslothai/unsloth/releases/download/v0.1.806-beta/Unsloth-Desktop-Linux.AppImage";
-            hash = "sha256-Qm9q0GaxuxkcFJfwlLXZy2r9B1QUmb2OJrMdpeiWyBY=";
+            url = "https://github.com/unslothai/unsloth/releases/download/v0.1.908-beta/Unsloth-Desktop-Linux.AppImage";
+            hash = "sha256-N7Nzb2zqm/db/zhvr7OuPhVy83Z+AHBng9PpasQVbCs=";
           };
           extraPkgs = pkgs: [ pkgs.libnotify pkgs.libnghttp2 ];
         };
@@ -64,7 +64,7 @@
             pkgs.curl
           ];
           text = ''
-            version="1.118.1"
+            version="1.123.1"
             state_dir="''${XDG_DATA_HOME:-$HOME/.local/share}/koboldcpp"
             binary="$state_dir/koboldcpp-linux-x64"
             tmp="$binary.tmp"

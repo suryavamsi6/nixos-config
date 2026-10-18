@@ -60,6 +60,68 @@
         protonGeBin = pkgs.proton-ge-bin.overrideAttrs (old: {
           steamDisplayName = old.version;
         });
+        # The official Epic Games Launcher — the Tauri-based rework ("preview");
+        # the classic launcher never shipped for Linux — distributes an AppImage
+        # that bundles WebKitGTK 4.1, GStreamer, gnutls (its GIO TLS module)
+        # and libsecret, so the extracted tree runs in a buildFHSEnv like
+        # openresearch (binary interpreter is
+        # /lib64/ld-linux-x86-64.so.2 = NixOS' stub-ld). Epic serves the file
+        # only through the Cloudflare-fronted store page with no versioned
+        # URL, so requireFile pins the manually downloaded AppImage; after
+        # fetching a new build from
+        # https://store.epicgames.com/en-US/install/ng/ (and bumping the hash),
+        # re-satisfy the build with
+        #   nix-store --add-fixed sha256 ~/Downloads/EpicGamesLauncher-x86_64.AppImage
+        # The runScript must unset APPIMAGE: the launcher keys its AppImage
+        # self-updater (rename + relaunch of the running AppImage) on that
+        # variable, and with it set it treats itself as a self-updating
+        # AppImage instead of a flake-managed build.
+        epicLauncherAppImage = pkgs.requireFile {
+          name = "EpicGamesLauncher-x86_64.AppImage";
+          url = "https://store.epicgames.com/en-US/install/ng/";
+          hash = "sha256-wp0ccwRNhmJxkTcWUhTpaWtp/QJB90JrHjHSXVp2mW8=";
+        };
+        epicLauncherContents = pkgs.appimageTools.extract {
+          pname = "epicgameslauncher";
+          version = "0.95.1";
+          src = epicLauncherAppImage;
+        };
+        epicLauncherRun = pkgs.writeShellScript "epicgameslauncher-run" ''
+          # See above: APPIMAGE flips the launcher into AppImage self-update mode.
+          unset APPIMAGE
+          exec appimage-exec.sh -w ${epicLauncherContents} -- "$@"
+        '';
+        epicgameslauncher = pkgs.buildFHSEnv (
+          pkgs.appimageTools.defaultFhsEnvArgs
+          // {
+            name = "epicgameslauncher";
+            runScript = "${epicLauncherRun}";
+            targetPkgs =
+              p:
+              [ pkgs.appimageTools.appimage-exec ]
+              ++ pkgs.appimageTools.defaultFhsEnvArgs.targetPkgs p;
+            # Ship the bundled entry (it carries the com.epicgames.launcher
+            # deep-link handler) with Exec pointed at the wrapper; the
+            # AppRun GTK hook forces GDK_BACKEND=x11 (Tauri's Wayland backend
+            # crashes — tauri#8541) and wires schemas/typelibs into the bundle.
+            extraInstallCommands = ''
+              install -Dm644 ${epicLauncherContents}/usr/share/applications/epic-games-launcher.desktop \
+                $out/share/applications/epic-games-launcher.desktop
+              substituteInPlace $out/share/applications/epic-games-launcher.desktop \
+                --replace "Exec=EpicGamesLauncher" "Exec=epicgameslauncher"
+              for size in 32x32 128x128 256x256@2; do
+                install -Dm644 ${epicLauncherContents}/usr/share/icons/hicolor/$size/apps/EpicGamesLauncher.png \
+                  $out/share/icons/hicolor/$size/apps/EpicGamesLauncher.png
+              done
+            '';
+            meta = {
+              description = "Epic Games Launcher (Linux preview)";
+              homepage = "https://store.epicgames.com/en-US/install/ng/";
+              platforms = [ "x86_64-linux" ];
+              license = lib.licenses.unfree;
+            };
+          }
+        );
       in
       {
         # HTTP/2 is disabled in the Steam client through the user config below.
@@ -74,6 +136,7 @@
           wine
           heroic
           bottles
+          epicgameslauncher
           qbittorrent
           mangojuice
         ];

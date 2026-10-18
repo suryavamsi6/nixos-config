@@ -1,16 +1,17 @@
 # MangoWM — NixOS session and Home Manager configuration
 { lib, ... }:
 let
-  mangoWlOnly = pkgs: pkgs.mango.overrideAttrs (old: {
-    pname = "mango-wl-only";
-    version = "0.16.3";
+  # Pinned 0.18.1 (newer than nixpkgs' 0.18.0). Upstream made scenefx-0.5 a
+  # hard dependency in 0.18.x, so the old scenefx-stripped wl-only build is
+  # gone; nixpkgs' scenefx 0.5 provides the Vulkan/HDR renderer path instead.
+  mangoPinned = pkgs: pkgs.mango.overrideAttrs (_: {
+    version = "0.18.1";
     src = pkgs.fetchFromGitHub {
       owner = "mangowm";
       repo = "mango";
-      rev = "f637c0c81166a801861fa0c1d49c8f3c31a3fc84";
-      hash = "sha256-F9NP/KoCEl/2XQEq/WDaN92rsATyPFz1m3Vcot23FxY=";
+      rev = "91e3f6884826ba4529c90afaff2762b5b3956bd6";
+      hash = "sha256-khk5mQE0pA+gMQXs+7Z1HD7sxHys50LzF5oleeqYwRo=";
     };
-    buildInputs = lib.filter (input: input != pkgs.scenefx) old.buildInputs;
   });
 in
 {
@@ -21,10 +22,9 @@ in
       {
         # The pinned nixpkgs module provides the package, session entry, and
         # WLR/GTK portal routing. These two options are intentionally explicit:
-        # nixpkgs' module does not enable them for us.
         programs.mango = {
           enable = true;
-          package = mangoWlOnly pkgs;
+          package = mangoPinned pkgs;
         };
         programs.xwayland.enable = true;
         security.polkit.enable = true;
@@ -65,7 +65,7 @@ in
     default =
       { config, inputs, pkgs, ... }:
       let
-        mango = mangoWlOnly pkgs;
+        mango = mangoPinned pkgs;
         home = config.home.homeDirectory;
         scripts = "${home}/.config/hypr/scripts";
         qs = "${scripts}/qs_manager.sh";
@@ -154,7 +154,7 @@ in
             "${scripts}/quickshell/focustime/focus_daemon.py"
         '';
         configText = ''
-          # MangoWM 0.16.3 wl-only — dwindle tags trial
+          # MangoWM pinned 0.18.1 — dwindle tags trial
           animations=1
           layer_animations=1
           animation_type_open=slide
@@ -167,7 +167,8 @@ in
           animation_curve_move=0.46,1.0,0.29,1
           animation_curve_tag=0.46,1.0,0.29,1
           animation_curve_close=0.08,0.92,0,1
-          # HDR-capable wl-only Mango uses Vulkan without the Scenefx renderer.
+          # HDR rendering goes through scenefx 0.5's Vulkan path; keep the
+          # renderer forced to vulkan.
           env=WLR_RENDERER,vulkan
           hdr_depth=2
 
@@ -176,8 +177,8 @@ in
           tag_num=9
 
           # MAG 341C OLED. Keep all coordinates non-negative for XWayland.
-          monitorrule=name:^HDMI-A-2$,width:3440,height:1440,refresh:175,x:0,y:0,scale:1,hdr:1,hdr_force:1,vrr:0
-          monitorrule=name:^HDMI-A-1$,width:3440,height:1440,refresh:175,x:0,y:0,scale:1,hdr:1,hdr_force:1,vrr:0
+          monitor_rule=name:^HDMI-A-2$,width:3440,height:1440,refresh:175,x:0,y:0,scale:1,hdr:1,hdr_force:1,vrr:0
+          monitor_rule=name:^HDMI-A-1$,width:3440,height:1440,refresh:175,x:0,y:0,scale:1,hdr:1,hdr_force:1,vrr:0
 
           # Input and appearance.
           xkb_rules_layout=us
@@ -193,32 +194,32 @@ in
           focus_on_activate=1
           focus_cross_monitor=0
           focus_cross_tag=0
-          sloppyfocus=1
-          warpcursor=1
-          gappih=5
-          gappiv=5
-          gappoh=10
-          gappov=10
-          borderpx=4
-          smartgaps=0
+          sloppy_focus=1
+          warp_cursor=1
+          gap_inner_horizontal=5
+          gap_inner_vertical=5
+          gap_outer_horizontal=10
+          gap_outer_vertical=10
+          border_px=4
+          smart_gaps=0
           focused_opacity=1.0
           unfocused_opacity=1.0
-          focuscolor=0xc9b890ff
-          urgentcolor=0xad401fff
+          focus_color=0xc9b890ff
+          urgent_color=0xad401fff
 
           # Tags 1–9: Super+number switches; Ctrl+number is retained as an alias.
           # Super+Shift+number toggles membership in a second tag.
           # Semantic labels: 1 code, 2 web, 3 chat, 4 media, 5 game, 6 work, 7 files, 8 misc, 9 staging.
-          tagrule=id:*,layout_name:dwindle
-          tagrule=id:1,layout_name:dwindle
-          tagrule=id:2,layout_name:dwindle
-          tagrule=id:3,layout_name:dwindle
-          tagrule=id:4,layout_name:dwindle
-          tagrule=id:5,layout_name:dwindle
-          tagrule=id:6,layout_name:dwindle
-          tagrule=id:7,layout_name:dwindle
-          tagrule=id:8,layout_name:dwindle
-          tagrule=id:9,layout_name:dwindle
+          tag_rule=id:*,layout_name:dwindle
+          tag_rule=id:1,layout_name:dwindle
+          tag_rule=id:2,layout_name:dwindle
+          tag_rule=id:3,layout_name:dwindle
+          tag_rule=id:4,layout_name:dwindle
+          tag_rule=id:5,layout_name:dwindle
+          tag_rule=id:6,layout_name:dwindle
+          tag_rule=id:7,layout_name:dwindle
+          tag_rule=id:8,layout_name:dwindle
+          tag_rule=id:9,layout_name:dwindle
 
           # Super is the primary modifier for launchers, apps, and compositor actions.
           bind=ALT,space,spawn_shell,serpantinum msg toggle launcher
@@ -323,7 +324,6 @@ in
           bind=NONE,XF86AudioMute,spawn,swayosd-client --output-volume mute-toggle
           bind=NONE,XF86AudioMicMute,spawn,swayosd-client --input-volume mute-toggle
           bind=NONE,XF86AudioPlay,spawn,playerctl play-pause
-          bind=NONE,XF86AudioPause,spawn,playerctl play-pause
           bind=NONE,XF86AudioNext,spawn,playerctl next
           bind=NONE,XF86AudioPrev,spawn,playerctl previous
 
@@ -334,18 +334,18 @@ in
           axisbind=SUPER,DOWN,viewtoright_have_client
 
           # Dialogs and helper windows should not disrupt the dwindle layout.
-          windowrule=isfloating:1,width:500,height:300,appid:^blueman-manager$
-          windowrule=isfloating:1,width:500,height:600,appid:^nm-connection-editor$
-          windowrule=isfloating:1,width:700,height:400,appid:^xdg-desktop-portal-gtk$
-          windowrule=isfloating:1,width:1100,height:750,appid:^(org\.kde\.polkit-kde-authentication-agent-1|polkit-gnome-authentication-agent-1|gcr-prompter)$
-          windowrule=isfloating:1,width:960,height:720,appid:^(PrimaryAuthManager|AuthManagerDaemon|UtilDaemon)$
-          windowrule=isfloating:1,isglobal:1,appid:^(zoom|Zoom)$
-          windowrule=isfloating:1,title:^(Open File|Select a File|Save As|File Upload).*$
-          windowrule=idleinhibit_when_focus:1,appid:^(steam_app_.*|gamescope)$
+          window_rule=is_floating:1,width:500,height:300,app_id:^blueman-manager$
+          window_rule=is_floating:1,width:500,height:600,app_id:^nm-connection-editor$
+          window_rule=is_floating:1,width:700,height:400,app_id:^xdg-desktop-portal-gtk$
+          window_rule=is_floating:1,width:1100,height:750,app_id:^(org\.kde\.polkit-kde-authentication-agent-1|polkit-gnome-authentication-agent-1|gcr-prompter)$
+          window_rule=is_floating:1,width:960,height:720,app_id:^(PrimaryAuthManager|AuthManagerDaemon|UtilDaemon)$
+          window_rule=is_floating:1,is_global:1,app_id:^(zoom|Zoom)$
+          window_rule=is_floating:1,title:^(Open File|Select a File|Save As|File Upload).*$
+          window_rule=idle_inhibit_when_focus:1,app_id:^(steam_app_.*|gamescope)$
           # Steam/gamescope games may use VRR only while truly fullscreen.
-          windowrule=vrr_only_fullscreen:1,appid:^(steam_app_.*|gamescope)$
+          window_rule=vrr_only_fullscreen:1,app_id:^(steam_app_.*|gamescope)$
 
-          exec-once=${home}/.config/mango/autostart.sh
+          exec_once=${home}/.config/mango/autostart.sh
         '';
         validatedConfig = pkgs.runCommand "mango-config.conf" { } ''
           cp ${pkgs.writeText "mango-config.conf" configText} "$out"

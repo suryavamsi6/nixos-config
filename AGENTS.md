@@ -104,14 +104,6 @@ Do not run a rebuild, switch, reboot, container update, secret rotation, or dest
 - Runtime secrets and credentials belong in the referenced external `.env` files or generated state, never in this repository. Do not expose secret contents in logs, diffs, prompts, or URLs.
 - Do not update mutable container tags, regenerate secrets, modify DNS/firewall exposure, or restart/rebuild the Pi unless explicitly requested. Validate mounts, environment files, service dependencies, and data paths before deploying.
 
-## Hermes Desktop Worker
-
-- `modules/packages/hermes-desktop.nix` configures the always-on Pi Hermes integration: SSH key authorization for `surya`, magic-packet WoL on `enp14s0`, and CUDA Ollama reachable only on the wired LAN.
-- Hermes runs on the Raspberry Pi under `/home/suryavamsi/hermes/`; its persistent state is `/home/suryavamsi/.hermes`. Do not store Pi credentials, OAuth credentials, or router API keys in this repository.
-- The desktop is a worker, not an always-on host. Hermes must use a dedicated SSH key, never broad passwordless sudo; it must not suspend or power off the desktop.
-- Private/unknown/tool-output conversations must remain on the desktop's local Ollama model. Cloud routing is allowed only after a deterministic, full-conversation privacy check; local inference failure must return an error, never fall back to cloud.
-- Before changing this integration, back up Pi Hermes `config.yaml`, `.env`, `auth.json`, and Compose configuration. Verify Pi-to-desktop SSH, the Ollama `/v1/models` endpoint, GPU inference, and WoL separately.
-
 ## Runtime/Tooling Preferences
 
 Nix is the build/configuration system; use flakes and the repository's pinned inputs. Target systems are `x86_64-linux`, `aarch64-linux`, and `aarch64-darwin`. User shells are Fish; the desktop terminal is Ghostty. Quickshell is the configured desktop shell, wrapped with the required Qt6 QML import paths.
@@ -124,6 +116,12 @@ Development tools provided by the configuration include `nixfmt`, `treefmt`, `ni
 - Prefer deterministic local tools, caches, and local models when reliable. Delegate only work that benefits from delegation.
 - Avoid polling and redundant status requests; use notifications or bounded waits where available.
 - When batching would reduce correctness or safety, make the smallest number of focused provider requests necessary.
+
+## Updating Pins
+
+`nix run .#update-pins` audits every pinned application in `modules/packages/` and `modules/mangowm/`: it resolves the newest upstream release, prefetches the hash, and reports what moved. Pass `--write` to rewrite the modules, `--build` to build `#nixos` afterwards, `--only orca,zcode` to narrow the run, and `--flake` to also run `nix flake update`. The implementation is `scripts/update-pins.py`.
+
+Do not convert a pin to `@latest`. Nix resolves fixed-output hashes at evaluation time, so a rolling version is unrepresentable; the rolling tools (pi, agent-browser, qmd, grok, feynman, deepseek-harness) instead run through `pnpm dlx …@latest` at runtime. `zoom-vdi`, `epic-launcher`, `capy`, and `autoclaw` have no machine-readable release index and stay manual.
 
 ## Testing & QA
 

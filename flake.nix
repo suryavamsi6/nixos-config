@@ -24,7 +24,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     opencode = {
-      url = "github:anomalyco/opencode/v2.0.15";
+      url = "github:anomalyco/opencode/v2.0.32";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     hunk = {
@@ -72,5 +72,25 @@
         "aarch64-darwin"
       ];
       imports = [ ./modules ];
+      # `nix run .#update-pins` audits every pinned app, prefetches the new
+      # hashes, and (with --write) rewrites the modules. See the script header.
+      perSystem =
+        { pkgs, ... }:
+        {
+          packages.update-pins = pkgs.writeShellApplication {
+            name = "update-pins";
+            runtimeInputs = [
+              pkgs.python3
+              pkgs.nix
+              pkgs.curl
+              pkgs.git
+              pkgs.cacert
+            ];
+            text = ''
+              export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+              exec python3 ${./scripts/update-pins.py} "$@"
+            '';
+          };
+        };
     };
 }
