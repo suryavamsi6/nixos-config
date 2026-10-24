@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in *.nix) command -v nixfmt >/dev/null 2>&1 && nixfmt \"$f\" 2>/dev/null || true ;; esac"
+          },
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in *.nix) if ! out=$(nix-instantiate --parse \"$f\" 2>&1); then printf 'Nix parse failed for %s:\\n%s\\nFix the syntax error before proceeding.\\n' \"$f\" \"$out\" >&2; exit 2; fi ;; esac"
+          }
+        ]
+      }
+    ]
+  }
+}

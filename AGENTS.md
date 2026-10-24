@@ -99,7 +99,7 @@ Do not run a rebuild, switch, reboot, container update, secret rotation, or dest
 
 - `#raspberry-pi` is an `aarch64-linux` NixOS host named `pi`, administered as `suryavamsi`; its configuration currently lives in `modules/hosts/nixos-raspberry-pi.nix`.
 - Core services include SSH, Tailscale, Nginx, Cockpit, AdGuard Home, Unbound, and Redis-backed DNS caching.
-- Podman is the OCI backend; Docker is disabled. Managed containers include MariaDB, Nextcloud, Open WebUI, Booklore, Jellyfin, Paperless-ngx, Redis for Paperless, and Speedtest Tracker.
+- Podman is the OCI backend; Docker is disabled. Managed containers include MariaDB, Nextcloud, Booklore, and Speedtest Tracker.
 - Persistent storage includes `/mnt/media`, `/var/lib/AdGuardHome`, and `/var/lib/redis-unbound`. Preserve mount ordering, ownership, container dependencies, network wiring, and firewall/reverse-proxy behavior.
 - Runtime secrets and credentials belong in the referenced external `.env` files or generated state, never in this repository. Do not expose secret contents in logs, diffs, prompts, or URLs.
 - Do not update mutable container tags, regenerate secrets, modify DNS/firewall exposure, or restart/rebuild the Pi unless explicitly requested. Validate mounts, environment files, service dependencies, and data paths before deploying.
@@ -121,7 +121,7 @@ Development tools provided by the configuration include `nixfmt`, `treefmt`, `ni
 
 `nix run .#update-pins` audits every pinned application in `modules/packages/` and `modules/mangowm/`: it resolves the newest upstream release, prefetches the hash, and reports what moved. Pass `--write` to rewrite the modules, `--build` to build `#nixos` afterwards, `--only orca,zcode` to narrow the run, and `--flake` to also run `nix flake update`. The implementation is `scripts/update-pins.py`.
 
-Do not convert a pin to `@latest`. Nix resolves fixed-output hashes at evaluation time, so a rolling version is unrepresentable; the rolling tools (pi, agent-browser, qmd, grok, feynman, deepseek-harness) instead run through `pnpm dlx …@latest` at runtime. `zoom-vdi`, `epic-launcher`, `capy`, and `autoclaw` have no machine-readable release index and stay manual.
+Do not convert a pin to `@latest`. Nix resolves fixed-output hashes at evaluation time, so a rolling version is unrepresentable; the rolling tools (pi, agent-browser, qmd, grok, feynman, deepseek-harness) instead run through `pnpm dlx …@latest` at runtime. `zoom-vdi`, `epic-launcher`, and `capy` have no machine-readable release index and stay manual.
 
 ## Testing & QA
 

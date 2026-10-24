@@ -1,10 +1,14 @@
-# Audio — PipeWire (NixOS)
+# Audio — PipeWire (NixOS) + EasyEffects (home-manager)
 { lib, ... }:
 {
   options.flake.modules.nixos.audio = lib.mkOption {
     type = lib.types.deferredModule;
     default = { pkgs, ... }: {
       security.rtkit.enable = true;
+
+      # EasyEffects stores its settings through GSettings/KConfig; the
+      # daemon needs the dconf service at runtime.
+      programs.dconf.enable = true;
 
       # MediaTek MT7922 (btusb). Keep autosuspend off so A2DP does not
       # drop on idle.
@@ -18,10 +22,10 @@
         "-${pkgs.util-linux}/bin/rfkill unblock bluetooth"
       ];
 
-      # Keep the Bluetooth headset profiles available so applications can
-      # select the ACCENTUM microphone. WirePlumber switches A2DP to HFP
-      # only while capture is active; Bluetooth cannot carry both profiles
-      # concurrently, so playback quality changes to the headset codec then.
+      # The ACCENTUM Plus stays A2DP-only: the PD200X is this machine's
+      # microphone, and WirePlumber registers no HFP/HSP endpoints for the
+      # headset (see bluez5.roles below), so playback never drops to the
+      # headset codec.
       # Exclude only the battery plugin, whose GATT notifications destabilize
       # this headset; do not disable the headset plugin.
       systemd.services.bluetooth.serviceConfig.ExecStart = lib.mkForce [
@@ -48,9 +52,8 @@
         alsa.support32Bit = true;
         pulse.enable = true;
 
-        # Keep the ACCENTUM Plus on aptX HD until an application actually
-        # records from its microphone. WirePlumber then switches it to mSBC
-        # HFP for full-duplex audio and restores A2DP after capture ends.
+        # Keep the ACCENTUM Plus on aptX HD permanently; the PD200X handles
+        # all capture, so the headset never needs to leave A2DP.
         # Skip LE Audio (BAP) — it reconnect-loops on this chip. Games request
         # Pulse quantum 32 against a 44.1 kHz HD sink while the graph is locked
         # to 48 kHz, so allow 44.1 kHz and pin the Bluetooth node quantum.
@@ -64,24 +67,22 @@
         };
         wireplumber.extraConfig."51-bluez-headset" = {
           "wireplumber.settings" = {
-            "bluetooth.autoswitch-to-headset-profile" = true;
-            # Do not restore a stale HFP state after a failed transport; the
-            # active capture stream will request HFP again when it is needed.
+            # A2DP-only: never flip the headset to a capture profile.
+            "bluetooth.autoswitch-to-headset-profile" = false;
+            # WirePlumber's saved state still carries HFP profiles from the
+            # autoswitch era; do not restore them onto a card that no longer
+            # registers HFP endpoints.
             "bluetooth.use-persistent-storage" = false;
           };
           "monitor.bluez.properties" = {
-            "bluez5.hfphsp-backend" = "native";
             "bluez5.enable-sbc-xq" = true;
-            "bluez5.enable-msbc" = true;
             "bluez5.enable-hw-volume" = true;
-            # Keep both role directions available for PipeWire's BlueZ
-            # profile negotiation; only the auto-connect list below is
-            # restricted so HFP is opened strictly on microphone demand.
+            # A2DP playback only. No hfp/hsp roles are registered, so the
+            # headset exposes no microphone and the codec never changes;
+            # capture is the PD200X's job.
             "bluez5.roles" = [
               "a2dp_sink"
               "a2dp_source"
-              "hfp_hf"
-              "hfp_ag"
             ];
           };
           "monitor.bluez.rules" = [
@@ -89,11 +90,9 @@
               matches = [ { "device.name" = "~bluez_card.*"; } ];
               actions = {
                 update-props = {
-                  # Connect playback only. The autoswitch policy opens the
-                  # headset's HFP role on demand when its microphone is used;
-                  # eagerly connecting HFP races A2DP and churns both nodes.
+                  # Connect playback only; no HFP endpoints exist to race it.
                   "bluez5.auto-connect" = [ "a2dp_sink" ];
-                  "bluez5.hw-volume" = [ "a2dp_sink" "hfp_hf" ];
+                  "bluez5.hw-volume" = [ "a2dp_sink" ];
                 };
               };
             }
@@ -105,6 +104,28 @@
                   "session.suspend-timeout-seconds" = 0;
                   "pulse.min.req" = "1024/44100";
                   "pulse.min.quantum" = "1024/44100";
+                };
+              };
+            }
+          ];
+        };
+
+        # MAONO PD200X (usb 352f:0104). Pin it as the default source so
+        # recording apps stop falling back to the webcam, and keep its
+        # ALSA node resumed: a USB mic that suspends clips the first
+        # syllable after idle. The node name embeds the unit's USB serial;
+        # update it if the mic is replaced.
+        wireplumber.extraConfig."51-pd200x-mic" = {
+          "wireplumber.settings" = {
+            "default.configured.audio.source" =
+              "alsa_input.usb-352f_PD200X_Podcast_Microphone_214b206000000178-00.mono-fallback";
+          };
+          "monitor.alsa.rules" = [
+            {
+              matches = [ { "node.name" = "~alsa_input.usb-352f_PD200X.*"; } ];
+              actions = {
+                update-props = {
+                  "session.suspend-timeout-seconds" = 0;
                 };
               };
             }
@@ -162,6 +183,167 @@
           '';
         };
       };
+    };
+  };
+
+  # EasyEffects input chain for the MAONO PD200X (home-manager). The
+  # service runs in the background from graphical-session.target; the
+  # preset targets the default source, which the NixOS audio module pins
+  # to the PD200X. Chain order: high-pass (rumble) -> RNNoise (fan/room
+  # noise) -> gate (residual noise between words) -> compressor -> EQ
+  # (mud cut, presence lift) -> limiter. Values follow EasyEffects 8.x;
+  # keys not listed keep the plugin defaults. Tune per-app or in the GUI
+  # from here.
+  options.flake.modules.homeManager.easyeffects = lib.mkOption {
+    type = lib.types.deferredModule;
+    default = { ... }: {
+      services.easyeffects = {
+        enable = true;
+        preset = {
+          input = "maono-pd200x";
+          output = "";
+        };
+        # Community voice presets to compare against maono-pd200x. All are
+        # EE 8-native (validated against the 8.3 plugin schemas) and
+        # vendored verbatim; none are autoloaded — pick them in the
+        # EasyEffects preset menu and flip `preset.input` above if one
+        # wins. Upstreams:
+        #  - npr-voice: jtrv, "Masc NPR Voice + Noise Reduction"
+        #    https://gist.github.com/jtrv/47542c8be6345951802eebcf9dc7da31
+        #  - voice-broadcast / voice-noise-suppression: m0rf30's MIT
+        #    collection https://github.com/m0rf30/easyeffects-presets
+        extraPresets."maono-pd200x".input = {
+          blocklist = [ ];
+          plugins_order = [
+            "filter#0"
+            "rnnoise#0"
+            "gate#0"
+            "compressor#0"
+            "equalizer#0"
+            "limiter#0"
+          ];
+
+          # 12 dB/oct high-pass at 80 Hz: desk thumps and plosives.
+          "filter#0" = {
+            bypass = false;
+            type = "High-pass";
+            slope = "x2";
+            frequency = 80.0;
+          };
+
+          "rnnoise#0" = {
+            bypass = false;
+            "use-standard-model" = true;
+          };
+
+          # Gentle gate below the speech floor; opens at -45 dB so speech
+          # survives leaning back from the mic (~1 m costs 12-16 dB), closes
+          # only -22 dB so misses never hard-mute a word tail. Room floor
+          # sits near -49 dB raw, keeping a few dB of margin.
+          "gate#0" = {
+            bypass = false;
+            "curve-threshold" = -45.0;
+            "curve-zone" = -5.0;
+            reduction = -22.0;
+            release = 150.0;
+          };
+
+          "compressor#0" = {
+            bypass = false;
+            threshold = -20.0;
+            ratio = 3.0;
+            attack = 10.0;
+            release = 120.0;
+            knee = -6.0;
+            makeup = 4.0;
+          };
+
+          "equalizer#0" = {
+            bypass = false;
+            "num-bands" = 3;
+            "split-channels" = false;
+            left = {
+              band0 = {
+                type = "Lo-shelf";
+                mode = "RLC (BT)";
+                slope = "x1";
+                solo = false;
+                mute = false;
+                gain = -2.0;
+                frequency = 110.0;
+                q = 1.0;
+                width = 4.0;
+              };
+              band1 = {
+                type = "Bell";
+                mode = "RLC (BT)";
+                slope = "x1";
+                solo = false;
+                mute = false;
+                gain = 2.0;
+                frequency = 3200.0;
+                q = 1.0;
+                width = 4.0;
+              };
+              band2 = {
+                type = "Hi-shelf";
+                mode = "RLC (BT)";
+                slope = "x1";
+                solo = false;
+                mute = false;
+                gain = 1.0;
+                frequency = 9000.0;
+                q = 1.0;
+                width = 4.0;
+              };
+            };
+            right = {
+              band0 = {
+                type = "Lo-shelf";
+                mode = "RLC (BT)";
+                slope = "x1";
+                solo = false;
+                mute = false;
+                gain = -2.0;
+                frequency = 110.0;
+                q = 1.0;
+                width = 4.0;
+              };
+              band1 = {
+                type = "Bell";
+                mode = "RLC (BT)";
+                slope = "x1";
+                solo = false;
+                mute = false;
+                gain = 2.0;
+                frequency = 3200.0;
+                q = 1.0;
+                width = 4.0;
+              };
+              band2 = {
+                type = "Hi-shelf";
+                mode = "RLC (BT)";
+                slope = "x1";
+                solo = false;
+                mute = false;
+                gain = 1.0;
+                frequency = 9000.0;
+                q = 1.0;
+                width = 4.0;
+              };
+            };
+          };
+
+          "limiter#0" = {
+            bypass = false;
+            threshold = -1.0;
+          };
+        };
+      };
+      xdg.dataFile."easyeffects/input/npr-voice.json".source = ./presets/npr-voice.json;
+      xdg.dataFile."easyeffects/input/voice-broadcast.json".source = ./presets/voice-broadcast.json;
+      xdg.dataFile."easyeffects/input/voice-noise-suppression.json".source =
+        ./presets/voice-noise-suppression.json;
     };
   };
 }

@@ -1,0 +1,3 @@
+- insert:
+    - id: openrouter-provider
+      name: '@local/openrouter-provider'

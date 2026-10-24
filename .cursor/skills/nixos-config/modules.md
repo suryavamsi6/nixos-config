@@ -11,7 +11,7 @@ Each leaf file **declares** `options.flake.modules.*`. Hosts **select** which to
 | `mango` | `nixos-mango.nix` | MangoWM + Serpantinum |
 | `macbook-air` | `darwin-macbook-air.nix` | nix-darwin |
 
-`#nixos` HM user `surya` currently imports: `shell`, `hyprland`, `serpantinum`, `wallpapers`, `dev`, `work`, `gaming`, `gridwatch`, `comfyui`, `hermesDesktop`, `capy`, `zenBrowser`. `#mango` also imports `capy`.
+`#nixos` HM user `surya` currently imports: `shell`, `hyprland`, `serpantinum`, `wallpapers`, `dev`, `work`, `gaming`, `gridwatch`, `comfyui`, `hermesDesktop`, `capy`, `claudeCodeRouter`, `zenBrowser`. `#mango` also imports `capy` and `claudeCodeRouter`.
 
 ## Where to edit
 
@@ -21,6 +21,7 @@ Each leaf file **declares** `options.flake.modules.*`. Hosts **select** which to
 | Packages (dev / HM) | `modules/packages/dev.nix` (agent CLIs; OpenResearch/Epic-launcher wrappers) |
 | Hermes Desktop (Electron shell for Hermes) | `modules/packages/hermes-desktop.nix` (pinned `install.sh` → `~/.hermes/hermes-agent`; electron-builder `--dir` → `linux-unpacked/{h,H}ermes` via FHS env runner; `#nixos` host carries the `programs.nix-ld` block) |
 | Capy desktop | `modules/packages/capy.nix` (`homeManager.capy` on `#nixos` and `#mango`). Pinned `downloads.capy.ai` **tarball**, not the AppImage. Same-length `APPIMAGE` → `CAPY_BIN` patch in `app.asar`; do not set `APPIMAGE` |
+| Claude Code Router | `modules/packages/claude-code-router.nix` (`homeManager.claudeCodeRouter` on `#nixos` and `#mango`). Pinned GitHub AppImage. Exec the ELF in the FHS env; do not set `APPIMAGE` (electron-updater). Upstream always passes `--no-sandbox` |
 | Citrix / Zoom / Zoom VDI plugin | `modules/packages/work.nix`, `citrix-adapter-wfica-shim.sh`, `zoomvdi-universal-plugin.nix` (gnome-keyring for CLStore; `gcr-ssh-agent` off) |
 | PipeWire, BlueZ | `modules/audio/default.nix` (Intel `btusb`; A2DP-only) |
 | Limine, Windows chainload | `modules/boot/default.nix` |

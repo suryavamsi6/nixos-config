@@ -46,7 +46,10 @@
             url = "https://github.com/unslothai/unsloth/releases/download/v0.1.908-beta/Unsloth-Desktop-Linux.AppImage";
             hash = "sha256-N7Nzb2zqm/db/zhvr7OuPhVy83Z+AHBng9PpasQVbCs=";
           };
-          extraPkgs = pkgs: [ pkgs.libnotify pkgs.libnghttp2 ];
+          extraPkgs = pkgs: [
+            pkgs.libnotify
+            pkgs.libnghttp2
+          ];
         };
         unslothDesktopEntry = pkgs.makeDesktopItem {
           name = "unsloth";
@@ -55,7 +58,10 @@
           exec = "${unslothDesktop}/bin/unsloth-desktop";
           icon = "applications-science";
           terminal = false;
-          categories = [ "Development" "Education" ];
+          categories = [
+            "Development"
+            "Education"
+          ];
         };
         koboldcpp = pkgs.writeShellApplication {
           name = "koboldcpp";
@@ -82,7 +88,8 @@
             exec "$binary" "$@"
           '';
         };
-      in {
+      in
+      {
         environment.systemPackages = with pkgs; [
           pavucontrol
           pulseaudio
@@ -114,7 +121,6 @@
           qsWrapped
         ];
 
-
         services.upower.enable = true;
         services.blueman.enable = true;
         zramSwap = {
@@ -126,7 +132,7 @@
         # This avoids kswapd churn and zram write failures on the 32 GiB desktop.
         boot.kernel.sysctl."vm.swappiness" = 10;
         # Desktop sessions run several Chromium/Electron-class file watchers at
-        # once (Emdash, Steam's CEF, Zen, editors) and each one adds its own
+        # once (Steam's CEF, Zen, editors) and each one adds its own
         # inotify watch per directory. The budget is per UID and counts
         # (instance, inode) pairs, while watches on unlinked inodes stay charged
         # until the owning process exits -- so a few apps over a $HOME-sized

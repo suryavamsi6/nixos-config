@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Canva MCP",
+    "description": "连接 Canva 远程 MCP 服务器（mcp.canva.com），让设计工具对模型可用。需要在行的 headers 配置里填入 Canva Connect 令牌。"
+  }
+}

@@ -101,6 +101,8 @@
             homeManager.gaming
             homeManager.gridwatch
             homeManager.capy
+            homeManager.claudeCodeRouter
+            homeManager.onepasswordMcp
             homeManager.zenBrowser
           ];
 

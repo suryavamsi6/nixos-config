@@ -230,7 +230,18 @@
               # per-game `MANGOHUD_CONFIGFILE` launch options take effect — in
               # Game Mode too, where gamescope's --mangoapp reads that same
               # config file for its own overlay.
+              #
+              # `STEAM_FORCE_DESKTOPUI_SCALING` (env form of
+              # `steam -forcedesktopscaling`) pins the desktop UI's scale factor.
+              # The CEF client otherwise re-derives it from the Xwayland screen
+              # whenever outputs change: while hypridle has the monitor DPMS-off
+              # that query returns degenerate geometry, so after the screen wakes
+              # Steam re-zooms itself to a bogus scale and steamwebhelper crashes
+              # on the rescale. The monitor is scale 1
+              # (modules/hyprland/lua/monitors.lua), so pinning 1 keeps the
+              # rendered size identical.
               extraProfile = ''
+                export STEAM_FORCE_DESKTOPUI_SCALING=1
                 export MANGOHUD=1
               '';
             };

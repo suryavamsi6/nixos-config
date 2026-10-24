@@ -129,6 +129,7 @@
         home-manager.users.surya = { pkgs, ... }: {
           imports = with config.flake.modules; [
             homeManager.shell
+            homeManager.easyeffects
             homeManager.hyprland
             homeManager.serpantinum
             homeManager.wallpapers
@@ -139,6 +140,8 @@
             homeManager.comfyui
             homeManager.hermesDesktop
             homeManager.capy
+            homeManager.claudeCodeRouter
+            homeManager.onepasswordMcp
             homeManager.zenBrowser
           ];
 

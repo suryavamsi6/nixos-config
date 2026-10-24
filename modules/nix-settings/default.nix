@@ -7,7 +7,10 @@
       nix = {
         package = pkgs.nix;
         settings = {
-          experimental-features = [ "nix-command" "flakes" ];
+          experimental-features = [
+            "nix-command"
+            "flakes"
+          ];
           auto-optimise-store = true;
           substituters = [
             "https://cache.nixos.org"
@@ -39,42 +42,32 @@
       systemd.settings.Manager.DefaultTimeoutStopSec = "15s";
       systemd.user.settings.Manager.DefaultTimeoutStopSec = "8s";
 
-      # googlefonts/nanoemoji retagged v0.16.0; nixpkgs hash is stale and
-      # blocks jetbrains-mono -> system fonts -> Steam FHS.
+      # nixpkgs' kmod aggregator always copies modules.cer after depmod
+      # (pkgs/os-specific/linux/kmod/aggregator.nix). Chaotic-Nyx CachyOS
+      # kernels do not ship that certificate — 7.2.11-cachyos has the
+      # modules.* indexes and no modules.cer — so the cp fails
+      # linux-*-modules and the whole system closure. Keep the merge for
+      # kernels that do ship a certificate. Drop this once nixpkgs guards
+      # the copy.
       nixpkgs.overlays = [
         (final: prev: {
-          pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
-            (pyfinal: pyprev: {
-              nanoemoji = pyprev.nanoemoji.overrideAttrs (old: {
-                src = old.src.override {
-                  hash = "sha256-FysyKC01XBnRiur5RR9fcsTxQqE8x0JJHSoe3q6JtKc=";
-                };
-              });
-            })
-          ];
-        })
-        # `makeBinaryWrapper` now rejects a `--prefix`/`--suffix` value that is
-        # empty or begins/ends with the separator (GHSA-p7v3-pr2c-8584): such a
-        # segment makes shells, execvp() and the dynamic loader search the
-        # current directory. `lazarus` wraps its launcher with
-        # `--prefix NIX_LDFLAGS ' ' "$(echo "$NIX_LDFLAGS" | sed -re 's/-rpath
-        # [^ ]+//g')"`, and stdenv's `_addRpathPrefix` puts the self-rpath
-        # first, so stripping it leaves a leading space and the check aborts
-        # `lazarus-qt6` in installPhase with `#error --prefix NIX_LDFLAGS would
-        # introduce an empty PATH-like segment`. That takes `goverlay` (which
-        # builds against lazarus-qt6) with it.
-        # Upstream fixed it in d02c4b3f3dbc ("lazarus: fix build", nixpkgs
-        # master 2026-10-01) by trimming that residue; the locked
-        # nixos-unstable rev c59305b predates the fix. Remove this overlay
-        # after the next nixpkgs bump. `lazarus`/`lazarus-qt5` carry the same
-        # line, but nothing here uses them.
-        (final: prev: {
-          lazarus-qt6 = prev.lazarus-qt6.overrideAttrs (old: {
-            postInstall = builtins.replaceStrings
-              [ ''$(echo "$NIX_LDFLAGS" | sed -re 's/-rpath [^ ]+//g')'' ]
-              [ ''$(echo "$NIX_LDFLAGS" | sed -re 's/-rpath [^ ]+//g' | sed -re 's/(^ *| *$)//g;')'' ]
-              old.postInstall;
-          });
+          aggregateModules =
+            modules:
+            (prev.aggregateModules modules).overrideAttrs (old: {
+              postBuild =
+                let
+                  start = "cp --no-preserve=mode,ownership --remove-destination \\";
+                  end = "xargs -d'\\n' cat >> modules.cer";
+                  withIf =
+                    builtins.replaceStrings [ start ] [ "if [ -e modules.cer ]; then\n${start}" ]
+                      old.postBuild;
+                  patched = builtins.replaceStrings [ end ] [ "${end}\nfi" ] withIf;
+                in
+                if withIf == old.postBuild || patched == withIf then
+                  throw "aggregateModules modules.cer workaround missed its target; nixpkgs aggregator.nix changed"
+                else
+                  patched;
+            });
         })
       ];
     };
@@ -89,7 +82,10 @@
         # The Pi deploy then copies that closure instead of compiling on the Pi.
         linux-builder.enable = true;
         settings = {
-          experimental-features = [ "nix-command" "flakes" ];
+          experimental-features = [
+            "nix-command"
+            "flakes"
+          ];
           # Performance: use all cores for builds
           max-jobs = "auto";
           http-connections = 50;

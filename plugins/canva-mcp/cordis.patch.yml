@@ -1,0 +1,14 @@
+- insert:
+    - id: canva-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: canva
+        transport: stdio
+        command: npx
+        args:
+          - -y
+          - mcp-remote@latest
+          - https://mcp.canva.com/mcp
+          - --transport
+          - http-only
+        failOnStartupError: false

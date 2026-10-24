@@ -25,6 +25,7 @@ import os
 import re
 import subprocess
 import sys
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 
@@ -197,18 +198,6 @@ PINS: list[Pin] = [
         hash_kind="file",
     ),
     Pin(
-        name="emdash",
-        file=DEVELOP,
-        anchor='pname = "emdash";',
-        version_re=r'version = "(?P<v>[0-9][0-9.]*)";',
-        version_tpl='version = "{v}";',
-        lookup={"kind": "github", "repo": "generalaction/emdash"},
-        url_re=r"https://github\.com/generalaction/emdash/releases/download/v[0-9.]+/emdash-x86_64\.AppImage",
-        url_tpl="https://github.com/generalaction/emdash/releases/download/v{v}/emdash-x86_64.AppImage",
-        hash_re=r'hash = "sha256-[^"]+";',
-        hash_kind="file",
-    ),
-    Pin(
         name="eigent",
         file=DEVELOP,
         anchor="eigentVersion = ",
@@ -253,6 +242,30 @@ PINS: list[Pin] = [
         version_tpl='version="{v}"',
         lookup={"kind": "github", "repo": "LostRuins/koboldcpp"},
         note="no hash: the launcher fetches the binary on first run",
+    ),
+    Pin(
+        name="claude-desktop",
+        file="modules/packages/claude-desktop.nix",
+        anchor='version = "',
+        version_re=r'version = "(?P<v>[0-9][0-9.]*)";',
+        version_tpl='version = "{v}";',
+        lookup={"kind": "claude-desktop"},
+        hash_re=r'hash = "sha256-[^"]+";',
+        hash_kind="file",
+        hash_url="https://downloads.claude.ai/claude-desktop/apt/stable/pool/main/c/claude-desktop/claude-desktop_{v}_amd64.deb",
+        note="apt index; a new build-number series can trip the minor-jump guard",
+    ),
+    Pin(
+        name="claude-code-router",
+        file="modules/packages/claude-code-router.nix",
+        anchor="ccrVersion = ",
+        version_re=r'ccrVersion = "(?P<v>[0-9][0-9.]*)";',
+        version_tpl='ccrVersion = "{v}";',
+        lookup={"kind": "github", "repo": "musistudio/claude-code-router"},
+        url_re=r'url = "https://github\.com/musistudio/claude-code-router/releases/download/v[0-9.]+/Claude-Code-Router_[0-9.]+\.AppImage";',
+        url_tpl='url = "https://github.com/musistudio/claude-code-router/releases/download/v{v}/Claude-Code-Router_{v}.AppImage";',
+        hash_re=r'hash = "sha256-[^"]+";',
+        hash_kind="file",
     ),
     Pin(
         name="capy",
@@ -301,29 +314,40 @@ PINS: list[Pin] = [
         hash_url="https://cdn-zcode.z.ai/zcode/electron/releases/{v}/linux-x64/ZCode-{v}-linux-x64.AppImage",
     ),
     Pin(
-        name="autoclaw",
+        name="deepseek-harness",
         file=DEVELOP,
-        anchor="autoclawVersion = ",
-        version_re=r'autoclawVersion = "(?P<v>[0-9][0-9.]*)";',
-        version_tpl='autoclawVersion = "{v}";',
-        lookup={
-            "kind": "manual",
-            "note": "Linux build is published only through the site download button",
-        },
+        anchor='pname = "deepseek-harness";',
+        version_re=r'version = "(?P<v>[0-9][0-9.]*(?:-rc\.[0-9]+)?)";',
+        version_tpl='version = "{v}";',
+        lookup={"kind": "npm", "package": "@deepseek-ai/dsh"},
+        url_re=r'url = "https://registry\.npmjs\.org/@deepseek-ai/dsh/-/dsh-[0-9.]+(?:-rc\.[0-9]+)?\.tgz";',
+        url_tpl='url = "https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-{v}.tgz";',
+        hash_re=r'hash = "sha256-[^"]+";',
+        hash_kind="file",
+        note="on bump also regenerate dsh-package-lock.json and refresh npmDepsHash",
     ),
     Pin(
-        name="t3code",
+        name="dsh-node",
         file=DEVELOP,
-        anchor="t3code = pkgs.t3code.override {",
-        version_re=r'version = "(?P<v>[0-9][0-9.]*)";',
-        version_tpl='version = "{v}";',
-        lookup={"kind": "t3code"},
+        anchor="dshNodeVersion = ",
+        version_re=r'dshNodeVersion = "(?P<v>[0-9][0-9.]*)";',
+        version_tpl='dshNodeVersion = "{v}";',
+        lookup={
+            "kind": "manual",
+            "note": "official nodejs.org runtime for dsh; its interception addon "
+            "fails closed on nixpkgs-built node, so this must stay an official "
+            "binary on a supported major (20/22/24/26); the pinned dsh-pnpm "
+            "tracks dsh-market's bundled version",
+        },
+        url_re=r'url = "https://nodejs\.org/dist/v[0-9.]+/node-v[0-9.]+-linux-x64\.tar\.xz";',
+        url_tpl='url = "https://nodejs.org/dist/v{v}/node-v{v}-linux-x64.tar.xz";',
         hash_re=r'hash = "sha256-[^"]+";',
-        hash_kind="unpack",
-        hash_url="https://github.com/pingdotgg/t3code/archive/refs/tags/v{v}.tar.gz",
-        note="pnpmDeps hash must be refreshed separately (see --write output)",
+        hash_kind="file",
     ),
 ]
+
+# t3code follows nixpkgs (`pkgs.t3code`). The local override was removed once
+# nixpkgs shipped 0.1.0 with the current source hash.
 
 # Reported every run, never bumped: these need a human decision.
 FROZEN = {
@@ -377,26 +401,29 @@ def resolve(pin: Pin) -> tuple[str | None, str]:
                 return candidate, ""
         return None, "no reachable Linux artifact in the changelog"
 
-    if kind == "t3code":
-        data = http_json("https://api.github.com/repos/pingdotgg/t3code/releases/latest")
-        tag = data.get("tag_name")
-        if not tag:
-            return None, "repository has no releases"
-        try:
-            nixpkgs_version = run(
-                [
-                    "nix",
-                    "eval",
-                    "--impure",
-                    "--raw",
-                    "--expr",
-                    f'(builtins.getFlake "{ROOT}").inputs.nixpkgs'
-                    ".legacyPackages.x86_64-linux.t3code.version",
-                ]
-            ).strip()
-        except Fail:
-            nixpkgs_version = "?"
-        return tag.lstrip("v"), f"nixpkgs currently ships {nixpkgs_version}"
+    if kind == "npm":
+        data = http_json(
+            "https://registry.npmjs.org/" + urllib.parse.quote(pin.lookup["package"], safe="")
+        )
+        latest = data.get("dist-tags", {}).get("latest")
+        if not latest:
+            return None, "registry exposes no latest tag"
+        return latest, ""
+
+    if kind == "claude-desktop":
+        text = http_get(
+            "https://downloads.claude.ai/claude-desktop/apt/stable/dists/stable/main/binary-amd64/Packages"
+        )
+        versions = []
+        pkg = None
+        for line in text.splitlines():
+            if line.startswith("Package: "):
+                pkg = line.split(": ", 1)[1].strip()
+            elif line.startswith("Version: ") and pkg == "claude-desktop":
+                versions.append(line.split(": ", 1)[1].strip())
+        if not versions:
+            return None, "apt index has no claude-desktop versions"
+        return max(versions, key=version_key), ""
 
     return None, pin.lookup.get("note", "no automated lookup")
 
@@ -592,12 +619,6 @@ def main() -> int:
             if args.write:
                 changes = apply_bump(pin, old, new)
                 bumps.append((pin.name, "  ".join(changes)))
-                if pin.name == "t3code":
-                    followups.append(
-                        "t3code: the fetchPnpmDeps hash changed with the source. "
-                        "Set it from the upstream bump PR (NixOS/nixpkgs#575132) or "
-                        "run the build once and copy the reported outputHash."
-                    )
             else:
                 suffix = f"  [{note}]" if note else ""
                 bumps.append((pin.name, f"{old} -> {new}{suffix}"))

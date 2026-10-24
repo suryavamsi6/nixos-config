@@ -11,86 +11,86 @@ let
     pkgs.citrix-workspace.overrideAttrs (old: {
       nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.makeWrapper ];
       postFixup = (old.postFixup or "") + ''
-                xml="$out/opt/citrix-icaclient/config/AuthManConfig.xml"
-                if [ -f "$xml" ]; then
-                  chmod u+w "$xml"
-                  if ! grep -q '<key>RememberUsername</key>' "$xml"; then
-                    sed -i '/<\/dict>/i\
-          <key>RememberUsername</key>\
-          <value>true</value>' "$xml"
-                  fi
+              xml="$out/opt/citrix-icaclient/config/AuthManConfig.xml"
+              if [ -f "$xml" ]; then
+                chmod u+w "$xml"
+                if ! grep -q '<key>RememberUsername</key>' "$xml"; then
+                  sed -i '/<\/dict>/i\
+        <key>RememberUsername</key>\
+        <value>true</value>' "$xml"
                 fi
-                # Entra/SAML deliberately stays on the embedded WebKitGTK dialog.
-                # Turning on AADSSOWithFido2AuthenticationEnabled / SharedAuthContext /
-                # FIDO2Enabled hands login to FIDO2AuthBrowser instead, and Citrix only
-                # launches known browser names — so it opens a bare Firefox with no MS
-                # session or passkeys rather than showing a popup, and the attempt ends
-                # as LogonResult_CancelledByUser. Keep the vendor defaults (false).
+              fi
+              # Entra/SAML deliberately stays on the embedded WebKitGTK dialog.
+              # Turning on AADSSOWithFido2AuthenticationEnabled / SharedAuthContext /
+              # FIDO2Enabled hands login to FIDO2AuthBrowser instead, and Citrix only
+              # launches known browser names — so it opens a bare Firefox with no MS
+              # session or passkeys rather than showing a popup, and the attempt ends
+              # as LogonResult_CancelledByUser. Keep the vendor defaults (false).
 
-                ica="$out/opt/citrix-icaclient"
-                ln -sf ${zoomvdi.pluginLib} "$ica/ZoomMedia.so"
-                for f in "$ica/config/module.ini" "$ica/nls/"*/module.ini; do
-                  [ -f "$f" ] || continue
-                  grep -q 'DriverName=ZoomMedia.so' "$f" && continue
-                  chmod u+w "$f"
-                  # Keep PulseAudio/HDX playback and capture enabled, but avoid the
-                  # Citrix Adaptive Audio path implicated by threaded-ml SIGSEGVs.
-                  # This leaves Bluetooth A2DP↔HFP profile switching untouched.
-                  sed -i \
-                    -e 's/^VirtualDriver = .*/&, ZoomMedia/' \
-                    -e '/^VDSCAN *= *On/a ZoomMedia=On' \
-                    -e 's/^EnableAdaptiveAudio=TRUE$/EnableAdaptiveAudio=FALSE/' \
-                    -e 's/^AudioRedirectionV4=TRUE$/AudioRedirectionV4=FALSE/' \
-                    "$f"
-                  printf '\n[ZoomMedia]\nDriverName=ZoomMedia.so\n' >> "$f"
-                done
+              ica="$out/opt/citrix-icaclient"
+              ln -sf ${zoomvdi.pluginLib} "$ica/ZoomMedia.so"
+              for f in "$ica/config/module.ini" "$ica/nls/"*/module.ini; do
+                [ -f "$f" ] || continue
+                grep -q 'DriverName=ZoomMedia.so' "$f" && continue
+                chmod u+w "$f"
+                # Keep PulseAudio/HDX playback and capture enabled, but avoid the
+                # Citrix Adaptive Audio path implicated by threaded-ml SIGSEGVs.
+                # This leaves Bluetooth A2DP audio routing untouched.
+                sed -i \
+                  -e 's/^VirtualDriver = .*/&, ZoomMedia/' \
+                  -e '/^VDSCAN *= *On/a ZoomMedia=On' \
+                  -e 's/^EnableAdaptiveAudio=TRUE$/EnableAdaptiveAudio=FALSE/' \
+                  -e 's/^AudioRedirectionV4=TRUE$/AudioRedirectionV4=FALSE/' \
+                  "$f"
+                printf '\n[ZoomMedia]\nDriverName=ZoomMedia.so\n' >> "$f"
+              done
 
 
-                # icasessionmgr execs $ICAROOT/wfica, not PATH. Keep it on this tree.
-                # Firefox stays on PATH only so links opened from the store UI resolve;
-                # login itself does not use it (see the AuthManConfig note above).
-                # The WEBKIT_* flags matter for the embedded login dialog on NVIDIA.
-                # wrapGAppsHook replaces wrapProgram with makeCWrapper, which rejects
-                # --run. wrapProgramShell is the bash wrapper that still supports it.
-                if [ -x "$ica/icasessionmgr" ]; then
-                  wrapProgramShell "$ica/icasessionmgr" \
-                    --set ICAROOT "$ica" \
-                    --prefix PATH : "${lib.makeBinPath [ pkgs.firefox ]}" \
-                    --run "ulimit -c unlimited" \
-                    --set-default GDK_BACKEND x11 \
-                    --set-default EGL_PLATFORM x11 \
-                    --set-default QT_QPA_PLATFORM xcb \
-                    --set LIBGL_ALWAYS_SOFTWARE 1 \
-                    --set WEBKIT_DISABLE_COMPOSITING_MODE 1 \
-                    --set WEBKIT_DISABLE_DMABUF_RENDERER 1
-                fi
+              # icasessionmgr execs $ICAROOT/wfica, not PATH. Keep it on this tree.
+              # Firefox stays on PATH only so links opened from the store UI resolve;
+              # login itself does not use it (see the AuthManConfig note above).
+              # The WEBKIT_* flags matter for the embedded login dialog on NVIDIA.
+              # wrapGAppsHook replaces wrapProgram with makeCWrapper, which rejects
+              # --run. wrapProgramShell is the bash wrapper that still supports it.
+              if [ -x "$ica/icasessionmgr" ]; then
+                wrapProgramShell "$ica/icasessionmgr" \
+                  --set ICAROOT "$ica" \
+                  --prefix PATH : "${lib.makeBinPath [ pkgs.firefox ]}" \
+                  --run "ulimit -c unlimited" \
+                  --set-default GDK_BACKEND x11 \
+                  --set-default EGL_PLATFORM x11 \
+                  --set-default QT_QPA_PLATFORM xcb \
+                  --set LIBGL_ALWAYS_SOFTWARE 1 \
+                  --set WEBKIT_DISABLE_COMPOSITING_MODE 1 \
+                  --set WEBKIT_DISABLE_DMABUF_RENDERER 1
+              fi
 
-                # AuthManager forks $ICAROOT/adapter (not PATH) as the store→HDX
-                # UIPipe child. Vendor adapter waits on a session hash and exits in
-                # ~10s when it cannot get one — never reaching wfica. Same ICA via
-                # `wfica -file` works. Replace both tree + bin entrypoints with a
-                # shim that strips UIPipe-only flags and execs wfica.
-                if [ -x "$ica/adapter" ]; then
-                  mv "$ica/adapter" "$ica/.adapter-uipipe-vendor"
-                  install -m755 ${./citrix-adapter-wfica-shim.sh} "$ica/adapter"
-                fi
-                if [ -e "$out/bin/adapter" ]; then
-                  rm -f "$out/bin/adapter"
-                  ln -s "$ica/adapter" "$out/bin/adapter"
-                fi
+              # AuthManager forks $ICAROOT/adapter (not PATH) as the store→HDX
+              # UIPipe child. Vendor adapter waits on a session hash and exits in
+              # ~10s when it cannot get one — never reaching wfica. Same ICA via
+              # `wfica -file` works. Replace both tree + bin entrypoints with a
+              # shim that strips UIPipe-only flags and execs wfica.
+              if [ -x "$ica/adapter" ]; then
+                mv "$ica/adapter" "$ica/.adapter-uipipe-vendor"
+                install -m755 ${./citrix-adapter-wfica-shim.sh} "$ica/adapter"
+              fi
+              if [ -e "$out/bin/adapter" ]; then
+                rm -f "$out/bin/adapter"
+                ln -s "$ica/adapter" "$out/bin/adapter"
+              fi
 
-                # wfica itself is also exec'd from $ICAROOT (shim, icasessionmgr).
-                # Force X11/WebKit flags here so store launches match the PATH wrap.
-                if [ -x "$ica/wfica" ] && [ ! -e "$ica/.wfica-wrapped" ]; then
-                  wrapProgramShell "$ica/wfica" \
-                    --set ICAROOT "$ica" \
-                    --set GDK_BACKEND x11 \
-                    --set EGL_PLATFORM x11 \
-                    --set QT_QPA_PLATFORM xcb \
-                    --unset QT_QPA_PLATFORMTHEME \
-                    --set WEBKIT_DISABLE_COMPOSITING_MODE 1 \
-                    --set WEBKIT_DISABLE_DMABUF_RENDERER 1
-                fi
+              # wfica itself is also exec'd from $ICAROOT (shim, icasessionmgr).
+              # Force X11/WebKit flags here so store launches match the PATH wrap.
+              if [ -x "$ica/wfica" ] && [ ! -e "$ica/.wfica-wrapped" ]; then
+                wrapProgramShell "$ica/wfica" \
+                  --set ICAROOT "$ica" \
+                  --set GDK_BACKEND x11 \
+                  --set EGL_PLATFORM x11 \
+                  --set QT_QPA_PLATFORM xcb \
+                  --unset QT_QPA_PLATFORMTHEME \
+                  --set WEBKIT_DISABLE_COMPOSITING_MODE 1 \
+                  --set WEBKIT_DISABLE_DMABUF_RENDERER 1
+              fi
       '';
     });
 in
@@ -206,36 +206,36 @@ in
           pkgs.zoom-us
           citrixX11
         ];
-        home.activation.citrixUserPreferences =
-          lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-            regions="$HOME/.ICAClient/All_Regions.ini"
-            if [ -f "$regions" ]; then
-              # Prefer EDT, but retain TCP fallback when the gateway or network
-              # blocks UDP. A specific All_Regions value overrides the
-              # downloaded ICA files, which currently force HDXoverUDP=Off.
-              $DRY_RUN_CMD sed -i \
-                -e '/^\[Virtual Channels\\Keyboard\]$/,/^\[/ s/^TransparentKeyPassthrough=.*/TransparentKeyPassthrough=Local/' \
-                -e '/^\[Network\\UDT\]$/,/^\[/ s/^HDXoverUDP=.*/HDXoverUDP=Preferred/' \
-                "$regions"
-            fi
+        home.activation.citrixUserPreferences = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          regions="$HOME/.ICAClient/All_Regions.ini"
+          if [ -f "$regions" ]; then
+            # Prefer EDT, but retain TCP fallback when the gateway or network
+            # blocks UDP. A specific All_Regions value overrides the
+            # downloaded ICA files, which currently force HDXoverUDP=Off.
+            $DRY_RUN_CMD sed -i \
+              -e '/^\[Virtual Channels\\Keyboard\]$/,/^\[/ s/^TransparentKeyPassthrough=.*/TransparentKeyPassthrough=Local/' \
+              -e '/^\[Network\\UDT\]$/,/^\[/ s/^HDXoverUDP=.*/HDXoverUDP=Preferred/' \
+              "$regions"
+          fi
 
-            wfclient="$HOME/.ICAClient/wfclient.ini"
-            if [ -f "$wfclient" ]; then
-              # Citrix 2601+ can rediscover the path MTU instead of retaining
-              # a stale value after a gateway/path change.
-              if grep -q '^MtuRediscovery=' "$wfclient"; then
-                $DRY_RUN_CMD sed -i 's/^MtuRediscovery=.*/MtuRediscovery=On/' "$wfclient"
-              else
-                $DRY_RUN_CMD sed -i '/^\[WFClient\]$/a MtuRediscovery=On' "$wfclient"
-              fi
-              # Legacy audio redirection uses one stable input/output pair.
-              # Pin both to the headset so its microphone remains available.
-              $DRY_RUN_CMD sed -i \
-                -e 's/^PreferredInputDevice=.*/PreferredInputDevice=ACCENTUM Plus/' \
-                -e 's/^PreferredOutputDevice=.*/PreferredOutputDevice=ACCENTUM Plus/' \
-                "$wfclient"
+          wfclient="$HOME/.ICAClient/wfclient.ini"
+          if [ -f "$wfclient" ]; then
+            # Citrix 2601+ can rediscover the path MTU instead of retaining
+            # a stale value after a gateway/path change.
+            if grep -q '^MtuRediscovery=' "$wfclient"; then
+              $DRY_RUN_CMD sed -i 's/^MtuRediscovery=.*/MtuRediscovery=On/' "$wfclient"
+            else
+              $DRY_RUN_CMD sed -i '/^\[WFClient\]$/a MtuRediscovery=On' "$wfclient"
             fi
-          '';
+            # Legacy audio redirection uses one stable input/output pair.
+            # Output stays the headset; the headset exposes no microphone
+            # (A2DP-only), so input is the PD200X.
+            $DRY_RUN_CMD sed -i \
+              -e 's/^PreferredInputDevice=.*/PreferredInputDevice=PD200X Podcast Microphone Mono/' \
+              -e 's/^PreferredOutputDevice=.*/PreferredOutputDevice=ACCENTUM Plus/' \
+              "$wfclient"
+          fi
+        '';
       };
   };
 }

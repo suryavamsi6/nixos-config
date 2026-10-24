@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "OpenRouter provider",
+    "description": "Choose which OpenRouter upstream provider serves the selected model."
+  }
+}

@@ -10,5 +10,7 @@
     ./comfyui.nix
     ./hermes-desktop.nix
     ./capy.nix
+    ./claude-code-router.nix
+    ./onepassword-mcp.nix
   ];
 }

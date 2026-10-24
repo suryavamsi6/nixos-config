@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "nixos": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["mcp-nixos"],
+      "env": {}
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/"
+    }
+  }
+}

@@ -31,6 +31,7 @@
     "npm:pi-stats-dashboard",
     "npm:billion-context",
     "npm:pi-goal-x",
+    "npm:@dietrichgebert/ponytail",
     "git:github.com/nagisanzenin/engram"
   ],
   "subagents": {

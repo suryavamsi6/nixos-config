@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Canva MCP",
+    "description": "Connects Canva's remote MCP server through mcp-remote: on first connect a browser window opens to authorize with Canva; the token is cached locally."
+  }
+}

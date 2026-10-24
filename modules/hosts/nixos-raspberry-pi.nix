@@ -49,7 +49,7 @@
         zramSwap = {
           enable = true;
           algorithm = "zstd";
-          memoryPercent = 50;
+          memoryPercent = 75;
         };
 
         fileSystems."/mnt/media" = {
@@ -80,7 +80,10 @@
         nix.registry = lib.mkForce { };
 
         # Allow on-Pi flake commands (nixos-rebuild --flake, nix shell, ...).
-        nix.settings.experimental-features = [ "nix-command" "flakes" ];
+        nix.settings.experimental-features = [
+          "nix-command"
+          "flakes"
+        ];
 
         # Nothing was collecting garbage: the store had reached 18 GB against
         # a 1.9 GB live closure.
@@ -117,8 +120,13 @@
 
         networking.networkmanager.enable = true;
         # LAN-facing services; native Nginx owns port 80.
-        networking.firewall.allowedTCPPorts = [ 22 53 80 82 8096 ];
-        networking.firewall.allowedUDPPorts = [ 53 7359 ];
+        networking.firewall.allowedTCPPorts = [
+          22
+          53
+          80
+          82
+        ];
+        networking.firewall.allowedUDPPorts = [ 53 ];
 
         services.openssh = {
           enable = true;
@@ -159,25 +167,13 @@
             dependsOn = [ "mariadb" ];
             extraOptions = [ "--network=pi_net" ];
           };
-          open-webui = {
-            image = "ghcr.io/open-webui/open-webui:main";
-            labels."io.containers.autoupdate" = "registry";
-            environmentFiles = [ "/mnt/media/open-webui/open-webui.env" ];
-            environment = {
-              OPENAI_API_BASE_URL = "https://openrouter.ai/api/v1";
-              ENABLE_OLLAMA_API = "false";
-              WEBUI_URL = "http://openwebui.home.arpa";
-            };
-            volumes = [ "/mnt/media/open-webui/data:/app/backend/data" ];
-            ports = [ "127.0.0.1:8083:8080" ];
-            dependsOn = [ "mariadb" ];
-            extraOptions = [ "--network=pi_net" "--memory=768m" ];
-          };
-
           booklore = {
             image = "ghcr.io/grimmory-tools/grimmory:latest";
             labels."io.containers.autoupdate" = "registry";
             environmentFiles = [ "/home/suryavamsi/services/booklore/.env" ];
+            environment = {
+              JAVA_TOOL_OPTIONS = "-XX:MaxRAMPercentage=60 -XX:+UseSerialGC";
+            };
             volumes = [
               "/mnt/media/booklore/data:/app/data"
               "/mnt/media/booklore/books:/books"
@@ -185,49 +181,14 @@
             ];
             ports = [ "6060:6060" ];
             dependsOn = [ "mariadb" ];
-            extraOptions = [ "--network=pi_net" ];
-          };
-
-
-
-          jellyfin = {
-            image = "docker.io/jellyfin/jellyfin:latest";
-            labels."io.containers.autoupdate" = "registry";
-            volumes = [
-              "/mnt/media/jellyfin/config:/config"
-              "/mnt/media/jellyfin/cache:/cache"
-              "/mnt/media/media:/media:ro"
+            # Cap the container so the JVM sizes its heap against the cap,
+            # not the Pi's total RAM. SerialGC has the smallest footprint.
+            extraOptions = [
+              "--network=pi_net"
+              "--memory=320m"
             ];
-            # Host networking preserves LAN broadcast discovery (UDP 7359).
-            extraOptions = [ "--network=host" "--device=/dev/dri:/dev/dri" ];
           };
 
-          redis-paperless = {
-            image = "docker.io/library/redis:alpine";
-            cmd = [ "redis-server" "--save" "" "--appendonly" "no" ];
-            extraOptions = [ "--network=pi_net" ];
-          };
-
-          paperless = {
-            image = "ghcr.io/paperless-ngx/paperless-ngx:latest";
-            labels."io.containers.autoupdate" = "registry";
-            environmentFiles = [ "/mnt/media/paperless/paperless.env" ];
-            environment = {
-              PAPERLESS_REDIS = "redis://redis-paperless:6379";
-              PAPERLESS_URL = "http://paperless.home.arpa";
-              PAPERLESS_TIME_ZONE = "Asia/Kolkata";
-              PAPERLESS_OCR_LANGUAGE = "eng";
-            };
-            volumes = [
-              "/mnt/media/paperless/data:/usr/src/paperless/data"
-              "/mnt/media/paperless/media:/usr/src/paperless/media"
-              "/mnt/media/paperless/consume:/usr/src/paperless/consume"
-              "/mnt/media/paperless/export:/usr/src/paperless/export"
-            ];
-            ports = [ "127.0.0.1:8000:8000" ];
-            dependsOn = [ "redis-paperless" ];
-            extraOptions = [ "--network=pi_net" ];
-          };
           speedtest-tracker = {
             image = "lscr.io/linuxserver/speedtest-tracker:latest";
             labels."io.containers.autoupdate" = "registry";
@@ -269,25 +230,30 @@
         services.nginx = {
           enable = true;
           recommendedProxySettings = true;
-          virtualHosts = lib.mapAttrs (_: upstream: {
-            listen = [{ addr = "0.0.0.0"; port = 80; }];
-            locations."/" = {
-              proxyPass = upstream;
-              proxyWebsockets = true;
-            };
-          }) {
-            "booklore.local" = "http://127.0.0.1:6060";
-            "booklore.home.arpa" = "http://127.0.0.1:6060";
-            "adguard.local" = "http://127.0.0.1:82";
-            "adguard.home.arpa" = "http://127.0.0.1:82";
-            "jellyfin.home.arpa" = "http://127.0.0.1:8096";
-            "paperless.home.arpa" = "http://127.0.0.1:8000";
-            "speedtest.home.arpa" = "http://127.0.0.1:8081";
-            "nextcloud.home.arpa" = "http://127.0.0.1:8082";
-            "openwebui.home.arpa" = "http://127.0.0.1:8083";
-            # Dashboard binds 127.0.0.1:9119. Hermes Desktop on the Mac uses this name.
-            "hermes.home.arpa" = "http://127.0.0.1:9119";
-          };
+          virtualHosts =
+            lib.mapAttrs
+              (_: upstream: {
+                listen = [
+                  {
+                    addr = "0.0.0.0";
+                    port = 80;
+                  }
+                ];
+                locations."/" = {
+                  proxyPass = upstream;
+                  proxyWebsockets = true;
+                };
+              })
+              {
+                "booklore.local" = "http://127.0.0.1:6060";
+                "booklore.home.arpa" = "http://127.0.0.1:6060";
+                "adguard.local" = "http://127.0.0.1:82";
+                "adguard.home.arpa" = "http://127.0.0.1:82";
+                "speedtest.home.arpa" = "http://127.0.0.1:8081";
+                "nextcloud.home.arpa" = "http://127.0.0.1:8082";
+                # Dashboard binds 127.0.0.1:9119. Hermes Desktop on the Mac uses this name.
+                "hermes.home.arpa" = "http://127.0.0.1:9119";
+              };
         };
         services.cockpit = {
           enable = true;
@@ -349,7 +315,7 @@
           appendOnly = false;
           # Unbound's Redis cache is disposable. Avoid periodic writes to disk
           # and let systemd keep its small state directory on the Pi root.
-          save = [];
+          save = [ ];
           settings = {
             maxmemory = "128mb";
             maxmemory-policy = "allkeys-lru";
@@ -386,23 +352,41 @@
           mutableSettings = true;
           settings = {
             # Listen on LAN and Tailscale; firewall still controls access.
-            dns.bind_hosts = [ "192.168.0.105" "100.118.149.0" ];
-            dns.upstream_dns = [ "127.0.0.1:53" ];
-            filtering.rewrites = map (domain: {
-              inherit domain;
-              answer = "192.168.0.105";
-              enabled = true;
-            }) [
-              "booklore.home.arpa"
-              "adguard.home.arpa"
-              "jellyfin.home.arpa"
-              "paperless.home.arpa"
-              "speedtest.home.arpa"
-              "nextcloud.home.arpa"
-              "openwebui.home.arpa"
-              "cockpit.home.arpa"
-              "hermes.home.arpa"
+            dns.bind_hosts = [
+              "192.168.0.105"
+              "100.118.149.0"
             ];
+            dns.upstream_dns = [ "127.0.0.1:53" ];
+            filtering.rewrites =
+              map
+                (domain: {
+                  inherit domain;
+                  answer =
+                    if domain == "homelab.home.arpa" then
+                      "192.168.0.160"
+                    else if domain == "homeassistant.home.arpa" then
+                      "192.168.0.160"
+                    else if domain == "litellm.home.arpa" then
+                      "192.168.0.160"
+                    else if domain == "mcp.home.arpa" then
+                      "192.168.0.160"
+                    else
+                      "192.168.0.105";
+                  enabled = true;
+                })
+                [
+                  "booklore.home.arpa"
+                  "adguard.home.arpa"
+                  "speedtest.home.arpa"
+                  "nextcloud.home.arpa"
+                  "cockpit.home.arpa"
+                  "hermes.home.arpa"
+                  # homelab laptop (192.168.0.160), proxied by its nginx
+                  "homelab.home.arpa"
+                  "homeassistant.home.arpa"
+                  "litellm.home.arpa"
+                  "mcp.home.arpa"
+                ];
           };
         };
 
@@ -414,15 +398,10 @@
           requires = [ "mnt-media.mount" ];
           after = [ "mnt-media.mount" ];
           before = [
-            "paperless-secret.service"
             "speedtest-tracker-secret.service"
             "podman-mariadb.service"
             "podman-nextcloud.service"
-            "podman-open-webui.service"
             "podman-booklore.service"
-            "podman-jellyfin.service"
-            "podman-redis-paperless.service"
-            "podman-paperless.service"
             "podman-speedtest-tracker.service"
           ];
           serviceConfig = {
@@ -431,15 +410,9 @@
           };
           script = ''
             ${pkgs.coreutils}/bin/install -d -m 0755 -o root -g root \
-              /mnt/media/jellyfin /mnt/media/media /mnt/media/paperless \
-              /mnt/media/nextcloud /mnt/media/open-webui /mnt/media/speedtest-tracker
+              /mnt/media/media /mnt/media/nextcloud /mnt/media/speedtest-tracker
             ${pkgs.coreutils}/bin/install -d -m 0755 -o 1000 -g 1000 \
-              /mnt/media/jellyfin/config /mnt/media/jellyfin/cache \
-              /mnt/media/paperless/data /mnt/media/paperless/media \
-              /mnt/media/paperless/export /mnt/media/open-webui/data \
               /mnt/media/speedtest-tracker/config
-            ${pkgs.coreutils}/bin/install -d -m 0775 -o 1000 -g 1000 \
-              /mnt/media/paperless/consume
             ${pkgs.coreutils}/bin/install -d -m 0755 -o suryavamsi -g users \
               /mnt/media/media/Anime
             ${pkgs.coreutils}/bin/install -d -m 0755 -o 33 -g 33 \
@@ -448,23 +421,38 @@
               /mnt/media/nextcloud/data
           '';
         };
-        systemd.services.paperless-secret = {
-          description = "Create the persistent Paperless secret key";
+        # Shrink MariaDB's RAM caches in the mutable custom.cnf on the media
+        # disk: a personal Nextcloud + book catalog never touches the 256M
+        # InnoDB pool or 64M query cache the stock template ships with. Only
+        # the exact shipped values are rewritten, so later hand tuning is
+        # respected; the container bounces once so the new sizes take effect.
+        systemd.services.mariadb-tuning = {
+          description = "Tune MariaDB buffer pools for a small instance";
           wantedBy = [ "multi-user.target" ];
           after = [ "media-directories.service" ];
           requires = [ "media-directories.service" ];
-          before = [ "podman-paperless.service" ];
+          before = [ "podman-mariadb.service" ];
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
           };
           script = ''
-            ${pkgs.coreutils}/bin/mkdir -p /mnt/media/paperless
-            if ! ${pkgs.coreutils}/bin/test -s /mnt/media/paperless/paperless.env; then
-              printf 'PAPERLESS_SECRET_KEY=%s\\n' "$(${pkgs.openssl}/bin/openssl rand -hex 32)" > /mnt/media/paperless/paperless.env
+            cfg=/mnt/media/booklore/mariadb/config/custom.cnf
+            if [ -f "$cfg" ]; then
+              changed=no
+              if grep -q '^innodb_buffer_pool_size[[:space:]]*= 256M$' "$cfg"; then
+                sed -i 's/^innodb_buffer_pool_size[[:space:]]*= 256M$/innodb_buffer_pool_size = 64M/' "$cfg"
+                changed=yes
+              fi
+              if grep -q '^query_cache_size[[:space:]]*= 64M$' "$cfg"; then
+                sed -i 's/^query_cache_size[[:space:]]*= 64M$/query_cache_size = 16M/' "$cfg"
+                changed=yes
+              fi
+              if [ "$changed" = yes ]; then
+                chown 911:911 "$cfg"
+                systemctl try-restart podman-mariadb.service || true
+              fi
             fi
-            ${pkgs.coreutils}/bin/chown root:root /mnt/media/paperless/paperless.env
-            ${pkgs.coreutils}/bin/chmod 600 /mnt/media/paperless/paperless.env
           '';
         };
         systemd.services.speedtest-tracker-secret = {
@@ -491,7 +479,10 @@
         systemd.services.adguardhome-data = {
           description = "Prepare root-backed AdGuard Home data";
           wantedBy = [ "multi-user.target" ];
-          after = [ "local-fs.target" "mnt-media.mount" ];
+          after = [
+            "local-fs.target"
+            "mnt-media.mount"
+          ];
           before = [ "adguardhome.service" ];
           serviceConfig = {
             Type = "oneshot";
@@ -531,11 +522,7 @@
           before = [
             "podman-mariadb.service"
             "podman-nextcloud.service"
-            "podman-open-webui.service"
             "podman-booklore.service"
-            "podman-jellyfin.service"
-            "podman-redis-paperless.service"
-            "podman-paperless.service"
             "podman-speedtest-tracker.service"
           ];
           serviceConfig = {
@@ -558,23 +545,7 @@
           requires = [ "media-directories.service" ];
           after = [ "media-directories.service" ];
         };
-        systemd.services.podman-open-webui = {
-          requires = [ "media-directories.service" ];
-          after = [ "media-directories.service" ];
-        };
         systemd.services.podman-booklore = {
-          requires = [ "media-directories.service" ];
-          after = [ "media-directories.service" ];
-        };
-        systemd.services.podman-jellyfin = {
-          requires = [ "media-directories.service" ];
-          after = [ "media-directories.service" ];
-        };
-        systemd.services.podman-redis-paperless = {
-          requires = [ "media-directories.service" ];
-          after = [ "media-directories.service" ];
-        };
-        systemd.services.podman-paperless = {
           requires = [ "media-directories.service" ];
           after = [ "media-directories.service" ];
         };
@@ -595,7 +566,7 @@
             "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMusYxP9HC82z/wagX2SQFMFkAC8K0gvjLQK5Q3KVcZN d.suryavamsi@gmail.com"
           ];
         };
-        users.groups.adguardhome = {};
+        users.groups.adguardhome = { };
         users.users.adguardhome = {
           isSystemUser = true;
           group = "adguardhome";
