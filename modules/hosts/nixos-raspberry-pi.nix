@@ -93,8 +93,8 @@
           options = "--delete-older-than 30d";
         };
 
-        # Hermes and other tools stage prebuilt generic-Linux binaries (their
-        # uv/Python/Node toolchain pieces, browser helpers, etc.). NixOS
+        # uv and other tools stage prebuilt generic-Linux binaries (Python
+        # toolchain pieces, browser helpers, etc.). NixOS
         # ships only a stub loader at /lib/ld-linux-aarch64.so.1, which
         # refuses them with exit 127. nix-ld supplies a real loader plus the
         # shared libraries those prebuilt tools expect. The default library
@@ -112,8 +112,8 @@
           ];
         };
 
-        # Generic-Linux prebuilt binaries (Hermes's staged CPython among
-        # them) resolve the OpenSSL default CA file at /etc/ssl/cert.pem,
+        # Generic-Linux prebuilt binaries (uv's staged CPython among them)
+        # resolve the OpenSSL default CA file at /etc/ssl/cert.pem,
         # which NixOS does not ship. Point it at the system bundle so
         # certificate verification works out of the box for such tools.
         environment.etc."ssl/cert.pem".source = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
@@ -227,6 +227,30 @@
             Persistent = true;
           };
         };
+        # Glances in webserver mode feeds the homelab's Homepage dashboard
+        # (its glances info widget) with this host's CPU/memory/disk/
+        # uptime. Loopback only; the nginx vhost below proxies it as
+        # glances.home.arpa, which the homelab pins in networking.hosts
+        # (no AdGuard rewrite needed for the dashboard to reach it).
+        systemd.services.glances = {
+          description = "Glances system monitor (REST feed for Homepage)";
+          wantedBy = [ "multi-user.target" ];
+          after = [ "network.target" ];
+          serviceConfig = {
+            # doCheck=false: glances' pytest calls ioctl(SIOCETHTOOL) via
+            # psutil, which qemu-user aarch64 emulation (desktop -> pi
+            # builds) does not implement, so the check phase dies with
+            # ENOTTY and blocks the deploy. The suite passes on real
+            # hardware; only this closure skips it.
+            ExecStart = "${
+              pkgs.glances.overridePythonAttrs (_: {
+                doCheck = false;
+              })
+            }/bin/glances -w --bind 127.0.0.1";
+            Restart = "on-failure";
+            RestartSec = "5s";
+          };
+        };
         services.nginx = {
           enable = true;
           recommendedProxySettings = true;
@@ -251,8 +275,8 @@
                 "adguard.home.arpa" = "http://127.0.0.1:82";
                 "speedtest.home.arpa" = "http://127.0.0.1:8081";
                 "nextcloud.home.arpa" = "http://127.0.0.1:8082";
-                # Dashboard binds 127.0.0.1:9119. Hermes Desktop on the Mac uses this name.
-                "hermes.home.arpa" = "http://127.0.0.1:9119";
+                # Glances REST feed for the homelab's Homepage dashboard.
+                "glances.home.arpa" = "http://127.0.0.1:61208";
               };
         };
         services.cockpit = {
@@ -362,13 +386,22 @@
                 (domain: {
                   inherit domain;
                   answer =
-                    if domain == "homelab.home.arpa" then
+                    # Hermes moved to the homelab Incus container.
+                    if domain == "hermes.home.arpa" then
+                      "192.168.0.160"
+                    else if domain == "homelab.home.arpa" then
                       "192.168.0.160"
                     else if domain == "homeassistant.home.arpa" then
                       "192.168.0.160"
                     else if domain == "litellm.home.arpa" then
                       "192.168.0.160"
                     else if domain == "mcp.home.arpa" then
+                      "192.168.0.160"
+                    else if domain == "lens.home.arpa" then
+                      "192.168.0.160"
+                    else if domain == "board.home.arpa" then
+                      "192.168.0.160"
+                    else if domain == "search.home.arpa" then
                       "192.168.0.160"
                     else
                       "192.168.0.105";
@@ -380,12 +413,15 @@
                   "speedtest.home.arpa"
                   "nextcloud.home.arpa"
                   "cockpit.home.arpa"
-                  "hermes.home.arpa"
-                  # homelab laptop (192.168.0.160), proxied by its nginx
+                  # homelab laptop (192.168.0.160), proxied by its Caddy
                   "homelab.home.arpa"
                   "homeassistant.home.arpa"
                   "litellm.home.arpa"
                   "mcp.home.arpa"
+                  "lens.home.arpa"
+                  "hermes.home.arpa"
+                  "board.home.arpa"
+                  "search.home.arpa"
                 ];
           };
         };
@@ -564,6 +600,8 @@
             # MacBook Air, so this machine can deploy #raspberry-pi.
             "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdi9zBb7cch8s8Gc6167hd8fkccFFHLg+j1IoJnnFrw suryavamsi6@users.noreply.github.com"
             "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMusYxP9HC82z/wagX2SQFMFkAC8K0gvjLQK5Q3KVcZN d.suryavamsi@gmail.com"
+            # Homelab board probe. Public half only.
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEjbh4yikKpLXTOp1YhpcD+TlmMOpK4zLn6u9BHLh+iG homelab-board"
           ];
         };
         users.groups.adguardhome = { };
@@ -578,8 +616,6 @@
           git
           htop
           tailscale
-          # Node for Hermes tooling on the Pi (gateway PATH + skills).
-          nodejs
           # General-purpose Python/uv tooling for agent-managed venvs and
           # ad-hoc scripts.
           uv

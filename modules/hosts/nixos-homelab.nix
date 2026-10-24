@@ -58,6 +58,58 @@
                 tar -cf $out/metadata.tar metadata.yaml
               '';
 
+          # Dev Lens (built from source; no published image) returns
+          # public_contract. LiteLLM v1.106.2's ServiceStatus model rejects
+          # that extra field, so the sidebar stays "not connected" until this
+          # one field is accepted. Idempotent; skipped if the image already
+          # has the field or the class shape moved.
+          litellmLensStatusPatch = pkgs.writeText "litellm-lens-status-patch.py" ''
+            import glob
+            import pathlib
+            import sys
+
+            matches = sorted(
+                glob.glob("/app/.venv/lib/python*/site-packages/litellm/proxy/lens/ingestion.py")
+            )
+            if len(matches) != 1:
+                print(f"lens patch: expected 1 ingestion.py, found {matches}", file=sys.stderr)
+                sys.exit(0)
+            path = pathlib.Path(matches[0])
+            src = path.read_text()
+            marker = "class ServiceStatus(Record):"
+            start = src.find(marker)
+            if start < 0:
+                print("lens patch: ServiceStatus missing, skipped", file=sys.stderr)
+                sys.exit(0)
+            nxt = src.find("\nclass ", start + len(marker))
+            body = src[start:nxt if nxt > 0 else None]
+            if "public_contract:" in body:
+                print("lens patch: already applied")
+                sys.exit(0)
+            needle = "    protocol_version: int = 0\n"
+            at = body.find(needle)
+            if at < 0:
+                print("lens patch: ServiceStatus shape changed, skipped", file=sys.stderr)
+                sys.exit(0)
+            insert_at = start + at + len(needle)
+            path.write_text(src[:insert_at] + "    public_contract: int = 0\n" + src[insert_at:])
+            print("lens patch: applied")
+          '';
+          # LiteLLM proxy config. Models live in Postgres, not here.
+          # drop_params: the harness (and other OpenAI-shaped clients) sends
+          # `store`, which xai-based routes reject with
+          # UnsupportedParamsError → HTTP 400. Dropping unsupported params
+          # keeps one client body working across grok, openai and local
+          # routes instead of pinning per-provider allowlists.
+          litellmLensTracingConfig = pkgs.writeText "litellm-lens-tracing.yaml" ''
+            general_settings:
+              tracing:
+                store:
+                  type: lens
+            litellm_settings:
+              drop_params: true
+          '';
+
           # Power/RAPL sampler: real watts without extra tooling.
           powerDraw = pkgs.writeShellApplication {
             name = "power-draw";
@@ -102,6 +154,41 @@
               printf 'cpu median freq: %s MHz\n' "$((f / 1000))"
             '';
           };
+          # systemd user unit for the Hermes dashboard inside the incus-hermes
+          # container below. Upstream does not start the dashboard with its
+          # gateway service (NousResearch/hermes-agent#16702), so it gets its
+          # own unit; %h expands to /home/hermes under the user manager.
+          hermesDashboardUnit = pkgs.writeText "hermes-dashboard.service" ''
+            [Unit]
+            Description=Hermes web dashboard (port 9119)
+
+            [Service]
+            EnvironmentFile=%h/.hermes/.env
+            ExecStart=%h/.local/bin/hermes dashboard --host 0.0.0.0 --port 9119 --no-open
+            Restart=on-failure
+            RestartSec=5
+
+            [Install]
+            WantedBy=default.target
+          '';
+          # Loopback feed for the Homepage dashboard tiles: Incus memory per
+          # instance, top units/processes by RSS, hwmon temperatures, and the
+          # AdGuard query log. AdGuard's API 401s without a WWW-Authenticate
+          # header, so challenge-response cannot work and the collector sends
+          # basic auth up front from the same env file the dashboard reads.
+          homelabStats = pkgs.writeShellApplication {
+            name = "homelab-stats";
+            runtimeInputs = [
+              pkgs.python3
+              pkgs.incus
+              pkgs.procps
+              pkgs.systemd
+              pkgs.coreutils
+            ];
+            text = ''
+              exec python3 ${./homelab-stats/homelab_stats.py} "$@"
+            '';
+          };
         in
         {
           imports = [ ./homelab-hardware-configuration.nix ];
@@ -118,16 +205,40 @@
           networking.nftables.enable = true;
           # Incus API + web UI from the desktop.
           networking.firewall.allowedTCPPorts = [
-            80
-            443 # nginx reverse proxy
+            80 # Caddy reverse proxy (HTTP only; TLS is not required on the LAN)
             8443
             8123 # Home Assistant (proxied to the HAOS VM)
             4000 # LiteLLM UI + API (OCI container)
             3000 # MCPHub dashboard + MCP endpoints
+            4318 # LiteLLM Lens UI (standalone; also embedded in the LiteLLM sidebar)
           ];
           # The VMs/containers DHCP against dnsmasq on incusbr0; without
           # trusting the bridge the firewall drops their discover packets.
           networking.firewall.trustedInterfaces = [ "incusbr0" ];
+          # Static home.arpa pins: outbound calls from this host (Homepage
+          # widgets and site monitors) must resolve the LAN service names
+          # no matter which DNS the LAN hands out. Other LAN clients get
+          # the same names from the pi's AdGuard rewrites.
+          networking.hosts = {
+            "192.168.0.160" = [
+              "homelab.home.arpa"
+              "homeassistant.home.arpa"
+              "litellm.home.arpa"
+              "lens.home.arpa"
+              "mcp.home.arpa"
+              "hermes.home.arpa"
+              "board.home.arpa"
+              "search.home.arpa"
+            ];
+            "192.168.0.105" = [
+              "adguard.home.arpa"
+              "nextcloud.home.arpa"
+              "booklore.home.arpa"
+              "speedtest.home.arpa"
+              "cockpit.home.arpa"
+              "glances.home.arpa"
+            ];
+          };
           # Allow pushing closures from the desktop (`nixos-rebuild
           # --target-host surya@…`) without root on the target.
           nix.settings.trusted-users = [
@@ -417,6 +528,9 @@
           # Official image. No host config mount: a bind mount made the
           # container exit immediately. Models are added in the UI (stored in
           # Postgres). UI: http://192.168.0.160:4000/ui
+          # Lens env is applied when /var/lib/litellm/lens.env exists (or can
+          # be snapshotted from the running container). The unit never rotates
+          # those secrets and never deletes the container.
           systemd.services.incus-litellm = {
             description = "Provision LiteLLM Incus container";
             wantedBy = [ "multi-user.target" ];
@@ -464,13 +578,108 @@
                 incus config device override litellm eth0 ipv4.address=10.110.0.20
               fi
 
+              # Point the gateway at the Lens container. Secrets stay in
+              # lens.env (mode 600), never in the flake. Snapshot them from
+              # the container the first time this unit runs after a hand setup.
+              lens_env=/var/lib/litellm/lens.env
+              if [ ! -s "$lens_env" ]; then
+                svc=$(incus config get litellm environment.LITELLM_LENS_SERVICE_TOKEN || true)
+                gw=$(incus config get litellm environment.LENS_GATEWAY_SECRET || true)
+                if [ -n "$svc" ] && [ -n "$gw" ]; then
+                  umask 077
+                  printf 'LITELLM_LENS_SERVICE_TOKEN=%s\nLENS_GATEWAY_SECRET=%s\n' \
+                    "$svc" "$gw" > "$lens_env"
+                fi
+                unset svc gw
+              fi
+              if [ -s "$lens_env" ]; then
+                set -a
+                # shellcheck disable=SC1090
+                . "$lens_env"
+                set +a
+                incus config set litellm environment.LITELLM_LENS_URL=http://10.110.0.40:4318
+                incus config set litellm environment.LITELLM_LENS_PUBLIC_URL=http://192.168.0.160:4318
+                incus config set litellm environment.LITELLM_LENS_SERVICE_TOKEN="$LITELLM_LENS_SERVICE_TOKEN"
+                incus config set litellm environment.LENS_GATEWAY_SECRET="$LENS_GATEWAY_SECRET"
+                incus config set litellm environment.CONFIG_FILE_PATH=/app/config.yaml
+                # Push only on a real content change (checksum, not the old
+                # "is lens tracing present" test, which never updated a config
+                # that already had the tracing block). A changed config needs
+                # a restart: the proxy reads it once at startup.
+                config_changed=0
+                want=$(sha256sum ${litellmLensTracingConfig} | cut -d' ' -f1)
+                have=$(incus file pull litellm/app/config.yaml - 2>/dev/null | sha256sum | cut -d' ' -f1)
+                if [ "$want" != "$have" ]; then
+                  incus file push ${litellmLensTracingConfig} litellm/app/config.yaml
+                  config_changed=1
+                fi
+              fi
+
               state=$(incus list litellm --format csv -c s)
               if [ "$state" != RUNNING ]; then
                 incus start litellm
               fi
+              if [ "''${config_changed:-0}" = 1 ]; then
+                incus restart litellm
+              fi
               while ! incus list litellm --format csv -c s | grep -qx RUNNING; do
                 sleep 3
               done
+
+              # Re-apply the ServiceStatus compatibility patch. A container
+              # recreate drops it; a restart does not. Restart only when the
+              # file actually changed, so a normal boot does not bounce the API.
+              incus file push ${litellmLensStatusPatch} litellm/app/lens-status-patch.py
+              if incus exec litellm -- python3 /app/lens-status-patch.py | grep -qx 'lens patch: applied'; then
+                incus restart litellm
+              fi
+            '';
+          };
+
+          # Lens has no published image. The running `lens` container is a
+          # one-time source build (BerriAI/lens + ClickHouse via Docker
+          # Compose inside an Ubuntu system container). This unit only keeps
+          # that container's address, port forward, and autostart. It does
+          # not clone or compile Lens.
+          systemd.services.incus-lens = {
+            description = "Keep the Lens observability container addressable";
+            wantedBy = [ "multi-user.target" ];
+            after = [
+              "incus.service"
+              "network-online.target"
+            ];
+            wants = [ "network-online.target" ];
+            requires = [ "incus.service" ];
+            serviceConfig = {
+              Type = "oneshot";
+              RemainAfterExit = true;
+            };
+            path = [
+              pkgs.incus
+              pkgs.gnugrep
+              pkgs.coreutils
+            ];
+            script = ''
+              set -euo pipefail
+              if ! incus list --format csv -c n | grep -qx lens; then
+                echo "lens container is absent; it is a one-time source build, not provisioned here"
+                exit 0
+              fi
+              incus config set lens boot.autostart=true
+              incus config set lens limits.memory=3GiB
+              incus config set lens limits.cpu=2
+              ip=$(incus config device get lens eth0 ipv4.address || true)
+              if [ "$ip" != 10.110.0.40 ]; then
+                incus config device override lens eth0 ipv4.address=10.110.0.40
+              fi
+              if ! incus config device show lens | grep -q '^ui:'; then
+                incus config device add lens ui proxy \
+                  listen=tcp:0.0.0.0:4318 connect=tcp:10.110.0.40:4318 nat=true
+              fi
+              state=$(incus list lens --format csv -c s)
+              if [ "$state" != RUNNING ]; then
+                incus start lens
+              fi
             '';
           };
 
@@ -552,7 +761,658 @@
             '';
           };
 
-          # --- nginx reverse proxy: one hostname per service ---
+          # --- Hermes agent in an Ubuntu 24.04 Incus container (idempotent) ---
+          # Migrated off the pi, where it ran as user state under ~/.hermes
+          # plus host-side nix-ld/cert.pem workarounds. Hermes publishes no
+          # OCI image and self-manages a floating git checkout with a prebuilt
+          # uv/Node toolchain, so it wants a plain FHS userspace; a system
+          # container provides that without touching this NixOS host, keeps
+          # the agent off this host's wheel/incus-admin user, and puts an
+          # `incus snapshot` rollback boundary around `hermes update`.
+          # Dashboard: http://hermes.home.arpa (Caddy -> 10.110.0.50:9119,
+          # plain HTTP like the other vhosts, so Hermes Desktop's Electron
+          # client can attach). The dashboard binds 0.0.0.0 inside the
+          # container (bridge-only reachability); that engages Hermes's auth
+          # gate, so basic-auth credentials are generated once and appended
+          # to ~/.hermes/.env. Read them with:
+          #   sudo cat /var/lib/incus/hermes/dashboard.env
+          #
+          # Computer use: the gateway is headless, so computer_use drives a
+          # Bot Screen — a per-profile Xvnc + Xfce desktop this unit installs
+          # — through cua-driver, which the Hermes installer already stages
+          # into ~/.hermes/tools. Three pieces keep it working:
+          #   * limits.memory 4GiB. The bot_desktop gate measures free memory
+          #     as min(host MemAvailable, cgroup headroom) and refuses below
+          #     bot_desktop.min_free_memory_mb (1536). At 2GiB the idle
+          #     gateway (~1.2GiB) left ~0.8GiB of headroom, so the screen
+          #     could never start.
+          #   * TigerVNC + Xfce plus at-spi2-core (its org.a11y.Bus D-Bus
+          #     activation is what makes cua-driver's ax_capability pass).
+          #   * bot_desktop.auto_start, so the first computer_use call brings
+          #     the screen up instead of waiting for someone to press Start.
+          # There is no port to open: the RFB socket is a 0600 Unix socket in
+          # the container and the dashboard streams it over its own auth.
+          # One-time state migration from the pi, run on this host before the
+          # first deploy of this unit (stop the pi's hermes gateway first so
+          # sessions are consistent; keep the pi copy until this runs):
+          #   sudo install -d -m 700 /var/lib/incus/hermes/state
+          #   sudo rsync -a --exclude hermes-agent --exclude tools \
+          #     --exclude logs --exclude telemetry pi:.hermes/ \
+          #     /var/lib/incus/hermes/state/
+          # The aarch64 toolchain pieces are excluded on purpose: the
+          # installer restages them for x86_64; only architecture-neutral
+          # state (config.yaml, .env, sessions, memories, skills, pairing,
+          # cron, hooks) moves over.
+          systemd.services.incus-hermes = {
+            description = "Provision Hermes agent Incus container";
+            wantedBy = [ "multi-user.target" ];
+            after = [
+              "incus.service"
+              "network-online.target"
+            ];
+            wants = [ "network-online.target" ];
+            requires = [ "incus.service" ];
+            serviceConfig = {
+              Type = "oneshot";
+              RemainAfterExit = true;
+            };
+            path = [
+              pkgs.incus
+              pkgs.gnugrep
+              pkgs.coreutils
+              pkgs.gnutar
+              pkgs.openssl
+            ];
+            script = ''
+              set -euo pipefail
+              exists=no
+              if incus list --format csv -c n | grep -qx hermes; then
+                exists=yes
+              fi
+
+              if [ "$exists" = no ]; then
+                incus launch images:ubuntu/24.04 hermes \
+                  -c boot.autostart=true \
+                  -c limits.memory=4GiB \
+                  -c limits.cpu=2
+                incus config device override hermes eth0 ipv4.address=10.110.0.50
+                sleep 15
+                incus exec hermes -- cloud-init status --wait >/dev/null 2>&1 || true
+                incus exec hermes -- apt-get update -qq
+                # libX*/xkb: the prebuilt cua-driver (computer-use helper)
+                # links against them; without the libs its staged
+                # verification exits 127 and the tool is skipped.
+                incus exec hermes -- apt-get install -y -qq git curl ca-certificates \
+                  libxi6 libxrandr2 libxrender1 libx11-6 libxext6 \
+                  libxkbcommon0 libxkbcommon-x11-0
+
+                # Dedicated user; the agent's whole world is its $HOME.
+                incus exec hermes -- useradd -m -s /bin/bash hermes
+                incus exec hermes -- bash -c \
+                  'echo "hermes ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/hermes && chmod 440 /etc/sudoers.d/hermes'
+              fi
+
+              # `launch` only sets limits at creation, so a container that
+              # predates the Bot Screen keeps its old cap until reconciled
+              # here. Raising memory takes effect live (cgroup), no restart.
+              if [ "$(incus config get hermes limits.memory)" != "4GiB" ]; then
+                incus config set hermes limits.memory=4GiB
+              fi
+
+              # Bot Screen display stack: Xvnc + Xfce give the bot its own X
+              # display, and at-spi2-core is what cua-driver's ax_capability
+              # probes for (org.a11y.Bus activation); libatspi2 alone is not
+              # enough. Deliberately not upstream's xfce4 metapackage — it
+              # pulls the screensaver, power manager and polkit agent that
+              # lock or prompt a headless session. Gated on Xvnc so an
+              # existing container picks this up on the next switch without
+              # re-running apt on every activation.
+              if ! incus exec hermes -- test -x /usr/bin/Xvnc; then
+                incus exec hermes -- apt-get update -qq
+                incus exec hermes -- env DEBIAN_FRONTEND=noninteractive \
+                  apt-get install -y -qq --no-install-recommends \
+                  tigervnc-standalone-server xfce4-panel xfwm4 xfdesktop4 \
+                  xfce4-settings xfce4-terminal dbus-x11 x11-xserver-utils \
+                  x11-utils x11-xkb-utils xauth fonts-dejavu-core \
+                  at-spi2-core
+              fi
+
+              # Must exist before either the state import or the auth append
+              # writes into it: on a fresh install the tree only appears at
+              # the installer's config stage, and `>> ~/.hermes/.env` fails
+              # with ENOENT when the parent is missing.
+              incus exec hermes -- install -d -o hermes -g hermes -m 700 /home/hermes/.hermes
+
+              # Import migrated state before the first install; the installer
+              # keeps an existing config.yaml/.env and only fills gaps.
+              state=/var/lib/incus/hermes/state
+              if [ -d "$state" ] && [ -n "$(ls -A "$state")" ]; then
+                incus exec hermes -- install -d -o hermes -g hermes /home/hermes/.hermes
+                tar -C "$state" -cf - . | incus exec hermes -- tar -C /home/hermes/.hermes --no-same-owner -xf -
+                incus exec hermes -- chown -R hermes:hermes /home/hermes/.hermes
+              fi
+
+              # Generate once, never rotate (rotation would lock out saved
+              # Hermes Desktop logins) and never print.
+              install -d -m 700 /var/lib/incus/hermes
+              auth=/var/lib/incus/hermes/dashboard.env
+              if [ ! -s "$auth" ]; then
+                umask 077
+                printf 'HERMES_DASHBOARD_BASIC_AUTH_USERNAME=surya\nHERMES_DASHBOARD_BASIC_AUTH_PASSWORD=%s\nHERMES_DASHBOARD_BASIC_AUTH_SECRET=%s\n' \
+                  "$(openssl rand -hex 12)" "$(openssl rand -hex 24)" > "$auth"
+              fi
+              incus exec hermes -- sudo -u hermes -- bash -c \
+                'grep -q "^HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=" ~/.hermes/.env 2>/dev/null || { printf "\n# dashboard auth for hermes.home.arpa\n"; cat; } >> ~/.hermes/.env' < "$auth"
+              incus exec hermes -- sudo -u hermes -- chmod 600 /home/hermes/.hermes/.env
+
+              # --non-interactive skips the TTY setup/gateway stages; on a
+              # fresh (non-migrated) install run `hermes setup` inside the
+              # container afterwards for provider keys. Install once: the
+              # update path afterwards is `hermes update` in the container
+              # (same as the pi setup), not a rerun of this unit.
+              if ! incus exec hermes -- sudo -u hermes -- test -x /home/hermes/.local/bin/hermes; then
+                incus exec hermes -- sudo -iu hermes -- \
+                  bash -c 'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- --non-interactive'
+              fi
+
+              # Gateway: upstream-managed systemd service. Linger keeps the
+              # user services alive without a login session.
+              incus exec hermes -- loginctl enable-linger hermes
+              uid=$(incus exec hermes -- id -u hermes | tr -d '\r\n ')
+              incus exec hermes -- systemctl start "user@$uid.service" 2>/dev/null || true
+              incus exec hermes -- sudo -iu hermes -- hermes gateway install --if-missing </dev/null
+
+              # Dashboard: its own user unit, pushed from the Nix store so
+              # the definition stays in this file.
+              incus exec hermes -- install -d -o hermes -g hermes /home/hermes/.config/systemd/user
+              incus file push ${hermesDashboardUnit} \
+                hermes/home/hermes/.config/systemd/user/hermes-dashboard.service
+              incus exec hermes -- chown hermes:hermes /home/hermes/.config/systemd/user/hermes-dashboard.service
+              incus exec hermes -- sudo -u hermes -- \
+                env XDG_RUNTIME_DIR=/run/user/$uid systemctl --user daemon-reload
+              incus exec hermes -- sudo -u hermes -- \
+                env XDG_RUNTIME_DIR=/run/user/$uid systemctl --user enable --now hermes-dashboard.service
+
+              # Computer use on a chat-only bot: auto_start brings the Bot
+              # Screen up on the first computer_use call instead of waiting
+              # for someone to press Start in the dashboard. `hermes config
+              # set` merges YAML, so this is idempotent and leaves the rest of
+              # config.yaml (models, platforms, dashboard auth) untouched. The
+              # gateway reads config at startup, so restart it when the value
+              # actually changed.
+              gateway_restarted=no
+              if [ "$(incus exec hermes -- sudo -u hermes -H /home/hermes/.local/bin/hermes \
+                        config get bot_desktop.auto_start 2>/dev/null | tr -d '\r\n')" != "true" ]; then
+                incus exec hermes -- sudo -u hermes -H /home/hermes/.local/bin/hermes \
+                  config set bot_desktop.auto_start true
+                incus exec hermes -- sudo -u hermes -- \
+                  env XDG_RUNTIME_DIR=/run/user/$uid systemctl --user restart hermes-gateway.service
+                gateway_restarted=yes
+              fi
+
+              echo "Hermes container ready; dashboard at http://hermes.home.arpa"
+              if [ "$gateway_restarted" = yes ]; then
+                echo "bot_desktop.auto_start enabled; hermes-gateway restarted"
+              fi
+            '';
+          };
+
+          # --- Homepage dashboard (https://gethomepage.dev/) ---
+          # Replaces the old static landing page: one dashboard listing this
+          # host's Incus services and the pi's, served by Caddy at
+          # homelab.home.arpa (also http://192.168.0.160/). It binds
+          # 0.0.0.0:8082 but the firewall keeps that port closed — Caddy on
+          # this host is the only intended client.
+          # hrefs use the pi's AdGuard home.arpa rewrites for other LAN
+          # clients; this host resolves the same names itself via
+          # networking.hosts, so widgets and siteMonitors can use either
+          # names or raw IP:port. Cockpit carries no monitor (its
+          # self-signed TLS breaks the probe). Tiles with live stats
+          # (AdGuard, Home Assistant, Nextcloud, Booklore, Speedtest) read
+          # credentials from the env file seeded below and show an error
+          # badge until it is filled in.
+          services.homepage-dashboard = {
+            enable = true;
+            listenPort = 8082;
+            # Host-header allowlist: homepage v2 rejects other Host values,
+            # so it must know the names Caddy forwards (it preserves the
+            # original Host header).
+            allowedHosts =
+              "homelab.home.arpa,homelab.192.168.0.160.nip.io,192.168.0.160," + "localhost:8082,127.0.0.1:8082";
+            # Widget credentials come from the env file seeded by the
+            # homepage-dashboard-secrets unit below ({{HOMEPAGE_VAR_*}}).
+            environmentFiles = [ "/var/lib/homepage-dashboard-env/secrets.env" ];
+            settings = {
+              title = "homelab";
+              description = "LAN services";
+              theme = "dark";
+              color = "slate";
+              headerStyle = "boxed";
+              # basic = textual status + response time per site monitor.
+              statusStyle = "basic";
+              hideVersion = true;
+              layout = {
+                Homelab = { };
+                "Raspberry Pi" = { };
+                AdGuard = { };
+                "Homelab memory" = { };
+                Infrastructure = { };
+              };
+            };
+            widgets = [
+              {
+                datetime = {
+                  text_size = "xl";
+                  format = {
+                    dateStyle = "long";
+                    timeStyle = "medium";
+                    hourCycle = "h23";
+                  };
+                };
+              }
+              {
+                # /proc stats of this host (the module opens ProcSubset for
+                # the cpu widget). Pi host stats come from glances below.
+                resources = {
+                  label = "Homelab";
+                  cpu = true;
+                  memory = true;
+                  disk = "/";
+                  # CPU package temperature straight from hwmon (no lm_sensors
+                  # on this host); Pi temperature comes from glances below.
+                  cputemp = true;
+                  uptime = true;
+                };
+              }
+              {
+                # Pi host feed: glances in webserver mode on the pi (see
+                # its host file), proxied by its nginx at glances.home.arpa
+                # and pinned in networking.hosts. Blank until the pi is
+                # redeployed with glances.
+                glances = {
+                  url = "http://glances.home.arpa";
+                  version = 4;
+                  label = "Raspberry Pi";
+                  cpu = true;
+                  mem = true;
+                  cputemp = true;
+                  uptime = true;
+                  disk = [
+                    "/"
+                    "/mnt/media"
+                  ];
+                };
+              }
+              {
+                # SearXNG's autocomplete JSON is not Homepage's suggestion
+                # shape, so suggestions stay off. The box still opens results
+                # on this instance.
+                search = {
+                  provider = "custom";
+                  url = "http://search.home.arpa/search?q=";
+                  target = "_blank";
+                };
+              }
+            ];
+            services = [
+              {
+                Homelab = [
+                  {
+                    "Home Assistant" = {
+                      href = "http://homeassistant.home.arpa/";
+                      icon = "mdi-home-assistant";
+                      description = "House control. Incus VM on this laptop.";
+                      siteMonitor = "http://192.168.0.160:8123";
+                    };
+                  }
+                  {
+                    LiteLLM = {
+                      href = "http://litellm.home.arpa/";
+                      icon = "mdi-robot-outline";
+                      description = "Model gateway. Incus container. The UI is at /ui.";
+                      siteMonitor = "http://192.168.0.160:4000";
+                    };
+                  }
+                  {
+                    "LiteLLM Lens" = {
+                      href = "http://lens.home.arpa/";
+                      icon = "mdi-telescope";
+                      description = "Traces for the model gateway. Incus container.";
+                      siteMonitor = "http://192.168.0.160:4318";
+                    };
+                  }
+                  {
+                    MCPHub = {
+                      href = "http://mcp.home.arpa/";
+                      icon = "mdi-hub";
+                      description = "MCP server gateway. Incus container.";
+                      siteMonitor = "http://192.168.0.160:3000";
+                    };
+                  }
+                  {
+                    Hermes = {
+                      href = "http://hermes.home.arpa/";
+                      icon = "mdi-face-agent";
+                      description = "Agent dashboard. Incus container on this laptop.";
+                      siteMonitor = "http://hermes.home.arpa/";
+                    };
+                  }
+                  {
+                    SearXNG = {
+                      href = "http://search.home.arpa/";
+                      icon = "mdi-magnify";
+                      description = "Private metasearch. Native service on this laptop.";
+                      siteMonitor = "http://search.home.arpa/";
+                    };
+                  }
+                ];
+              }
+              {
+                "Raspberry Pi" = [
+                  {
+                    "AdGuard Home" = {
+                      href = "http://adguard.home.arpa/";
+                      icon = "si-adguard";
+                      description = "LAN DNS and filtering on the Pi.";
+                      # /control/* answers 401 to an unauthenticated probe, so
+                      # the monitor watches the login page instead.
+                      siteMonitor = "http://adguard.home.arpa/login.html";
+                      widget = {
+                        type = "adguard";
+                        url = "http://adguard.home.arpa";
+                        username = "{{HOMEPAGE_VAR_ADGUARD_USERNAME}}";
+                        password = "{{HOMEPAGE_VAR_ADGUARD_PASSWORD}}";
+                      };
+                    };
+                  }
+                  {
+                    Nextcloud = {
+                      href = "http://nextcloud.home.arpa/";
+                      icon = "si-nextcloud";
+                      description = "Files and sync. Podman on the Pi.";
+                      siteMonitor = "http://nextcloud.home.arpa/";
+                    };
+                  }
+                  {
+                    Booklore = {
+                      href = "http://booklore.home.arpa/";
+                      icon = "mdi-bookshelf";
+                      description = "Library. Podman on the Pi.";
+                      siteMonitor = "http://192.168.0.105:6060";
+                    };
+                  }
+                  {
+                    "Speedtest Tracker" = {
+                      href = "http://speedtest.home.arpa/";
+                      icon = "mdi-speedometer";
+                      description = "LAN speed history. Podman on the Pi.";
+                      siteMonitor = "http://speedtest.home.arpa/";
+                    };
+                  }
+                  {
+                    Cockpit = {
+                      href = "https://cockpit.home.arpa:9090/";
+                      icon = "mdi-server";
+                      description = "Pi admin. The certificate is self-signed.";
+                    };
+                  }
+                ];
+              }
+              {
+                Infrastructure = [
+                  {
+                    "Incus UI" = {
+                      href = "https://192.168.0.160:8443/";
+                      icon = "mdi-console";
+                      description = "Containers and VMs. Client certificate, so it stays off the proxy.";
+                    };
+                  }
+                  {
+                    OpenBot = {
+                      href = "https://openbot.run/app";
+                      icon = "mdi-robot";
+                      description = "Account app. The container is on this laptop and has no LAN page.";
+                    };
+                  }
+                  {
+                    Tailscale = {
+                      href = "https://login.tailscale.com/admin/machines";
+                      icon = "si-tailscale";
+                      description = "Pi mesh. This opens the admin site, not a page on the Pi.";
+                    };
+                  }
+                  {
+                    PostgreSQL = {
+                      icon = "mdi-database";
+                      description = "LiteLLM database. Loopback only, no page.";
+                    };
+                  }
+                  {
+                    MariaDB = {
+                      icon = "mdi-database-outline";
+                      description = "Nextcloud and Booklore database. No host port.";
+                    };
+                  }
+                  {
+                    "Unbound + Redis" = {
+                      icon = "mdi-dns";
+                      description = "Recursive DNS on the Pi, cached by Redis. Both stay on loopback.";
+                    };
+                  }
+                  {
+                    Caddy = {
+                      icon = "mdi-swap-horizontal";
+                      description = "Names on this laptop. Not a separate page.";
+                    };
+                  }
+                  {
+                    Nginx = {
+                      icon = "mdi-web";
+                      description = "Names on the Pi. Not a separate page.";
+                    };
+                  }
+                ];
+              }
+              {
+                # AdGuard log views. AdGuard's own UI is not embedded: its
+                # SPA renders the login form unless the request already
+                # carries an `agh_session` cookie, and that cookie is
+                # HttpOnly + SameSite=Lax and issued on another origin, so an
+                # iframe here has no session of its own and showed only a
+                # login box (the state it was in). Both tiles read the
+                # loopback collector instead, which logs in server-side and
+                # reports "auth needed" while the seeded credentials are
+                # still placeholders, so the log renders with no per-browser
+                # login at all.
+                AdGuard = [
+                  {
+                    "Query log" = {
+                      href = "http://adguard.home.arpa/#/logs";
+                      icon = "mdi-text-box-search-outline";
+                      description = "Last 10 DNS queries, newest first.";
+                      widget = {
+                        type = "customapi";
+                        url = "http://127.0.0.1:8793/adguard/queries.json";
+                        display = "dynamic-list";
+                        refreshInterval = 15000;
+                        mappings = {
+                          name = "name";
+                          label = "label";
+                          limit = 10;
+                          target = "http://adguard.home.arpa/#/logs";
+                        };
+                      };
+                    };
+                  }
+                  {
+                    "Top blocked" = {
+                      icon = "mdi-shield-alert-outline";
+                      description = "Most blocked domains this period.";
+                      widget = {
+                        type = "customapi";
+                        url = "http://127.0.0.1:8793/adguard/top.json";
+                        display = "dynamic-list";
+                        refreshInterval = 30000;
+                        mappings = {
+                          name = "name";
+                          label = "label";
+                          limit = 6;
+                          target = "http://adguard.home.arpa/#/logs";
+                        };
+                      };
+                    };
+                  }
+                ];
+              }
+              {
+                # Memory and thermals for this host. The collector runs as
+                # root, so Incus memory and every cgroup are visible; it
+                # binds 127.0.0.1 only and nothing outside this host can
+                # read it (the query log carries client names).
+                "Homelab memory" = [
+                  {
+                    Apps = {
+                      icon = "mdi-cube-outline";
+                      description = "Incus containers and VMs by memory.";
+                      widget = {
+                        type = "customapi";
+                        url = "http://127.0.0.1:8793/apps.json";
+                        display = "dynamic-list";
+                        refreshInterval = 10000;
+                        mappings = {
+                          name = "name";
+                          label = "mem";
+                          limit = 6;
+                        };
+                      };
+                    };
+                  }
+                  {
+                    Services = {
+                      icon = "mdi-cog-outline";
+                      description = "Top systemd units by cgroup memory.";
+                      widget = {
+                        type = "customapi";
+                        url = "http://127.0.0.1:8793/services.json";
+                        display = "dynamic-list";
+                        refreshInterval = 10000;
+                        mappings = {
+                          name = "name";
+                          label = "mem";
+                          limit = 6;
+                        };
+                      };
+                    };
+                  }
+                  {
+                    Processes = {
+                      icon = "mdi-format-list-numbered";
+                      description = "Top processes by RSS, merged per app.";
+                      widget = {
+                        type = "customapi";
+                        url = "http://127.0.0.1:8793/procs.json";
+                        display = "dynamic-list";
+                        refreshInterval = 10000;
+                        mappings = {
+                          name = "name";
+                          label = "mem";
+                          limit = 6;
+                        };
+                      };
+                    };
+                  }
+                  {
+                    Temperatures = {
+                      icon = "mdi-thermometer";
+                      description = "CPU package, NVMe, board and Wi-Fi sensors.";
+                      widget = {
+                        type = "customapi";
+                        url = "http://127.0.0.1:8793/temps.json";
+                        display = "dynamic-list";
+                        refreshInterval = 10000;
+                        mappings = {
+                          name = "name";
+                          label = "temp";
+                          limit = 6;
+                        };
+                      };
+                    };
+                  }
+                ];
+              }
+            ];
+          };
+
+          # One-time seed of widget credentials for the dashboard. Homepage
+          # reads it via environmentFiles and substitutes
+          # {{HOMEPAGE_VAR_*}} placeholders in its YAML configs. Fill it in
+          # on the homelab once, then:
+          #   systemctl restart homepage-dashboard
+          # Mode 0644 because the dashboard runs as a DynamicUser with no
+          # stable uid (only root and surya have accounts on this host).
+          systemd.services.homepage-dashboard-secrets = {
+            description = "Seed Homepage dashboard widget credentials";
+            before = [ "homepage-dashboard.service" ];
+            wantedBy = [ "multi-user.target" ];
+            serviceConfig = {
+              Type = "oneshot";
+              RemainAfterExit = true;
+            };
+            path = [ pkgs.coreutils ];
+            script = ''
+              set -euo pipefail
+              install -d -m 755 /var/lib/homepage-dashboard-env
+              secrets=/var/lib/homepage-dashboard-env/secrets.env
+              if [ ! -f "$secrets" ]; then
+                {
+                  echo "# Homepage dashboard widget credentials - edit me, then:"
+                  echo "#   systemctl restart homepage-dashboard"
+                  echo "# AdGuard Home web login (http://adguard.home.arpa)"
+                  echo "HOMEPAGE_VAR_ADGUARD_USERNAME=changeme"
+                  echo "HOMEPAGE_VAR_ADGUARD_PASSWORD=changeme"
+                  echo "# Home Assistant long-lived access token:"
+                  echo "# profile (bottom-left) > Security > Long-lived access tokens"
+                  echo "HOMEPAGE_VAR_HA_TOKEN=changeme"
+                  echo "# Nextcloud NC-Token: Settings > Administration > System"
+                  echo "HOMEPAGE_VAR_NEXTCLOUD_TOKEN=changeme"
+                  echo "# Booklore account (same as the web login)"
+                  echo "HOMEPAGE_VAR_BOOKLORE_USERNAME=changeme"
+                  echo "HOMEPAGE_VAR_BOOKLORE_PASSWORD=changeme"
+                } > "$secrets"
+              fi
+              chmod 0644 "$secrets"
+            '';
+          };
+          systemd.services.homepage-dashboard = {
+            after = [ "homepage-dashboard-secrets.service" ];
+            requires = [ "homepage-dashboard-secrets.service" ];
+          };
+
+          # JSON feed the dashboard tiles above read. Runs as root so Incus
+          # and every cgroup are visible; it binds 127.0.0.1 only, and the
+          # firewall keeps that port closed, so the AdGuard query log it
+          # serves never reaches the LAN. The env file is the same one
+          # Homepage substitutes {{HOMEPAGE_VAR_*}} from; while the seeded
+          # values are placeholders the AdGuard tiles show a hint instead of
+          # an error.
+          systemd.services.homelab-stats = {
+            description = "Loopback stats feed for the Homepage dashboard";
+            wantedBy = [ "multi-user.target" ];
+            after = [
+              "incus.service"
+              "homepage-dashboard-secrets.service"
+            ];
+            serviceConfig = {
+              ExecStart = "${homelabStats}/bin/homelab-stats";
+              Restart = "on-failure";
+              RestartSec = "5s";
+              # Tolerate a missing file: the AdGuard endpoints degrade to a
+              # hint row and the rest of the feed works without credentials.
+              EnvironmentFile = "-/var/lib/homepage-dashboard-env/secrets.env";
+            };
+          };
+
+          # --- Caddy reverse proxy: one hostname per service ---
           # Naming follows the pi's convention: <service>.home.arpa (RFC 8375),
           # with AdGuard rewrites on the pi (192.168.0.105) resolving them to
           # this host. nip.io aliases answer the same vhosts for clients not
@@ -560,109 +1420,177 @@
           #   homeassistant.home.arpa -> Home Assistant
           #   litellm.home.arpa       -> LiteLLM
           #   mcp.home.arpa           -> MCPHub
-          #   homelab.home.arpa       -> landing page (also http://192.168.0.160/)
+          #   lens.home.arpa          -> LiteLLM Lens
+          #   hermes.home.arpa        -> Hermes agent (Ubuntu Incus container)
+          #   board.home.arpa         -> this host's own board (127.0.0.1:8765)
+          #   search.home.arpa        -> SearXNG (127.0.0.1:8888)
+          #   homelab.home.arpa       -> Homepage dashboard (also http://192.168.0.160/)
           # Future services: add one entry to `proxyHosts` below, add the same
           # name to the pi's adguardhome rewrites, and switch both hosts.
           # The Incus UI deliberately stays direct on https://192.168.0.160:8443
           # — its client-certificate TLS cannot pass through an HTTP proxy.
-          # TLS uses a self-signed wildcard cert generated on first boot
-          # (browser warning expected; trust it or keep using port 80).
-          services.nginx =
+          # HTTP only. home.arpa cannot get a publicly trusted cert, and the
+          # previous self-signed wildcard made every browser warn. Site
+          # addresses are explicit `http://` so Caddy does not turn automatic
+          # HTTPS back on. `auto_https disable_redirects` stops the catch-all
+          # :443 redirect for any other name (including the bare IP).
+          services.nginx.enable = false;
+          services.caddy =
             let
               domain = "home.arpa";
               # Public-DNS aliases that embed the IP; no setup needed.
               nip = "192.168.0.160.nip.io";
-              cert = "/var/lib/nginx-certs/cert.pem";
-              key = "/var/lib/nginx-certs/key.pem";
-              tls = {
-                sslCertificate = cert;
-                sslCertificateKey = key;
-              };
+              # nat=true proxy devices only DNAT traffic arriving from the
+              # LAN — they never bind host localhost, so Caddy must target
+              # the container IPs on incusbr0 directly.
               proxyHosts = {
                 homeassistant = {
-                  port = 8123;
-                  websockets = true;
+                  host = "10.110.0.10";
+                  # HAOS serves on port 80 inside the VM (8123 is dead there;
+                  # the incus ha-ui proxy device DNATs host :8123 -> VM :80).
+                  port = 80;
                 };
                 litellm = {
+                  host = "10.110.0.20";
                   port = 4000;
                 };
                 mcp = {
+                  host = "10.110.0.30";
                   port = 3000;
                 };
+                lens = {
+                  host = "10.110.0.40";
+                  port = 4318;
+                };
+                hermes = {
+                  host = "10.110.0.50";
+                  port = 9119;
+                };
+                # Native SearXNG, not an Incus container. Loopback only.
+                search = {
+                  host = "127.0.0.1";
+                  port = 8888;
+                };
               };
-              landing = pkgs.writeTextDir "index.html" ''
-                <!DOCTYPE html>
-                <html><head><meta charset="utf-8"><title>homelab</title>
-                <style>body{font-family:sans-serif;max-width:40rem;margin:4rem auto}
-                a{display:block;padding:.6rem 0;font-size:1.2rem}</style></head>
-                <body><h1>homelab services</h1>
-                <a href="http://homeassistant.${domain}">Home Assistant</a>
-                <a href="http://litellm.${domain}">LiteLLM</a>
-                <a href="http://mcp.${domain}">MCPHub</a>
-                <a href="https://192.168.0.160:8443">Incus UI (direct, client cert)</a>
-                </body></html>
-              '';
+              site = name: upstream: {
+                serverAliases = [ "http://${name}.${nip}" ];
+                extraConfig = ''
+                  encode gzip
+                  reverse_proxy ${upstream}
+                '';
+              };
             in
             {
               enable = true;
-              recommendedProxySettings = true;
-              recommendedGzipSettings = true;
+              globalConfig = ''
+                auto_https disable_redirects
+              '';
+              httpsPort = null;
               virtualHosts =
-                (lib.mapAttrs (
+                (lib.mapAttrs' (
                   name: cfg:
-                  {
-                    serverName = "${name}.${domain}";
-                    serverAliases = [ "${name}.${nip}" ];
-                    addSSL = true;
-                    locations."/" = {
-                      proxyPass = "http://127.0.0.1:${toString cfg.port}";
-                      proxyWebsockets = cfg.websockets or false;
-                    };
-                  }
-                  // tls
+                  lib.nameValuePair "http://${name}.${domain}" (site name "http://${cfg.host}:${toString cfg.port}")
                 ) proxyHosts)
                 // {
-                  "homelab.${domain}" = {
-                    default = true;
-                    serverAliases = [ "homelab.${nip}" ];
-                    addSSL = true;
-                    root = "${landing}";
-                  }
-                  // tls;
+                  # Homepage dashboard (services.homepage-dashboard).
+                  "http://homelab.${domain}" = site "homelab" "http://127.0.0.1:8082";
+                  # This host's board. The port stays closed; Caddy is the door.
+                  "http://board.${domain}" = site "board" "http://127.0.0.1:8765";
+                  # Everything else (http://192.168.0.160/, a short name, a
+                  # mistyped host) would otherwise fall through to Caddy's
+                  # hostless default and answer 200 with an empty body — a
+                  # blank page that looks like "the dashboard is down". Bounce
+                  # those to the canonical dashboard address instead.
+                  ":80" = {
+                    extraConfig = ''
+                      redir http://homelab.${domain}{uri} permanent
+                    '';
+                  };
                 };
             };
 
-          systemd.services.nginx-wildcard-cert = {
-            description = "Self-signed wildcard cert for the reverse proxy";
-            before = [ "nginx.service" ];
+          # --- SearXNG (native, loopback; Caddy is the LAN door) ---
+          # pkgs.searxng via services.searx. Not an Incus container: the
+          # upstream image is unnecessary when nixpkgs already ships the
+          # service, and a container would add another image pull on a laptop.
+          # Port 8888 stays closed. secret_key is generated once on the host
+          # and substituted from the env file; it never enters the flake.
+          # First switch prints nothing secret — the file is mode 0600 under
+          # /var/lib/searx. A later switch does not rotate it.
+          systemd.services.searx-secret = {
+            description = "Seed SearXNG secret key";
+            before = [ "searx-init.service" ];
+            requiredBy = [ "searx-init.service" ];
             wantedBy = [ "multi-user.target" ];
             serviceConfig = {
               Type = "oneshot";
               RemainAfterExit = true;
-              StateDirectory = "nginx-certs";
-              UMask = "0077";
             };
-            path = [ pkgs.openssl ];
+            path = [
+              pkgs.coreutils
+              pkgs.openssl
+            ];
             script = ''
-              dir=/var/lib/nginx-certs
-              gen() {
+              set -euo pipefail
+              install -d -m 700 /var/lib/searx
+              secrets=/var/lib/searx/secret.env
+              if [ ! -s "$secrets" ]; then
                 umask 077
-                openssl req -x509 -newkey rsa:2048 -sha256 -days 3650 -nodes \
-                  -keyout "$dir/key.pem" -out "$dir/cert.pem" \
-                  -subj "/CN=homelab.home.arpa" \
-                  -addext "subjectAltName=DNS:home.arpa,DNS:*.home.arpa,DNS:192.168.0.160.nip.io,DNS:*.192.168.0.160.nip.io"
-              }
-              if [ ! -s "$dir/key.pem" ]; then
-                gen
-              elif ! openssl x509 -in "$dir/cert.pem" -noout -ext subjectAltName 2>/dev/null | grep -q "home.arpa"; then
-                # earlier cert generation lacked the home.arpa names
-                gen
+                printf 'SEARX_SECRET_KEY=%s\n' "$(openssl rand -hex 32)" > "$secrets"
               fi
+              chmod 0600 "$secrets"
             '';
           };
-          systemd.services.nginx = {
-            after = [ "nginx-wildcard-cert.service" ];
-            requires = [ "nginx-wildcard-cert.service" ];
+          services.searx = {
+            enable = true;
+            environmentFile = "/var/lib/searx/secret.env";
+            settings = {
+              general.instance_name = "homelab";
+              search.safe_search = 0;
+              search.autocomplete = "duckduckgo";
+              search.formats = [
+                "html"
+                "json"
+              ];
+              server = {
+                port = 8888;
+                bind_address = "127.0.0.1";
+                base_url = "http://search.home.arpa/";
+                secret_key = "$SEARX_SECRET_KEY";
+                limiter = false;
+                image_proxy = true;
+                method = "GET";
+              };
+              ui.default_theme = "simple";
+            };
+          };
+          systemd.services.searx-init = {
+            after = [ "searx-secret.service" ];
+            requires = [ "searx-secret.service" ];
+          };
+
+          # The page and probe live in ~surya/homelab-board and run as a user
+          # service. Caddy above is the only LAN door, so 8765 stays closed.
+          # The probe reads this host directly and reaches the Pi with
+          # ~/.ssh/homelab-board, whose public half is on #raspberry-pi.
+          users.users.surya.linger = true;
+          systemd.user.services.homelab-board = {
+            description = "Homelab board";
+            wantedBy = [ "default.target" ];
+            after = [ "network-online.target" ];
+            wants = [ "network-online.target" ];
+            serviceConfig = {
+              WorkingDirectory = "%h/homelab-board";
+              ExecStart = "${pkgs.nodejs}/bin/node %h/homelab-board/server.mjs";
+              Restart = "on-failure";
+              RestartSec = 3;
+            };
+            environment = {
+              PORT = "8765";
+              BIND = "127.0.0.1";
+              LOCAL_HOMELAB = "1";
+              PI_IDENTITY = "%h/.ssh/homelab-board";
+            };
           };
 
           # --- OpenBot server in an Ubuntu 24.04 Incus container (idempotent) ---
