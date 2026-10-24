@@ -139,6 +139,7 @@
             homeManager.gridwatch
             homeManager.comfyui
             homeManager.hermesDesktop
+            homeManager.openbot
             homeManager.capy
             homeManager.claudeCodeRouter
             homeManager.onepasswordMcp

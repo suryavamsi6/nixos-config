@@ -250,6 +250,21 @@
           # Headless server: keep running with the lid closed.
           services.logind.settings.Login.HandleLidSwitch = "ignore";
 
+          # Reflect mDNS between the LAN (WiFi uplink) and the Incus bridge:
+          # lets the HAOS VM see LAN zeroconf/mDNS devices (ESPHome etc.) and
+          # lets its Matter-hub announcements reach LAN clients for
+          # commissioning from phone apps. The host uplink is WiFi, which
+          # rules out a macvlan NIC for the VM (APs drop foreign source
+          # MACs), so a reflector is the only viable bridge.
+          services.avahi = {
+            enable = true;
+            reflector = true;
+            allowInterfaces = [
+              "wlp5s0"
+              "incusbr0"
+            ];
+          };
+
           # NOTE: battery 80% cap is enforced BY THE EC — set once via MSI
           # Center on Windows and it persists across reboots/wipes (verified:
           # capacity 80, "Not charging" under NixOS). The msi_ec kernel module

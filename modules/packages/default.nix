@@ -9,6 +9,7 @@
     ./system.nix
     ./comfyui.nix
     ./hermes-desktop.nix
+    ./openbot.nix
     ./capy.nix
     ./claude-code-router.nix
     ./onepassword-mcp.nix
