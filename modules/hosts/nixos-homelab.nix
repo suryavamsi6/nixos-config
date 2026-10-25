@@ -23,6 +23,7 @@
       nixos.nixSettings
       nixos.users
       nixos.locale # sets time.timeZone = "Asia/Kolkata"
+      ./hermes-bridge # services.hermesBridge: management API for the Hermes phone app
 
       # Hardware scan from the laptop (ext4 root + ESP, Intel CPU, kvm-intel)
       (
@@ -171,6 +172,22 @@
             [Install]
             WantedBy=default.target
           '';
+          # Tailscale Funnel that puts the Hermes API server (not the
+          # dashboard) on the internet for the Hermes phone app, at
+          # https://homelab.<tailnet>.ts.net. Off until this host is logged in
+          # to Tailscale and the tailnet allows Funnel (docs/hermes-funnel.md);
+          # while false only the Funnel job is absent (tailscaled itself is
+          # always on, see services.tailscale below), so this file deploys
+          # as-is.
+          hermesFunnel = {
+            enable = true; # TODO(surya): true once the runbook's admin-console steps are done
+            target = "http://10.110.0.50:8642"; # API server in the Incus container
+            # Extra path mounts on the same :443 Funnel; "/" (target) always comes first.
+            mounts = lib.optional config.services.hermesBridge.enable {
+              path = config.services.hermesBridge.funnelPath;
+              target = config.services.hermesBridge.funnelTarget;
+            };
+          };
           # Loopback feed for the Homepage dashboard tiles: Incus memory per
           # instance, top units/processes by RSS, hwmon temperatures, and the
           # AdGuard query log. AdGuard's API 401s without a WWW-Authenticate
@@ -211,6 +228,8 @@
             4000 # LiteLLM UI + API (OCI container)
             3000 # MCPHub dashboard + MCP endpoints
             4318 # LiteLLM Lens UI (standalone; also embedded in the LiteLLM sidebar)
+            8283 # Matterbridge web UI (QR pairing for SmartThings commissioning)
+            5540 # Matterbridge commissioning/session port (phone connects here)
           ];
           # The VMs/containers DHCP against dnsmasq on incusbr0; without
           # trusting the bridge the firewall drops their discover packets.
@@ -229,11 +248,11 @@
               "hermes.home.arpa"
               "board.home.arpa"
               "search.home.arpa"
+              "booklore.home.arpa"
             ];
             "192.168.0.105" = [
               "adguard.home.arpa"
               "nextcloud.home.arpa"
-              "booklore.home.arpa"
               "speedtest.home.arpa"
               "cockpit.home.arpa"
               "glances.home.arpa"
@@ -259,6 +278,9 @@
           services.avahi = {
             enable = true;
             reflector = true;
+            # Opens UDP 5353 so LAN clients (phone Matter commissioning,
+            # discovery queries) can reach mDNS on this host at all.
+            openFirewall = true;
             allowInterfaces = [
               "wlp5s0"
               "incusbr0"
@@ -322,6 +344,17 @@
           services.thermald.enable = true; # Intel thermal protection
           services.fstrim.enable = true; # weekly SSD trim
 
+          # Compressed RAM swap. 16 GB laptop, ~10 GB of containers and
+          # no disk swap: a burst goes straight to the OOM killer (it
+          # killed litellm's Prisma query engine on 2026-10-25). zram
+          # gives cold anonymous pages a compressible place to go
+          # without wearing the NVMe.
+          zramSwap = {
+            enable = true;
+            algorithm = "zstd";
+            memoryPercent = 50; # ~8 GiB
+          };
+
           # intel_pstate energy-performance preference: favour efficiency.
           systemd.services.cpu-epp = {
             description = "Set CPU energy_performance_preference to balance_power";
@@ -363,6 +396,26 @@
             ];
             packages = [ ];
           };
+
+          # raw.idmap for the hermes work mount (incus-hermes below):
+          # newuidmap enforces /etc/subuid + /etc/subgid even for the
+          # root daemon, and the incus module grants root only the
+          # 1000000+ container range. Mapping host surya (1000) and
+          # group users (100) into the container needs exactly these
+          # two ids granted as well; module list merging appends them
+          # to the incus module's range.
+          users.users.root.subUidRanges = [
+            {
+              startUid = 1000;
+              count = 1;
+            }
+          ];
+          users.users.root.subGidRanges = [
+            {
+              startGid = 100;
+              count = 1;
+            }
+          ];
 
           programs.gnupg.agent = {
             enable = true;
@@ -583,7 +636,7 @@
               if ! incus list --format csv -c n | grep -qx litellm; then
                 incus init ghcr:berriai/litellm:main-stable litellm \
                   -c boot.autostart=true \
-                  -c limits.memory=2GiB \
+                  -c limits.memory=3GiB \
                   -c limits.cpu=2 \
                   -c environment.DATABASE_URL="$DATABASE_URL" \
                   -c environment.LITELLM_MASTER_KEY="$LITELLM_MASTER_KEY" \
@@ -591,6 +644,13 @@
                 incus config device add litellm api proxy \
                   listen=tcp:0.0.0.0:4000 connect=tcp:10.110.0.20:4000 nat=true
                 incus config device override litellm eth0 ipv4.address=10.110.0.20
+              fi
+
+              # `init` sets limits only at creation; reconcile the cap
+              # here (a memory raise applies live, no restart). The 2GiB
+              # cap OOM-killed the Prisma query engine on 2026-10-25.
+              if [ "$(incus config get litellm limits.memory)" != "3GiB" ]; then
+                incus config set litellm limits.memory=3GiB
               fi
 
               # Point the gateway at the Lens container. Secrets stay in
@@ -796,7 +856,7 @@
           # Bot Screen — a per-profile Xvnc + Xfce desktop this unit installs
           # — through cua-driver, which the Hermes installer already stages
           # into ~/.hermes/tools. Three pieces keep it working:
-          #   * limits.memory 4GiB. The bot_desktop gate measures free memory
+          #   * limits.memory 8GiB. The bot_desktop gate measures free memory
           #     as min(host MemAvailable, cgroup headroom) and refuses below
           #     bot_desktop.min_free_memory_mb (1536). At 2GiB the idle
           #     gateway (~1.2GiB) left ~0.8GiB of headroom, so the screen
@@ -818,6 +878,12 @@
           # installer restages them for x86_64; only architecture-neutral
           # state (config.yaml, .env, sessions, memories, skills, pairing,
           # cron, hooks) moves over.
+          # Management API for the Hermes phone app (profiles, MCP, routines,
+          # skills, plugins, memory), next to Hermes in this container and
+          # published at /bridge by the Funnel job. ./hermes-bridge,
+          # docs/hermes-bridge.md.
+          services.hermesBridge.enable = true;
+
           systemd.services.incus-hermes = {
             description = "Provision Hermes agent Incus container";
             wantedBy = [ "multi-user.target" ];
@@ -848,8 +914,8 @@
               if [ "$exists" = no ]; then
                 incus launch images:ubuntu/24.04 hermes \
                   -c boot.autostart=true \
-                  -c limits.memory=4GiB \
-                  -c limits.cpu=2
+                  -c limits.memory=8GiB \
+                  -c limits.cpu=6
                 incus config device override hermes eth0 ipv4.address=10.110.0.50
                 sleep 15
                 incus exec hermes -- cloud-init status --wait >/dev/null 2>&1 || true
@@ -868,10 +934,14 @@
               fi
 
               # `launch` only sets limits at creation, so a container that
-              # predates the Bot Screen keeps its old cap until reconciled
-              # here. Raising memory takes effect live (cgroup), no restart.
-              if [ "$(incus config get hermes limits.memory)" != "4GiB" ]; then
-                incus config set hermes limits.memory=4GiB
+              # predates these caps keeps its old ones until reconciled
+              # here. Raising memory or cpu takes effect live (cgroup),
+              # no restart.
+              if [ "$(incus config get hermes limits.memory)" != "8GiB" ]; then
+                incus config set hermes limits.memory=8GiB
+              fi
+              if [ "$(incus config get hermes limits.cpu)" != "6" ]; then
+                incus config set hermes limits.cpu=6
               fi
 
               # Bot Screen display stack: Xvnc + Xfce give the bot its own X
@@ -956,10 +1026,56 @@
               # gateway reads config at startup, so restart it when the value
               # actually changed.
               gateway_restarted=no
+              restart_reasons=""
               if [ "$(incus exec hermes -- sudo -u hermes -H /home/hermes/.local/bin/hermes \
                         config get bot_desktop.auto_start 2>/dev/null | tr -d '\r\n')" != "true" ]; then
                 incus exec hermes -- sudo -u hermes -H /home/hermes/.local/bin/hermes \
                   config set bot_desktop.auto_start true
+                restart_reasons="$restart_reasons bot_desktop.auto_start"
+              fi
+
+              # API server for the Hermes phone app, reached through Tailscale
+              # Funnel (tailscaled on this host -> 10.110.0.50:8642).
+              # It binds 0.0.0.0 inside the container (bridge-only, like the
+              # dashboard) and always requires the bearer key. Same pattern as
+              # the dashboard auth: generated once, never rotated (rotation
+              # would sign the phone out), never printed. Each variable is
+              # appended only if ~/.hermes/.env lacks it, so a key migrated
+              # from the pi wins. Read the key the phone needs with:
+              #   sudo cat /var/lib/incus/hermes/api-server.env
+              # (if ~/.hermes/.env already had API_SERVER_KEY, that one is live).
+              api=/var/lib/incus/hermes/api-server.env
+              if [ ! -s "$api" ]; then
+                umask 077
+                printf 'API_SERVER_ENABLED=true\nAPI_SERVER_HOST=0.0.0.0\nAPI_SERVER_PORT=8642\nAPI_SERVER_KEY=%s\n' \
+                  "$(openssl rand -hex 32)" > "$api"
+              fi
+              api_added=$(incus exec hermes -- sudo -u hermes -- bash -c '
+                env=~/.hermes/.env; touch "$env"; added=0
+                while IFS= read -r line; do
+                  [ -n "$line" ] || continue
+                  if ! grep -q "^''${line%%=*}=" "$env"; then
+                    [ "$added" = 1 ] || printf "\n# API server for the Hermes phone app (Tailscale Funnel)\n" >> "$env"
+                    printf "%s\n" "$line" >> "$env"; added=1
+                  fi
+                done
+                chmod 600 "$env"; echo "$added"' < "$api" | tr -d '\r\n')
+              if [ "$api_added" = 1 ]; then
+                restart_reasons="$restart_reasons api_server"
+              fi
+              # One listener serves every profile under /p/<profile>/...; each
+              # named profile then needs its own API_SERVER_KEY in
+              # ~/.hermes/profiles/<name>/.env or its prefix fails closed.
+              if [ "$(incus exec hermes -- sudo -u hermes -H /home/hermes/.local/bin/hermes \
+                        config get gateway.multiplex_profiles 2>/dev/null | tr -d '\r\n')" != "true" ]; then
+                incus exec hermes -- sudo -u hermes -H /home/hermes/.local/bin/hermes \
+                  config set gateway.multiplex_profiles true
+                restart_reasons="$restart_reasons gateway.multiplex_profiles"
+              fi
+
+              # The gateway reads .env and config.yaml at startup: restart once
+              # for everything that changed above.
+              if [ -n "$restart_reasons" ]; then
                 incus exec hermes -- sudo -u hermes -- \
                   env XDG_RUNTIME_DIR=/run/user/$uid systemctl --user restart hermes-gateway.service
                 gateway_restarted=yes
@@ -967,9 +1083,336 @@
 
               echo "Hermes container ready; dashboard at http://hermes.home.arpa"
               if [ "$gateway_restarted" = yes ]; then
-                echo "bot_desktop.auto_start enabled; hermes-gateway restarted"
+                echo "hermes-gateway restarted for:$restart_reasons"
+              fi
+
+              # Host code workspace: ~/hermes-work bind-mounted at
+              # /home/hermes/work, no shift. hermes is 1001:1001 inside
+              # (uid 1000 is taken by the Ubuntu image) while surya is
+              # 1000:100 on the host, so raw.idmap aligns the ids
+              # instead: hermes's writes land as surya:users and vice
+              # versa (see also the root subUid/subGid grants above).
+              # Deliberately last: a restart must not precede the
+              # systemctl --user calls above — seconds after a
+              # container restart the user manager's bus socket is
+              # not up yet and they fail with "Failed to connect to
+              # bus" (seen 2026-10-25, switch gen 34). The map
+              # applies at container start, so restart only when it
+              # actually changed. Never widen this to all of
+              # ~surya: it holds SSH keys and other credentials.
+              install -d -o surya -g users -m 700 /home/surya/hermes-work
+              idmap=$(incus config get hermes raw.idmap 2>/dev/null || true)
+              case "$idmap" in
+                *"uid 1000 1001"*"gid 100 1001"*) : ;;
+                *)
+                  printf 'uid 1000 1001\ngid 100 1001\n' |
+                    incus config set hermes raw.idmap -
+                  incus restart hermes
+                  ;;
+              esac
+              if ! incus config device show hermes | grep -q '^work:'; then
+                incus config device add hermes work disk \
+                  source=/home/surya/hermes-work path=/home/hermes/work
               fi
             '';
+          };
+
+          # --- Grimmory (Booklore) library in Incus, migrated off the pi ---
+          # The pi's `booklore` podman container ran ghcr.io/grimmory-tools/
+          # grimmory (the Booklore-derived library server; the "booklore"
+          # container/tile/env names are historical). Two Incus OCI containers
+          # replace it: `booklore` (the app, 10.110.0.61) and `booklore-db`
+          # (linuxserver MariaDB pinned at exactly the pi's 11.4.5 so the
+          # imported SQL matches the engine it was dumped from; the datadir
+          # files themselves are root-only on the pi, which is why the
+          # database moves as a mariadb-dump instead of a file copy). The
+          # pi keeps its MariaDB for Nextcloud; only the booklore database
+          # moved. Host data: /var/lib/incus/booklore/{db,data,books,
+          # bookdrop}, bind-mounted shift=true like mcphub's. One-time
+          # migration: the books/data/bookdrop trees and env were staged
+          # (as surya, no root) in ~/booklore-migration/ by streaming from
+          # the pi; the dump lands there as import.sql. The unit adopts all
+          # of it on first run (fresh db -> dump import -> the app's DB
+          # user, then import.sql is renamed .done) and never touches live
+          # data afterwards. The pi's copy under /mnt/media/booklore stays
+          # as the rollback. Port 6060 is not
+          # published to the LAN (Caddy is the door, as booklore.home.arpa),
+          # which also drops the pi's old 0.0.0.0:6060 publish. Updates and
+          # env-file changes: `incus delete -f booklore && sudo systemctl
+          # restart incus-booklore` re-creates the container from the
+          # current :latest and re-reads the env; host data survives.
+          #
+          # Grimmory's real env contract is USER_ID/GROUP_ID (entrypoint
+          # su-exec), SERVER_PORT, DATABASE_URL/DATABASE_USERNAME/
+          # DATABASE_PASSWORD. The pi .env's APP_USER_ID/BOOKLORE_PORT/
+          # DB_USER-style keys are compose-interpolation names the image
+          # never read; on the pi they worked by accident because
+          # DB_PASSWORD equals MYSQL_ROOT_PASSWORD, so the app's root
+          # fallback could authenticate. This unit maps the .env inputs to
+          # the real names. Root SQL goes through unix_socket: linuxserver
+          # MariaDB 11.4.5's root refuses password auth entirely, and
+          # `incus exec` runs as the container's root, so `mariadb -uroot`
+          # without -p just works — while `mariadb-admin ping` lies (it
+          # reports success even on access-denied), hence -uroot there too.
+          systemd.services.incus-booklore = {
+            description = "Provision Grimmory library + MariaDB Incus containers";
+            wantedBy = [ "multi-user.target" ];
+            after = [
+              "incus.service"
+              "network-online.target"
+            ];
+            wants = [ "network-online.target" ];
+            requires = [ "incus.service" ];
+            serviceConfig = {
+              Type = "simple";
+              Restart = "on-failure";
+              RestartSec = "15s";
+            };
+            path = [
+              pkgs.incus
+              pkgs.gnugrep
+              pkgs.coreutils
+              pkgs.gnused
+              pkgs.openssl
+            ];
+            script = ''
+              set -euo pipefail
+              incus remote list --format csv | cut -d, -f1 | grep -qx ghcr ||
+                incus remote add ghcr https://ghcr.io --protocol=oci
+              incus remote list --format csv | cut -d, -f1 | grep -qx lscr ||
+                incus remote add lscr https://lscr.io --protocol=oci
+
+              state=/var/lib/incus/booklore
+              staging=/home/surya/booklore-migration
+              install -d -m 700 "$state"
+
+              install -d "$state/db"
+              # One-time adoption of the staged pi copy (first run only:
+              # later runs see non-empty live dirs and never overwrite).
+              for d in data books bookdrop; do
+                install -d "$state/$d"
+                if [ -z "$(ls -A "$state/$d")" ] && [ -d "$staging/$d" ] && [ -n "$(ls -A "$staging/$d")" ]; then
+                  cp -a "$staging/$d/." "$state/$d/"
+                fi
+              done
+              # Seed dump for the first-run import below (.done is the
+              # "already imported" marker).
+              if [ -s "$staging/import.sql" ] && [ ! -e "$state/db/import.sql.done" ]; then
+                install -m 600 "$staging/import.sql" "$state/db/import.sql"
+              fi
+
+              # Same env-file contract as the pi: one file holding the app
+              # keys and the MariaDB keys together. Adopt the migrated file,
+              # or seed a fresh one for an empty install. Generated once,
+              # never rotated, never printed.
+              env=$state/booklore.env
+              if [ ! -s "$env" ]; then
+                if [ -s "$staging/booklore.env" ]; then
+                  install -m 600 "$staging/booklore.env" "$env"
+                else
+                  umask 077
+                  {
+                    printf 'TZ=Etc/UTC\n'
+                    printf 'BOOKLORE_PORT=6060\n'
+                    printf 'DATABASE_URL=jdbc:mariadb://10.110.0.60:3306/booklore\n'
+                    printf 'DB_USER=grimmory\n'
+                    printf 'DB_PASSWORD=%s\n' "$(openssl rand -hex 16)"
+                    printf 'MYSQL_ROOT_PASSWORD=%s\n' "$(openssl rand -hex 24)"
+                    printf 'MYSQL_DATABASE=booklore\n'
+                  } > "$env"
+                fi
+              fi
+              chmod 600 "$env"
+
+              set -a
+              # shellcheck disable=SC1090
+              . "$env"
+              set +a
+              # The migrated DATABASE_URL names the pi's podman alias
+              # ("mariadb"); point it at the db container's static address,
+              # keeping port, database and any query params intact.
+              appurl=$(printf '%s' "$DATABASE_URL" | sed -E 's#(://[^/:]+)#://10.110.0.60#')
+
+              if ! incus list --format csv -c n | grep -qx booklore-db; then
+                incus init lscr:linuxserver/mariadb:11.4.5 booklore-db \
+                  -c boot.autostart=true \
+                  -c limits.memory=1GiB \
+                  -c limits.cpu=1 \
+                  -c environment.TZ="$TZ" \
+                  -c environment.MYSQL_ROOT_PASSWORD="$MYSQL_ROOT_PASSWORD" \
+                  -c environment.MYSQL_DATABASE="$MYSQL_DATABASE"
+                incus config device add booklore-db db disk \
+                  source=$state/db path=/config shift=true
+                incus config device override booklore-db eth0 ipv4.address=10.110.0.60
+              fi
+
+              if [ "$(incus list '^booklore-db$' --format csv -c s)" != RUNNING ]; then
+                incus start booklore-db
+              fi
+              # MariaDB must accept connections before the JVM starts, or
+              # Spring Boot exits and an Incus container stays down until
+              # the next reconcile (Restart=on-failure here is the retry).
+              i=0
+              until incus exec booklore-db -- mariadb-admin -uroot ping >/dev/null 2>&1; do
+                i=$((i + 1))
+                if [ "$i" -ge 60 ]; then
+                  echo "booklore-db: mariadb not answering after 60 tries" >&2
+                  exit 1
+                fi
+                sleep 5
+              done
+
+              # First-run import: load the pi dump and create the app's
+              # database user (a mariadb-dump carries neither users nor
+              # grants; DB_USER here is "booklore", not root). Runs before
+              # the app starts so Spring Boot sees a complete schema.
+              # Single quotes in values are doubled for SQL. mariadb runs
+              # as container root over unix_socket (no -p; see header).
+              if [ -f "$state/db/import.sql" ]; then
+                incus exec booklore-db -- mariadb -uroot \
+                  < "$state/db/import.sql"
+                if [ "$DB_USER" != "root" ]; then
+                  q() { printf '%s' "$1" | sed "s/'/'''/g"; }
+                  dbuser=$(q "$DB_USER")
+                  dbpass=$(q "$DB_PASSWORD")
+                  grants=$state/grants.sql
+                  printf "CREATE USER IF NOT EXISTS '%s'@'%%' IDENTIFIED BY '%s';\n" "$dbuser" "$dbpass" > "$grants"
+                  printf "GRANT ALL PRIVILEGES ON %s.* TO '%s'@'%%';\n" "$MYSQL_DATABASE" "$dbuser" >> "$grants"
+                  printf "FLUSH PRIVILEGES;\n" >> "$grants"
+                  chmod 600 "$grants"
+                  incus exec booklore-db -- mariadb -uroot \
+                    < "$grants"
+                  rm -f "$grants"
+                fi
+                mv "$state/db/import.sql" "$state/db/import.sql.done"
+              fi
+
+              if ! incus list --format csv -c n | grep -qx booklore; then
+                incus init ghcr:grimmory-tools/grimmory:latest booklore \
+                  -c boot.autostart=true \
+                  -c limits.memory=1GiB \
+                  -c limits.cpu=1 \
+                  -c environment.USER_ID=1000 \
+                  -c environment.GROUP_ID=1000 \
+                  -c environment.TZ="$TZ" \
+                  -c environment.SERVER_PORT="$BOOKLORE_PORT" \
+                  -c environment.DATABASE_URL="$appurl" \
+                  -c environment.DATABASE_USERNAME="$DB_USER" \
+                  -c environment.DATABASE_PASSWORD="$DB_PASSWORD"
+                incus config device add booklore data disk \
+                  source=$state/data path=/app/data shift=true
+                incus config device add booklore books disk \
+                  source=$state/books path=/books shift=true
+                incus config device add booklore bookdrop disk \
+                  source=$state/bookdrop path=/bookdrop shift=true
+                incus config device override booklore eth0 ipv4.address=10.110.0.61
+              fi
+
+              if [ "$(incus list '^booklore$' --format csv -c s)" != RUNNING ]; then
+                incus start booklore
+              fi
+              # Exit once running so Restart does not loop (mcphub pattern).
+              while ! incus list '^booklore$' --format csv -c s | grep -qx RUNNING; do
+                sleep 3
+              done
+            '';
+          };
+
+          # --- Tailscale (same as the pi) ---
+          # Joins homelab to the tailnet once `sudo tailscale up` has been run;
+          # until then tailscaled idles in NeedsLogin. No exit node or subnet
+          # routes, so tailnet peers reach only this host, and the NixOS
+          # firewall still applies on tailscale0 (it is not a trusted
+          # interface). openFirewall stays off (the pi has it on): it only
+          # opens UDP 41641 for inbound direct connections. Without it, NAT
+          # traversal still makes direct peer-to-peer links in most cases
+          # (both sides punch out through the LAN router); only when that fails
+          # does traffic fall back to the slower DERP relays. Turn it on if
+          # `tailscale ping <peer>` from here keeps reporting "via DERP".
+          services.tailscale = {
+            enable = true;
+            openFirewall = false;
+            useRoutingFeatures = "none";
+          };
+          # Incus already forces nftables here; keep tailscaled's own rules in
+          # nftables too instead of letting it guess between backends.
+          systemd.services.tailscaled.environment.TS_DEBUG_FIREWALL_MODE = "nftables";
+
+          # --- Tailscale Funnel: Hermes API for the phone app ---
+          # Outbound-only (tailscaled dials Tailscale's relays), so no firewall
+          # port opens. Only the API server (8642, at /) and hermes-bridge (at
+          # /bridge, docs/hermes-bridge.md) are published; the dashboard
+          # (9119) stays LAN-only behind Caddy. The API still demands its
+          # bearer key. Funnel's proxy flushes text/event-stream as it is
+          # written, so chat replies stream. Setup and test steps:
+          # docs/hermes-funnel.md.
+
+          # Reconciles the Funnel: publishes hermesFunnel.target at / and each
+          # of hermesFunnel.mounts at its path on :443 when the node is logged
+          # in, and leaves mounts that already match alone. It
+          # runs on every deploy and then every 2 min, and always exits 0, so
+          # a deploy before `sudo tailscale up` (or before the tailnet policy
+          # allows Funnel) still switches cleanly; it just logs why it waited
+          # (journalctl -u hermes-funnel) and picks itself up afterwards. The
+          # enable call is wrapped in a timeout because the CLI can block
+          # waiting for an admin to approve Funnel. Setting enable = false
+          # only removes this job; tailscaled keeps the Funnel it already set
+          # up, so run `sudo tailscale funnel reset` too (docs/hermes-funnel.md).
+          systemd.services.hermes-funnel = lib.mkIf hermesFunnel.enable {
+            description = "Tailscale Funnel for the Hermes API (phone app)";
+            after = [
+              "tailscaled.service"
+              "network-online.target"
+            ];
+            wants = [
+              "tailscaled.service"
+              "network-online.target"
+            ];
+            wantedBy = [ "multi-user.target" ];
+            path = [
+              config.services.tailscale.package
+              pkgs.jq
+              pkgs.coreutils
+            ];
+            serviceConfig.Type = "oneshot";
+            script = ''
+              state=$(tailscale status --json 2>/dev/null | jq -r '.BackendState // "Unknown"' || true)
+              state=''${state:-unreachable}
+              if [ "$state" != Running ]; then
+                echo "tailscale is $state, not Running; run 'sudo tailscale up' (docs/hermes-funnel.md). Retrying in 2 min." >&2
+                exit 0
+              fi
+              # One "path target" pair per line; "/" first so the API server keeps the root.
+              while read -r mount target; do
+                if tailscale funnel status --json | jq -e --arg m "$mount" --arg t "$target" '
+                      ([.Web // {} | to_entries[] | select(.key | endswith(":443")) | .value.Handlers[$m].Proxy] | index($t)) != null
+                      and ([.AllowFunnel // {} | to_entries[] | select(.key | endswith(":443")) | .value] | any)' >/dev/null; then
+                  echo "Funnel already serves $target at $mount on :443"
+                elif timeout 60 tailscale funnel --bg --yes --https=443 --set-path "$mount" "$target" </dev/null; then
+                  echo "Funnel enabled for $target at $mount on :443"
+                else
+                  echo "Funnel not enabled yet for $mount (is HTTPS on and the funnel nodeAttr in the tailnet policy? docs/hermes-funnel.md). Retrying in 2 min." >&2
+                fi
+              done <<'MOUNTS'
+              ${lib.concatMapStringsSep "\n" (m: "${m.path} ${m.target}") (
+                [
+                  {
+                    path = "/";
+                    target = hermesFunnel.target;
+                  }
+                ]
+                ++ hermesFunnel.mounts
+              )}
+              MOUNTS
+              tailscale funnel status || true
+            '';
+          };
+          systemd.timers.hermes-funnel = lib.mkIf hermesFunnel.enable {
+            wantedBy = [ "timers.target" ];
+            timerConfig = {
+              OnBootSec = "1min";
+              OnUnitInactiveSec = "2min";
+            };
           };
 
           # --- Homepage dashboard (https://gethomepage.dev/) ---
@@ -1042,8 +1485,7 @@
               {
                 # Pi host feed: glances in webserver mode on the pi (see
                 # its host file), proxied by its nginx at glances.home.arpa
-                # and pinned in networking.hosts. Blank until the pi is
-                # redeployed with glances.
+                # and pinned in networking.hosts.
                 glances = {
                   url = "http://glances.home.arpa";
                   version = 4;
@@ -1120,6 +1562,14 @@
                       siteMonitor = "http://search.home.arpa/";
                     };
                   }
+                  {
+                    Booklore = {
+                      href = "http://booklore.home.arpa/";
+                      icon = "mdi-bookshelf";
+                      description = "E-book library (Grimmory). Incus container on this laptop.";
+                      siteMonitor = "http://booklore.home.arpa/";
+                    };
+                  }
                 ];
               }
               {
@@ -1146,14 +1596,6 @@
                       icon = "si-nextcloud";
                       description = "Files and sync. Podman on the Pi.";
                       siteMonitor = "http://nextcloud.home.arpa/";
-                    };
-                  }
-                  {
-                    Booklore = {
-                      href = "http://booklore.home.arpa/";
-                      icon = "mdi-bookshelf";
-                      description = "Library. Podman on the Pi.";
-                      siteMonitor = "http://192.168.0.105:6060";
                     };
                   }
                   {
@@ -1205,7 +1647,7 @@
                   {
                     MariaDB = {
                       icon = "mdi-database-outline";
-                      description = "Nextcloud and Booklore database. No host port.";
+                      description = "Nextcloud (Pi) and Grimmory (Incus) databases. No host ports.";
                     };
                   }
                   {
@@ -1437,6 +1879,7 @@
           #   mcp.home.arpa           -> MCPHub
           #   lens.home.arpa          -> LiteLLM Lens
           #   hermes.home.arpa        -> Hermes agent (Ubuntu Incus container)
+          #   booklore.home.arpa      -> Grimmory/Booklore library (Incus container)
           #   board.home.arpa         -> this host's own board (127.0.0.1:8765)
           #   search.home.arpa        -> SearXNG (127.0.0.1:8888)
           #   homelab.home.arpa       -> Homepage dashboard (also http://192.168.0.160/)
@@ -1480,6 +1923,12 @@
                 hermes = {
                   host = "10.110.0.50";
                   port = 9119;
+                };
+                # Grimmory (Booklore) library; its MariaDB container
+                # stays bridge-only (10.110.0.60), like the pi's.
+                booklore = {
+                  host = "10.110.0.61";
+                  port = 6060;
                 };
                 # Native SearXNG, not an Incus container. Loopback only.
                 search = {
@@ -1632,17 +2081,39 @@
             ];
             script = ''
               set -euo pipefail
+              exists=no
               if incus list --format csv -c n | grep -qx openbot; then
-                echo "openbot already exists, nothing to do"
-                exit 0
+                exists=yes
               fi
 
-              incus launch images:ubuntu/24.04 openbot -c boot.autostart=true
-              # Wait for container network + apt to be ready.
-              sleep 15
-              incus exec openbot -- cloud-init status --wait >/dev/null 2>&1 || true
-              incus exec openbot -- bash -c \
-                'curl -fsSL https://raw.githubusercontent.com/nightly-labs/openbot/main/scripts/install-server.sh | sudo bash -s -- --user openbot'
+              if [ "$exists" = no ]; then
+                incus launch images:ubuntu/24.04 openbot \
+                  -c boot.autostart=true \
+                  -c limits.memory=2GiB \
+                  -c limits.cpu=1
+                # Wait for container network + apt to be ready.
+                sleep 15
+                incus exec openbot -- cloud-init status --wait >/dev/null 2>&1 || true
+                incus exec openbot -- bash -c \
+                  'curl -fsSL https://raw.githubusercontent.com/nightly-labs/openbot/main/scripts/install-server.sh | sudo bash -s -- --user openbot'
+              fi
+
+              # Reconcile caps and address on containers that predate
+              # them; launch sets config only at creation (hermes
+              # pattern). Memory raises apply live; the static address
+              # lands on the container's next DHCP renew or reboot.
+              if [ "$(incus config get openbot limits.memory)" != "2GiB" ]; then
+                incus config set openbot limits.memory=2GiB
+              fi
+              if [ "$(incus config get openbot limits.cpu)" != "1" ]; then
+                incus config set openbot limits.cpu=1
+              fi
+              # Static bridge address like the other instances (DHCP
+              # .241 drifts). `device set` fails while eth0 exists only
+              # in the profile, hence the override fallback (HAOS
+              # pattern).
+              incus config device set openbot eth0 ipv4.address=10.110.0.70 ||
+                incus config device override openbot eth0 ipv4.address=10.110.0.70
             '';
           };
 
