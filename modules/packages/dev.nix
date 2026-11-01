@@ -866,6 +866,12 @@ in
           # (modules/clan/deploy.nix consumes the same `deploy-rs.lib`), so the CLI
           # and the evaluated checks can never drift apart.
           inputs.deploy-rs.packages.${pkgs.stdenv.hostPlatform.system}.default
+          # `clan machines update` / `clan vars …` — the fleet commands the
+          # migration plan gates Step 6 on. Never installed before, so those
+          # gates had no way to run. Large (713 MiB: it bundles git and a
+          # Python env), hence NixOS/desktop-only — ad-hoc on the Mac via
+          # `nix run .#clanCorePackages.clan-cli`.
+          inputs.clan-core.packages.${pkgs.stdenv.hostPlatform.system}.clan-cli
         ];
 
         programs.git = {

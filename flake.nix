@@ -89,8 +89,12 @@
       # `nix run .#update-pins` audits every pinned app, prefetches the new
       # hashes, and (with --write) rewrites the modules. See the script header.
       perSystem =
-        { pkgs, ... }:
+        { pkgs, system, ... }:
         {
+          # Ad-hoc access to Clan's CLI on every system this flake evaluates,
+          # darwin included — homeManager.dev (which installs it on the desktop)
+          # is not imported by the Mac. `nix run .#clan-cli`.
+          packages.clan-cli = inputs.clan-core.packages.${system}.clan-cli;
           packages.update-pins = pkgs.writeShellApplication {
             name = "update-pins";
             runtimeInputs = [
