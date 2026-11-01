@@ -19,5 +19,6 @@
     ./bifrost.nix
     ./hermes.nix
     ./booklore.nix
+    ./homelable.nix
   ];
 }
