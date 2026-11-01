@@ -40,6 +40,7 @@
           nixos.homepage # dashboard + homelab-stats feed (§7)
           nixos.grokOauthProxy # SuperGrok -> OpenAI-compatible API (§7)
           nixos.caddy # one home.arpa hostname per service, the LAN door (§7)
+          nixos.openbot # OpenBot server in an Ubuntu Incus container (§7)
           ./hermes-bridge # services.hermesBridge: management API for the Hermes phone app
 
           # Hardware scan from the laptop (ext4 root + ESP, Intel CPU, kvm-intel)
@@ -2009,66 +2010,6 @@
                   LOCAL_HOMELAB = "1";
                   PI_IDENTITY = "%h/.ssh/homelab-board";
                 };
-              };
-
-              # --- OpenBot server in an Ubuntu 24.04 Incus container (idempotent) ---
-              # The upstream installer is Ubuntu-only (apt-get + in-image setup
-              # script), so it runs inside the container. Agents are reached via
-              # your OpenBot account (desktop/mobile app or openbot.run/app);
-              # finish with:  incus exec openbot -- sudo openbot login
-              systemd.services.incus-openbot = {
-                description = "Provision OpenBot server Incus container";
-                wantedBy = [ "multi-user.target" ];
-                after = [
-                  "incus.service"
-                  "network-online.target"
-                ];
-                wants = [ "network-online.target" ];
-                requires = [ "incus.service" ];
-                serviceConfig = {
-                  Type = "oneshot";
-                  RemainAfterExit = true;
-                };
-                path = [
-                  pkgs.incus
-                  pkgs.gnugrep
-                ];
-                script = ''
-                  set -euo pipefail
-                  exists=no
-                  if incus list --format csv -c n | grep -qx openbot; then
-                    exists=yes
-                  fi
-
-                  if [ "$exists" = no ]; then
-                    incus launch images:ubuntu/24.04 openbot \
-                      -c boot.autostart=true \
-                      -c limits.memory=2GiB \
-                      -c limits.cpu=1
-                    # Wait for container network + apt to be ready.
-                    sleep 15
-                    incus exec openbot -- cloud-init status --wait >/dev/null 2>&1 || true
-                    incus exec openbot -- bash -c \
-                      'curl -fsSL https://raw.githubusercontent.com/nightly-labs/openbot/main/scripts/install-server.sh | sudo bash -s -- --user openbot'
-                  fi
-
-                  # Reconcile caps and address on containers that predate
-                  # them; launch sets config only at creation (hermes
-                  # pattern). Memory raises apply live; the static address
-                  # lands on the container's next DHCP renew or reboot.
-                  if [ "$(incus config get openbot limits.memory)" != "2GiB" ]; then
-                    incus config set openbot limits.memory=2GiB
-                  fi
-                  if [ "$(incus config get openbot limits.cpu)" != "1" ]; then
-                    incus config set openbot limits.cpu=1
-                  fi
-                  # Static bridge address like the other instances (DHCP
-                  # .241 drifts). `device set` fails while eth0 exists only
-                  # in the profile, hence the override fallback (HAOS
-                  # pattern).
-                  incus config device set openbot eth0 ipv4.address=10.110.0.70 ||
-                    incus config device override openbot eth0 ipv4.address=10.110.0.70
-                '';
               };
 
               # --- Reactive Resume v6 (Incus OCI, pinned digest) ---

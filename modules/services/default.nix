@@ -12,5 +12,6 @@
     ./homepage.nix
     ./grok-oauth-proxy.nix
     ./caddy.nix
+    ./openbot.nix
   ];
 }
