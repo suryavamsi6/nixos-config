@@ -196,6 +196,13 @@
         # One attribute set: `xdg.configFile` cannot be assigned twice.
         xdg.configFile = {
           "herdr-app/layouts/0oz-design.json".source = layoutPatched;
+          # NOTE: `source = ./dir` makes home-manager create a SYMLINK at
+          # ~/.config/herdr-app/mods/oz-pet pointing back into this repo. Every
+          # later activation then writes *through* that link, replacing the
+          # tracked files here with /nix/store symlinks and backing the old ones
+          # up as .bak/.bak.bak — exactly how this directory got corrupted once
+          # (commit 80688fe committed the symlinks). If it recurs, the .bak chain
+          # still holds the original content.
           "herdr-app/mods/oz-pet" = {
             source = ./herdr-oz-pet;
             recursive = true;
