@@ -14,5 +14,6 @@
     ./caddy.nix
     ./openbot.nix
     ./reactive-resume.nix
+    ./nutify.nix
   ];
 }
