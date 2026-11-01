@@ -4,5 +4,7 @@
     inputs.clan-core.flakeModules.default
     ./inventory.nix
     ./machines.nix
+    ./vars.nix
+    ./deploy.nix
   ];
 }
