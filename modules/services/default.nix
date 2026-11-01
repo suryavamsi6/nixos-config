@@ -17,5 +17,6 @@
     ./nutify.nix
     ./qdrant.nix
     ./bifrost.nix
+    ./hermes.nix
   ];
 }
