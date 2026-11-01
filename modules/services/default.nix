@@ -16,5 +16,6 @@
     ./reactive-resume.nix
     ./nutify.nix
     ./qdrant.nix
+    ./bifrost.nix
   ];
 }
