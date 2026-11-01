@@ -8,10 +8,11 @@ Everything is computed from local sources only:
   /services.json      top systemd units by memory
   /procs.json         top processes by resident memory, merged per command
   /temps.json         hwmon temperatures (CPU package/cores, NVMe, board)
+  /disk.json          SMART health snapshot written by disk-health.timer
+  /disk/health.json   {ok, disks, failing} for the Gatus SMART check
+  /backups.json       last restic run per host, from /var/lib/backup-status
+  /backups/health.json  {ok, hosts} for the Gatus backup check
   /adguard/log.json   AdGuard Home query log, newest first
-  /adguard/queries.json  the same log, longer tail for the dashboard tile
-  /adguard/top.json   AdGuard Home most-blocked domains for today
-  /health             liveness probe
 
 It binds 127.0.0.1 only: the AdGuard query log carries client names and the
 domains the LAN looks up, so it stays private to this host. Homepage runs in
@@ -312,6 +313,101 @@ def adguard_top():
     return rows[:LIMIT] or [{"name": "AdGuard", "label": "nothing blocked"}]
 
 
+# --- files produced by other services -------------------------------------
+
+DISK_HEALTH_FILE = os.environ.get(
+    "HOMELAB_STATS_DISK_HEALTH", "/var/lib/disk-health/health.json"
+)
+BACKUP_STATUS_DIR = os.environ.get(
+    "HOMELAB_STATS_BACKUP_STATUS", "/var/lib/backup-status"
+)
+
+
+def _read_json(path):
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, ValueError):
+        return None
+
+
+def _short_time(stamp):
+    """Trim an ISO timestamp to minutes: the tile shows age, not precision."""
+    return (stamp or "").replace("T", " ")[:16]
+
+
+def disk_health():
+    """One row per disk, plus any smartd alerts in the tail."""
+    data = _read_json(DISK_HEALTH_FILE)
+    if not data:
+        return [{"name": "SMART", "label": "no snapshot yet"}]
+    rows = []
+    for disk in data.get("disks") or []:
+        device = (disk.get("device") or "?").replace("/dev/", "")
+        temp = disk.get("temperature")
+        if disk.get("health") == "STANDBY":
+            label = "asleep"
+        elif not disk.get("smart"):
+            label = "no SMART"
+        else:
+            label = disk.get("health") or "unknown"
+            if temp is not None:
+                label += f" · {temp}°C"
+        rows.append({"name": device, "label": label})
+    for alert in (data.get("alerts") or [])[-2:]:
+        # "2026-10-27T14:00:00Z /dev/sda FAILTYPE: message" — the timestamp is
+        # already implied by the tile, so keep the device and reason.
+        parts = alert.split(" ", 2)
+        rows.append({"name": parts[1] if len(parts) > 1 else "smartd",
+                     "label": (parts[2] if len(parts) > 2 else alert)[:80]})
+    return rows[:LIMIT] or [{"name": "SMART", "label": "no disks"}]
+
+
+def disk_probe():
+    """Gatus shape: red when a disk is failing or the snapshot is missing."""
+    # A missing snapshot counts as red: silence would otherwise look healthy
+    # for as long as the timer stayed broken.
+    data = _read_json(DISK_HEALTH_FILE)
+    if not data:
+        return {"ok": False, "disks": 0, "failing": ["no snapshot"]}
+    failing = data.get("failing") or []
+    return {
+        "ok": bool(data.get("ok")) and not failing,
+        "disks": len(data.get("disks") or []),
+        "failing": failing,
+    }
+
+
+def backup_status():
+    """One row per host that pushes here; age is the useful part."""
+    try:
+        entries = sorted(os.listdir(BACKUP_STATUS_DIR))
+    except OSError:
+        return [{"name": "restic", "label": "no status yet", "ok": False}]
+    rows = []
+    for entry in entries:
+        if not entry.endswith(".json"):
+            continue
+        data = _read_json(os.path.join(BACKUP_STATUS_DIR, entry))
+        if not data:
+            continue
+        rows.append({
+            "name": data.get("name") or entry[:-5],
+            "label": f"{data.get('result', '?')} · {_short_time(data.get('at'))}",
+            "ok": bool(data.get("ok")),
+        })
+    return rows or [{"name": "restic", "label": "no status yet", "ok": False}]
+
+
+def backup_probe():
+    """Gatus shape: red unless every host reported a successful last run."""
+    # Same source as backup_status, but as one boolean, so a single broken host
+    # turns the check red instead of hiding inside a list of timestamps.
+    rows = backup_status()
+    failing = [row["name"] for row in rows if not row["ok"]]
+    return {"ok": not failing, "hosts": len(rows), "failing": failing}
+
+
 # --- HTTP -----------------------------------------------------------------
 
 ROUTES = {
@@ -319,6 +415,10 @@ ROUTES = {
     "/services.json": top_services,
     "/procs.json": top_processes,
     "/temps.json": temperatures,
+    "/disk.json": disk_health,
+    "/disk/health.json": disk_probe,
+    "/backups.json": backup_status,
+    "/backups/health.json": backup_probe,
     "/adguard/log.json": adguard_log,
     "/adguard/queries.json": lambda: adguard_log(QUERY_LIMIT),
     "/adguard/top.json": adguard_top,

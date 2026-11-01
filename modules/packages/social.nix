@@ -5,7 +5,6 @@
     type = lib.types.deferredModule;
     default = { pkgs, ... }: {
       environment.systemPackages = with pkgs; [
-        element-desktop
         discord
         telegram-desktop
       ];

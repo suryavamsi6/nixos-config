@@ -64,8 +64,7 @@
         '';
 
         # appimage-run's FHS env plus appimage-exec (runs AppImages with
-        # writable home; dev.nix's openresearch chroot adds it the same
-        # way) and libsecret (Electron safeStorage, the one lib upstream .deb
+        # writable home) and libsecret (Electron safeStorage, the one lib upstream .deb
         # packaging adds beyond the AppImage's own bundle).
         hermesFhs = pkgs.buildFHSEnv (
           pkgs.appimageTools.defaultFhsEnvArgs

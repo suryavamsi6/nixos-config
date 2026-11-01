@@ -133,3 +133,15 @@ hl.window_rule({
   center = false,
   pin = false,
 })
+
+-- Steam games launched outside gamescope render into a normal toplevel, so UE5
+-- titles that ask for "borderless"/windowed open as a floating Hyprland window.
+-- Phantom Blade Zero (Steam app 4115450) does exactly this: GameUserSettings.ini
+-- persists FullscreenMode=1 and there is no in-game exclusive-fullscreen switch
+-- that survives a Proton prefix reset. Matching the appid class and forcing
+-- fullscreen also gives gamescope-free VRR (misc.vrr = 2 is fullscreen-only, see
+-- look.lua) and lets the compositor hand the surface to direct scanout.
+hl.window_rule({
+  match = { class = "^steam_app_4115450$" },
+  fullscreen = true,
+})

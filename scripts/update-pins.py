@@ -20,6 +20,7 @@ Exit status: 0 nothing to do, 1 bumps available (dry run), 2 hard failure.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import os
 import re
@@ -102,8 +103,10 @@ def version_key(text: str) -> tuple[int, ...]:
     head, _, pre = base.partition("-")
     numbers = [int(x) for x in re.findall(r"\d+", head)][:4]
     numbers += [0] * (4 - len(numbers))
-    # A pre-release sorts below the matching final release.
-    return tuple(numbers) + (1 if pre else 0,)
+    # A pre-release sorts below the matching final release; previews in the
+    # same series (preview.8 vs preview.10) order by their numeric tail.
+    tail = tuple(int(x) for x in re.findall(r"\d+", pre))
+    return tuple(numbers) + (1 if pre else 0,) + tail
 
 
 def prefetch_file(url: str) -> str:
@@ -152,6 +155,7 @@ class Pin:
     lookup          how to find the newest version (see resolve())
     url_re/url_tpl  the URL literal, when the module spells one out
     hash_re/hash_*  the hash literal and how to compute it
+    lock_node       flake.lock node to re-resolve after a --write (flake inputs)
     """
 
     name: str
@@ -165,12 +169,14 @@ class Pin:
     hash_re: str | None = None
     hash_kind: str | None = None  # file | nix32 | unpack | None
     hash_url: str | None = None  # overrides url_tpl for the prefetch
+    lock_node: str | None = None
     extra: list[tuple[str, str]] = field(default_factory=list)
     note: str = ""
 
 
 DEVELOP = "modules/packages/dev.nix"
 SYSTEM = "modules/packages/system.nix"
+T3CODE = "modules/packages/t3code-nightly.nix"
 
 PINS: list[Pin] = [
     Pin(
@@ -209,30 +215,6 @@ PINS: list[Pin] = [
         hash_re=r'hash = "sha256-[^"]+";',
         hash_kind="file",
         extra=[(r'name = "Eigent-[0-9.]+\.AppImage";', 'name = "Eigent-{v}.AppImage";')],
-    ),
-    Pin(
-        name="openresearch",
-        file=DEVELOP,
-        anchor="openresearchVersion = ",
-        version_re=r'openresearchVersion = "(?P<v>[0-9][0-9.]*)";',
-        version_tpl='openresearchVersion = "{v}";',
-        lookup={"kind": "github", "repo": "alphaXiv/OpenResearch"},
-        url_re=r'url = "https://github\.com/alphaXiv/OpenResearch/releases/download/v[0-9.]+/OpenResearch-x86_64\.AppImage";',
-        url_tpl='url = "https://github.com/alphaXiv/OpenResearch/releases/download/v{v}/OpenResearch-x86_64.AppImage";',
-        hash_re=r'hash = "sha256-[^"]+";',
-        hash_kind="file",
-    ),
-    Pin(
-        name="unsloth",
-        file=SYSTEM,
-        anchor='pname = "unsloth-desktop";',
-        version_re=r'version = "(?P<v>[0-9][^"]*)";',
-        version_tpl='version = "{v}";',
-        lookup={"kind": "github", "repo": "unslothai/unsloth"},
-        url_re=r'url = "https://github\.com/unslothai/unsloth/releases/download/v[^/]+/Unsloth-Desktop-Linux\.AppImage";',
-        url_tpl='url = "https://github.com/unslothai/unsloth/releases/download/v{v}/Unsloth-Desktop-Linux.AppImage";',
-        hash_re=r'hash = "sha256-[^"]+";',
-        hash_kind="file",
     ),
     Pin(
         name="koboldcpp",
@@ -293,6 +275,37 @@ PINS: list[Pin] = [
         note="x86_64 AppImage only; macOS/Linux arm64 assets exist but are unused",
     ),
     Pin(
+        name="monocode-native",
+        file="modules/packages/monocode.nix",
+        anchor="monocodeVersion = ",
+        version_re=r'monocodeVersion = "(?P<v>[0-9][^"]*)";',
+        version_tpl='monocodeVersion = "{v}";',
+        lookup={
+            "kind": "github",
+            "repo": "hardbeat920/monocode",
+            "prerelease": True,
+            "tag_prefix": "native-v",
+        },
+        # Experimental GPUI preview series; the production Tauri app keeps
+        # the v-prefixed stable tags. The URL interpolates
+        # ${monocodeVersion}, so only the version literal and the hash get
+        # rewritten; hash_url drives the prefetch.
+        hash_url="https://github.com/hardbeat920/monocode/releases/download/native-v{v}/monocode-native_{v}_amd64.deb",
+        hash_re=r'hash = "sha256-[^"]+";',
+        hash_kind="file",
+    ),
+    Pin(
+        name="codex",
+        file="modules/packages/codex.nix",
+        anchor="codexVersion = ",
+        version_re=r'codexVersion = "(?P<v>[0-9][0-9.]*)";',
+        version_tpl='codexVersion = "{v}";',
+        lookup={"kind": "github", "repo": "openai/codex", "tag_prefix": "rust-v"},
+        hash_url="https://github.com/openai/codex/releases/download/rust-v{v}/codex-package-x86_64-unknown-linux-musl.tar.gz",
+        hash_re=r'hash = "sha256-[^"]+";',
+        hash_kind="file",
+    ),
+    Pin(
         name="mango",
         file="modules/mangowm/wm.nix",
         anchor="mangoPinned = pkgs:",
@@ -340,6 +353,18 @@ PINS: list[Pin] = [
         note="on bump also regenerate dsh-package-lock.json and refresh npmDepsHash",
     ),
     Pin(
+        name="dsh-desktop-next",
+        file="modules/packages/dsh-desktop-next.nix",
+        anchor="# DSH Desktop NEXT",
+        version_re=r'version = "(?P<v>[0-9][0-9.]*-next)";',
+        version_tpl='version = "{v}";',
+        lookup={"kind": "github", "repo": "anywhere-labs/dsh-desktop"},
+        hash_re=r'hash = "sha256-[^"]+";',
+        hash_kind="file",
+        hash_url="https://github.com/anywhere-labs/dsh-desktop/releases/download/v{v}/DSH-NEXT-{v}-x86_64.AppImage",
+        note="tracks the NEXT channel's x86_64 AppImage",
+    ),
+    Pin(
         name="dsh-node",
         file=DEVELOP,
         anchor="dshNodeVersion = ",
@@ -357,6 +382,46 @@ PINS: list[Pin] = [
         hash_re=r'hash = "sha256-[^"]+";',
         hash_kind="file",
     ),
+    Pin(
+        name="herdr-app",
+        file="modules/packages/herdr.nix",
+        anchor="herdrAppVersion = ",
+        version_re=r'herdrAppVersion = "(?P<v>[0-9][0-9.]*)";',
+        version_tpl='herdrAppVersion = "{v}";',
+        lookup={"kind": "herdr", "channel": "app"},
+        hash_re=r'hash = "sha256-[^"]+";',
+        hash_kind="file",
+        hash_url="https://releases.herdr.dev/app/{v}/herdr-app-linux-x86_64.tar.gz",
+        note="Herdr desktop app; no GitHub releases, only releases.herdr.dev",
+    ),
+    Pin(
+        name="herdr-core",
+        file="modules/packages/herdr.nix",
+        anchor="herdrCoreVersion = ",
+        version_re=r'herdrCoreVersion = "(?P<v>[0-9][0-9.]*)";',
+        version_tpl='herdrCoreVersion = "{v}";',
+        lookup={"kind": "herdr", "channel": "core"},
+        hash_re=r'hash = "sha256-[^"]+";',
+        hash_kind="file",
+        hash_url="https://releases.herdr.dev/core/{v}/herdr-core-linux-x86_64.tar.gz",
+        note="herdr-core must stay on the app's generation; the app refuses others",
+    ),
+    Pin(
+        name="opencode",
+        file="flake.nix",
+        anchor="opencode = {",
+        version_re=r'github:anomalyco/opencode/v(?P<v>[0-9][0-9.]*)";',
+        version_tpl='github:anomalyco/opencode/v{v}";',
+        lookup={
+            "kind": "github-tags",
+            "repo": "anomalyco/opencode",
+            "tag_prefix": "v",
+            "tag_glob": "v2.*",
+        },
+        lock_node="opencode",
+        note="flake input pinned to a v2.x tag; GitHub releases/latest still "
+        "serves the old v1 line and npm has no 2.x, so the tags are the index",
+    ),
 ]
 
 # t3code follows nixpkgs (`pkgs.t3code`). The local override was removed once
@@ -365,8 +430,7 @@ PINS: list[Pin] = [
 # Reported every run, never bumped: these need a human decision.
 FROZEN = {
     "zoom-vdi": "pinned for Citrix/VDI compatibility (AGENTS.md)",
-    "epic-launcher": "requireFile manual download; no stable upstream URL",
-    "flakes-inputs": "opencode/hyprland/etc. move with `nix flake update --flake`, not here",
+    "flakes-inputs": "hyprland/serpantinum/etc. move with `nix flake update --flake`, not here",
 }
 
 # A pin that jumps more than this many minor versions is worth eyeballing.
@@ -382,12 +446,46 @@ def resolve(pin: Pin) -> tuple[str | None, str]:
     """Return (latest_version, note). Version None means "cannot automate"."""
     kind = pin.lookup["kind"]
 
+    if kind == "github-tags":
+        # Repos that publish the current line as tags without a matching
+        # GitHub release (opencode v2.x), or whose releases/latest still serves
+        # an older stable line. Match the ref name, not the release feed.
+        base = f"https://api.github.com/repos/{pin.lookup['repo']}"
+        prefix = pin.lookup.get("tag_prefix", "")
+        glob = pin.lookup["tag_glob"]
+        tags = [
+            ref["ref"].removeprefix("refs/tags/")
+            for ref in http_json(
+                f"{base}/git/matching-refs/tags/{glob.replace('*', '')}?per_page=100"
+            )
+            if fnmatch.fnmatch(ref.get("ref", "").removeprefix("refs/tags/"), glob)
+        ]
+        if not tags:
+            return None, f"no tag matches {glob}"
+        tag = max(tags, key=version_key)
+        return tag.removeprefix(prefix).lstrip("v"), ""
+
     if kind == "github":
-        data = http_json(f"https://api.github.com/repos/{pin.lookup['repo']}/releases/latest")
-        tag = data.get("tag_name")
-        if not tag:
-            return None, "repository has no releases"
-        return tag.lstrip("v"), ""
+        base = f"https://api.github.com/repos/{pin.lookup['repo']}"
+        prefix = pin.lookup.get("tag_prefix", "")
+        if pin.lookup.get("prerelease"):
+            # Newest-first release list, keeping prereleases, filtered to
+            # the tag prefix (stable tags on the same repo are skipped).
+            tags = [
+                rel.get("tag_name", "")
+                for rel in http_json(f"{base}/releases?per_page=20")
+                if rel.get("tag_name", "").startswith(prefix)
+            ]
+            if not tags:
+                return None, "no release matches the tag prefix"
+            tag = tags[0]
+        else:
+            tag = http_json(f"{base}/releases/latest").get("tag_name")
+            if not tag:
+                return None, "repository has no releases"
+            if prefix and not tag.startswith(prefix):
+                return None, f"tag {tag} lacks the {prefix} prefix"
+        return tag.removeprefix(prefix).lstrip("v"), ""
 
     if kind == "grok-bot":
         html = http_get("https://cursor.com/download/bot?download=1")
@@ -421,6 +519,21 @@ def resolve(pin: Pin) -> tuple[str | None, str]:
         latest = data.get("dist-tags", {}).get("latest")
         if not latest:
             return None, "registry exposes no latest tag"
+        return latest, ""
+
+    if kind == "herdr":
+        channel = pin.lookup["channel"]
+        data = http_json(f"https://releases.herdr.dev/{channel}/latest.json")
+        latest = data.get("version")
+        if not latest:
+            return None, f"releases.herdr.dev/{channel}/latest.json has no version"
+        if channel == "core":
+            # The newest app states the core it needs; a core below that is
+            # rejected by the app, so both pins move together.
+            app = http_json("https://releases.herdr.dev/app/latest.json")
+            minimum = app.get("core_min", "")
+            if minimum and version_key(minimum) > version_key(latest):
+                return None, f"app {app.get('version')} needs herdr-core >= {minimum}"
         return latest, ""
 
     if kind == "claude-desktop":
@@ -538,6 +651,13 @@ def apply_bump(pin: Pin, old: str, new: str) -> list[str]:
         changed.append("hash")
 
     write(pin.file, text)
+
+    if pin.lock_node:
+        # A flake input's version literal is only half the pin: flake.lock
+        # still names the old ref, so re-resolve just this node.
+        run(["nix", "flake", "update", pin.lock_node])
+        changed.append("flake.lock")
+
     return changed
 
 
@@ -595,7 +715,6 @@ def main() -> int:
     manual: list[tuple[str, str]] = []
     skipped: list[tuple[str, str]] = []
     failures: list[tuple[str, str]] = []
-    followups: list[str] = []
 
     for pin in selected:
         try:
@@ -678,9 +797,6 @@ def main() -> int:
                 print(f"  {path}: FAILED")
                 print(f"    {proc.stderr.strip().splitlines()[0] if proc.stderr.strip() else ''}")
                 failures.append((path, "parse error"))
-
-    for note in followups:
-        print(f"\nNEXT STEP\n  {note}")
 
     if args.build and bumps and not failures:
         print("\nBUILDING #nixos (this takes a while)...")

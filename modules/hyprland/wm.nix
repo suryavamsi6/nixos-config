@@ -17,7 +17,6 @@
           hyprutils
           hyprlang
           hyprshot
-          hyprland-qtutils
           hyprshutdown
           aquamarine
           wl-clipboard

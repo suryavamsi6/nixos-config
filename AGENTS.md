@@ -6,10 +6,11 @@ Nix flake configuration for:
 
 - `#nixos`: primary x86_64 Linux host using Hyprland.
 - `#mango`: experimental x86_64 Linux host using MangoWM.
+- `#homelab`: x86_64 NixOS server (`hostname = "homelab"`) running the LAN's apps as Incus containers.
 - `#raspberry-pi`: aarch64 NixOS server (`hostname = "pi"`, user `suryavamsi`).
 - `#macbook-air`: nix-darwin configuration for the MacBook Air.
 
-The repository manages desktop systems, the Raspberry Pi server, Home Manager user configuration, Hyprland Lua, Quickshell/Serpantinum, hardware, networking, audio, containers, DNS, storage, and packaged applications.
+The repository manages desktop systems, the homelab and Raspberry Pi servers, Home Manager user configuration, Hyprland Lua, Quickshell/Serpantinum, hardware, networking, audio, containers, DNS, storage, backups, monitoring, and packaged applications.
 
 ## Architecture & Data Flow
 
@@ -22,6 +23,7 @@ flake inputs -> modules registry -> host selection -> system configuration
                                       -> Home Manager user files/services
                                       -> Hyprland/MangoWM + Quickshell runtime
                                       -> Raspberry Pi services + Podman containers
+                                      -> homelab Incus containers + Caddy/Homepage/Gatus
 ```
 
 NixOS system configuration and Home Manager/user-runtime configuration are separate layers. A module definition is not enabled until the appropriate host imports it.
@@ -31,15 +33,17 @@ NixOS system configuration and Home Manager/user-runtime configuration are separ
 - Desktop shell: `modules/desktop/serpantinum.nix`
 - Shell/user programs: `modules/shell/` and `modules/users/`
 - Hardware/system services: `modules/hardware/`, `modules/audio/`, `modules/networking/`, `modules/boot/`
+- Disk health (SMART) and restic backups: `modules/monitoring/`
 - Packages: `modules/packages/`
 
 ## Key Directories
 
-- `modules/hosts/`: `#nixos`, `#mango`, `#raspberry-pi`, and `#macbook-air` composition.
+- `modules/hosts/`: `#nixos`, `#mango`, `#homelab`, `#raspberry-pi`, and `#macbook-air` composition.
 - `modules/hyprland/lua/`: Lua configuration loaded by Hyprland 0.55+.
 - `modules/desktop/`: Serpantinum/Quickshell, greetd, and wallpapers.
 - `modules/packages/`: custom derivations and application wrappers, including Citrix and Zoom VDI.
 - `modules/hardware/`: GPU, disks, RGB, and device-specific configuration.
+- `modules/monitoring/`: `diskHealth`, `backups`, and `resticServer` deferred modules; see `docs/homelab.md`.
 - `modules/shell/`: Fish, Ghostty, Starship, and shell abbreviations.
 - `.cursor/skills/` and `.agents/skills/`: detailed repository-specific operational guidance.
 
@@ -99,7 +103,7 @@ Do not run a rebuild, switch, reboot, container update, secret rotation, or dest
 
 - `#raspberry-pi` is an `aarch64-linux` NixOS host named `pi`, administered as `suryavamsi`; its configuration currently lives in `modules/hosts/nixos-raspberry-pi.nix`.
 - Core services include SSH, Tailscale, Nginx, Cockpit, AdGuard Home, Unbound, and Redis-backed DNS caching.
-- Podman is the OCI backend; Docker is disabled. Managed containers include MariaDB, Nextcloud, Booklore, and Speedtest Tracker.
+- Podman is the OCI backend; Docker is disabled. Managed containers include MariaDB, Nextcloud, and Speedtest Tracker. (The Booklore/Grimmory library moved to the `#homelab` host in October 2026; the pi copy under `/mnt/media/booklore` is kept as a fallback.)
 - Persistent storage includes `/mnt/media`, `/var/lib/AdGuardHome`, and `/var/lib/redis-unbound`. Preserve mount ordering, ownership, container dependencies, network wiring, and firewall/reverse-proxy behavior.
 - Runtime secrets and credentials belong in the referenced external `.env` files or generated state, never in this repository. Do not expose secret contents in logs, diffs, prompts, or URLs.
 - Do not update mutable container tags, regenerate secrets, modify DNS/firewall exposure, or restart/rebuild the Pi unless explicitly requested. Validate mounts, environment files, service dependencies, and data paths before deploying.
@@ -120,6 +124,8 @@ Development tools provided by the configuration include `nixfmt`, `treefmt`, `ni
 ## Updating Pins
 
 `nix run .#update-pins` audits every pinned application in `modules/packages/` and `modules/mangowm/`: it resolves the newest upstream release, prefetches the hash, and reports what moved. Pass `--write` to rewrite the modules, `--build` to build `#nixos` afterwards, `--only orca,zcode` to narrow the run, and `--flake` to also run `nix flake update`. The implementation is `scripts/update-pins.py`.
+
+Flake-input pins are covered too. `opencode` is pinned to a `github:anomalyco/opencode/v2.x` tag in `flake.nix`, and `nix run .#update-pins -- --only opencode --write` bumps the tag literal *and* re-resolves that one `flake.lock` node (`lock_node=` on the `Pin`), so plain `nix flake update` is never needed for it. Its resolver is `kind = "github-tags"`, matching tag refs against a glob, because GitHub's `releases/latest` for that repo still serves the retired v1 line and npm has no 2.x at all. Nothing runs this on a schedule: you run it, review the diff, then switch.
 
 Do not convert a pin to `@latest`. Nix resolves fixed-output hashes at evaluation time, so a rolling version is unrepresentable; the rolling tools (pi, agent-browser, qmd, grok, feynman, deepseek-harness) instead run through `pnpm dlx …@latest` at runtime. `zoom-vdi`, `epic-launcher`, and `capy` have no machine-readable release index and stay manual.
 

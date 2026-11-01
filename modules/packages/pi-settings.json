@@ -32,17 +32,18 @@
     "npm:billion-context",
     "npm:pi-goal-x",
     "npm:@dietrichgebert/ponytail",
+    "npm:@ramarivera/pi-supermemory",
     "git:github.com/nagisanzenin/engram"
   ],
   "subagents": {
     "agentOverrides": {
-      "scout": { "model": "opencode-free/muse-spark-1.2-contributor-free", "thinking": "low" },
-      "delegate": { "model": "opencode-free/mimo-v2.5-free", "thinking": "medium" },
-      "researcher": { "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free", "thinking": "high" },
-      "worker": { "model": "opencode-free/mimo-v2.5-free", "thinking": "medium" },
-      "reviewer": { "model": "openrouter/nvidia/nemotron-3-super-120b-a12b:free", "thinking": "high" },
-      "oracle": { "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free", "thinking": "max" },
-      "advisor": { "model": "opencode-free/nemotron-3-ultra-free", "thinking": "high" }
+      "scout": { "model": "bifrost/opencode-go/mimo-v2.6-flash", "thinking": "low" },
+      "delegate": { "model": "bifrost/opencode-go/minimax-m3.1-flash", "thinking": "medium" },
+      "researcher": { "model": "bifrost/opencode-go/kimi-k3.1-pro", "thinking": "high" },
+      "worker": { "model": "bifrost/opencode-go/deepseek-v4.1-flash", "thinking": "medium" },
+      "reviewer": { "model": "bifrost/opencode-go/glm-5.3", "thinking": "high" },
+      "oracle": { "model": "bifrost/opencode-go/deepseek-v4-pro", "thinking": "high" },
+      "advisor": { "model": "bifrost/opencode-go/qwen3.8-max", "thinking": "high" }
     }
   },
   "quietStartup": true,

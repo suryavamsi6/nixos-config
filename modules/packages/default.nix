@@ -10,8 +10,19 @@
     ./comfyui.nix
     ./hermes-desktop.nix
     ./openbot.nix
+    ./monocode.nix
     ./capy.nix
     ./claude-code-router.nix
+    ./codex.nix
+    ./chatgpt-desktop.nix
     ./onepassword-mcp.nix
+    ./cliproxyapi.nix
+    ./ghostex.nix
+    ./herdr.nix
+    ./dsh-desktop-next.nix
+    ./orbit-pi.nix
+    ./pi-desktop.nix
+    ./synara.nix
+    ./t3code-nightly.nix
   ];
 }

@@ -85,6 +85,9 @@ class Bridge:
         r("GET", P + r"/memory", self.memory_status)
         r("GET", P + rf"/memory/providers/(?P<name>{NAME_RE})/config", self.memory_config_get)
         r("PUT", P + rf"/memory/providers/(?P<name>{NAME_RE})/config", self.memory_config_put)
+        r("GET", P + r"/soul", self.soul_get)
+        r("PUT", P + r"/soul", self.soul_put)
+        r("GET", P + r"/usage", self.usage)
 
     def _route(self, method: str, pattern: str, fn: Callable[..., Result], auth: bool = True, gate: bool = True) -> None:
         self.routes.append((method, re.compile("^" + pattern + "$"), fn, auth, gate and auth))
@@ -97,10 +100,12 @@ class Bridge:
         except HttpError as e:
             return e.status, {"error": {"code": e.code, "message": e.message, **e.extra}}
         except UpstreamUnreachable as e:
-            return 502, {"error": {"code": "dashboard_unreachable", "message": str(e)}}
+            # Details (internal URLs, socket errors) go to the log, not to the client.
+            log.warning("dashboard unreachable: %s", e)
+            return 502, {"error": {"code": "dashboard_unreachable", "message": "The Hermes dashboard didn't answer. Check that it's running."}}
         except ConfigError as e:
             log.error("configuration error: %s", e)
-            return 500, {"error": {"code": "bridge_misconfigured", "message": str(e)}}
+            return 500, {"error": {"code": "bridge_misconfigured", "message": "hermes-bridge is misconfigured; see its log on the server."}}
 
     def _handle(self, method, path, query, headers, body) -> Result:
         if self.cfg.base_path and (path == self.cfg.base_path or path.startswith(self.cfg.base_path + "/")):
@@ -414,6 +419,38 @@ class Bridge:
             raise HttpError(400, "invalid_body", "values must be an object")
         return 200, self._call("PUT", f"/api/memory/providers/{quote(name)}/config", query={"profile": p},
                                body={"values": values})
+
+    # The profile's persona (SOUL.md) via the dashboard's /api/profiles/{name}/soul. Writes are
+    # size-capped and must be text; the dashboard writes atomically.
+    def soul_get(self, p: str, **_) -> Result:
+        self._require_profile(p)
+        body = self._call("GET", f"/api/profiles/{quote(p)}/soul")
+        return 200, {"content": str(body.get("content") or ""), "exists": bool(body.get("exists"))}
+
+    def soul_put(self, p: str, body: dict, **_) -> Result:
+        content = body.get("content")
+        if not isinstance(content, str):
+            raise HttpError(400, "invalid_body", "content must be a string")
+        if len(content.encode("utf-8")) > SOUL_MAX_BYTES:
+            raise HttpError(413, "too_large", f"SOUL.md is limited to {SOUL_MAX_BYTES // 1024} KB.")
+        self._require_profile(p)
+        self._call("PUT", f"/api/profiles/{quote(p)}/soul", body={"content": content})
+        return 200, {"ok": True}
+
+
+    # Token and cost totals for a profile (dashboard /api/analytics/usage). Only the totals and the
+    # per-model and per-day rows are passed on.
+    def usage(self, p: str, query: dict, **_) -> Result:
+        try:
+            days = max(1, min(365, int(query.get("days") or 30)))
+        except ValueError:
+            raise HttpError(400, "invalid_days", "days must be a number from 1 to 365")
+        body = self._call("GET", "/api/analytics/usage", query={"profile": p, "days": days})
+        return 200, {"days": days, "totals": body.get("totals") or {}, "by_model": body.get("by_model") or [],
+                     "daily": body.get("daily") or []}
+
+
+SOUL_MAX_BYTES = 48 * 1024  # under MAX_BODY, leaving room for JSON escaping
 
 
 # ---------------------------------------------------------------------- small helpers

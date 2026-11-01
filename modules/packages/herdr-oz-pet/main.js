@@ -1,0 +1,1 @@
+/nix/store/8a8cby3h0jxv3f5kc1mbn474gkmciiql-home-manager-files/.config/herdr-app/mods/oz-pet/main.js

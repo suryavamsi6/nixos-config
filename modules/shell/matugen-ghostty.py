@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render a Ghostty palette from Serpantinum's Matugen color cache."""
+"""Render Ghostty and Starship palettes from Serpantinum's active colors."""
 
 import json
 import os
@@ -37,8 +37,8 @@ def colors_from(path: Path) -> dict[str, str]:
 
 
 def render_ghostty(colors: dict[str, str]) -> str:
-    # ANSI colors use Matugen semantic roles so terminal output follows the
-    # same palette as Serpantinum and the existing Kitty/Cava integrations.
+    # ANSI colors use Serpantinum semantic roles so terminal output follows
+    # both its static presets and image-generated palette.
     palette = [
         colors["crust"],
         colors["red"],
@@ -59,7 +59,7 @@ def render_ghostty(colors: dict[str, str]) -> str:
     ]
 
     lines = [
-        "# Generated from Serpantinum Matugen colors; do not edit.",
+        "# Generated from Serpantinum active colors; do not edit.",
         f"background = {colors['base']}",
         f"foreground = {colors['text']}",
         f"cursor-color = {colors['text']}",

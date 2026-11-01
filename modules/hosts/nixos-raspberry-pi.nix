@@ -1,13 +1,22 @@
 # Host: Raspberry Pi 4 (aarch64-linux)
-{ inputs, ... }:
+#
+# Two things live here on purpose:
+#
+#   * `flake.modules.nixos.raspberryPi` — the reusable host body. Clan evaluates
+#     this once the migration flips (plans/clan-deploy-rs-migration.md §4).
+#   * `flake.nixosConfigurations.raspberry-pi` — the transitional wrapper. It is
+#     deleted in the flip step and exists only so the host keeps building from
+#     an unchanged drvPath in the meantime.
+{ config, inputs, lib, ... }:
 {
-  flake.nixosConfigurations.raspberry-pi = inputs.nixpkgs.lib.nixosSystem {
-    system = "aarch64-linux";
-    specialArgs = {
-      inherit inputs;
-      system = "aarch64-linux";
-    };
-    modules = [
+  options.flake.modules.nixos.raspberryPi = lib.mkOption {
+    type = lib.types.deferredModule;
+    default =
+      { flakeModules, ... }:
+      {
+    imports = with flakeModules; [
+      nixos.diskHealth # smartd + /var/lib/disk-health/health.json
+      nixos.resticServer # rest-server: this host IS the backup target
       # Raspberry Pi SD-card image support
       "${inputs.nixpkgs}/nixos/modules/installer/sd-card/sd-image-aarch64.nix"
 
@@ -119,7 +128,7 @@
         environment.etc."ssl/cert.pem".source = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
 
         networking.networkmanager.enable = true;
-        # LAN-facing services; native Nginx owns port 80.
+        # LAN-facing services; Caddy owns port 80.
         networking.firewall.allowedTCPPorts = [
           22
           53
@@ -167,28 +176,6 @@
             dependsOn = [ "mariadb" ];
             extraOptions = [ "--network=pi_net" ];
           };
-          booklore = {
-            image = "ghcr.io/grimmory-tools/grimmory:latest";
-            labels."io.containers.autoupdate" = "registry";
-            environmentFiles = [ "/home/suryavamsi/services/booklore/.env" ];
-            environment = {
-              JAVA_TOOL_OPTIONS = "-XX:MaxRAMPercentage=60 -XX:+UseSerialGC";
-            };
-            volumes = [
-              "/mnt/media/booklore/data:/app/data"
-              "/mnt/media/booklore/books:/books"
-              "/mnt/media/booklore/bookdrop:/bookdrop"
-            ];
-            ports = [ "6060:6060" ];
-            dependsOn = [ "mariadb" ];
-            # Cap the container so the JVM sizes its heap against the cap,
-            # not the Pi's total RAM. SerialGC has the smallest footprint.
-            extraOptions = [
-              "--network=pi_net"
-              "--memory=320m"
-            ];
-          };
-
           speedtest-tracker = {
             image = "lscr.io/linuxserver/speedtest-tracker:latest";
             labels."io.containers.autoupdate" = "registry";
@@ -227,56 +214,27 @@
             Persistent = true;
           };
         };
-        # Glances in webserver mode feeds the homelab's Homepage dashboard
-        # (its glances info widget) with this host's CPU/memory/disk/
-        # uptime. Loopback only; the nginx vhost below proxies it as
-        # glances.home.arpa, which the homelab pins in networking.hosts
-        # (no AdGuard rewrite needed for the dashboard to reach it).
-        systemd.services.glances = {
-          description = "Glances system monitor (REST feed for Homepage)";
-          wantedBy = [ "multi-user.target" ];
-          after = [ "network.target" ];
-          serviceConfig = {
-            # doCheck=false: glances' pytest calls ioctl(SIOCETHTOOL) via
-            # psutil, which qemu-user aarch64 emulation (desktop -> pi
-            # builds) does not implement, so the check phase dies with
-            # ENOTTY and blocks the deploy. The suite passes on real
-            # hardware; only this closure skips it.
-            ExecStart = "${
-              pkgs.glances.overridePythonAttrs (_: {
-                doCheck = false;
-              })
-            }/bin/glances -w --bind 127.0.0.1";
-            Restart = "on-failure";
-            RestartSec = "5s";
-          };
-        };
-        services.nginx = {
+        # Caddy replaces Nginx here: one reverse proxy for the Pi's apps,
+        # matching the homelab host so there is a single proxy config style.
+        # AdGuard owns :53/:82, Speedtest and Nextcloud publish loopback-only
+        # ports, so Caddy is the only thing listening on :80.
+        services.caddy = {
           enable = true;
-          recommendedProxySettings = true;
+          # Caddy runs as the unprivileged `caddy` user and binds :80 itself
+          # (ambient capability, no root).
           virtualHosts =
             lib.mapAttrs
               (_: upstream: {
-                listen = [
-                  {
-                    addr = "0.0.0.0";
-                    port = 80;
-                  }
-                ];
-                locations."/" = {
-                  proxyPass = upstream;
-                  proxyWebsockets = true;
-                };
+                extraConfig = ''
+                  encode gzip
+                  reverse_proxy ${upstream}
+                '';
               })
               {
-                "booklore.local" = "http://127.0.0.1:6060";
-                "booklore.home.arpa" = "http://127.0.0.1:6060";
-                "adguard.local" = "http://127.0.0.1:82";
-                "adguard.home.arpa" = "http://127.0.0.1:82";
-                "speedtest.home.arpa" = "http://127.0.0.1:8081";
-                "nextcloud.home.arpa" = "http://127.0.0.1:8082";
-                # Glances REST feed for the homelab's Homepage dashboard.
-                "glances.home.arpa" = "http://127.0.0.1:61208";
+                "http://adguard.local" = "http://127.0.0.1:82";
+                "http://adguard.home.arpa" = "http://127.0.0.1:82";
+                "http://speedtest.home.arpa" = "http://127.0.0.1:8081";
+                "http://nextcloud.home.arpa" = "http://127.0.0.1:8082";
               };
         };
         services.cockpit = {
@@ -393,15 +351,25 @@
                       "192.168.0.160"
                     else if domain == "homeassistant.home.arpa" then
                       "192.168.0.160"
-                    else if domain == "litellm.home.arpa" then
-                      "192.168.0.160"
                     else if domain == "mcp.home.arpa" then
-                      "192.168.0.160"
-                    else if domain == "lens.home.arpa" then
                       "192.168.0.160"
                     else if domain == "board.home.arpa" then
                       "192.168.0.160"
                     else if domain == "search.home.arpa" then
+                      "192.168.0.160"
+                    else if domain == "booklore.home.arpa" then
+                      # Grimmory/Booklore moved to the homelab laptop.
+                      "192.168.0.160"
+                    else if
+                      domain == "resume.home.arpa"
+                      || domain == "netdata.home.arpa"
+                      || domain == "status.home.arpa"
+                      || domain == "map.home.arpa"
+                      || domain == "bifrost.home.arpa"
+                      || domain == "grok.home.arpa"
+                      || domain == "nutify.home.arpa"
+                      || domain == "cliproxy.home.arpa"
+                    then
                       "192.168.0.160"
                     else
                       "192.168.0.105";
@@ -416,12 +384,17 @@
                   # homelab laptop (192.168.0.160), proxied by its Caddy
                   "homelab.home.arpa"
                   "homeassistant.home.arpa"
-                  "litellm.home.arpa"
                   "mcp.home.arpa"
-                  "lens.home.arpa"
                   "hermes.home.arpa"
                   "board.home.arpa"
                   "search.home.arpa"
+                  "resume.home.arpa"
+                  "status.home.arpa"
+                  "map.home.arpa"
+                  "bifrost.home.arpa"
+                  "grok.home.arpa"
+                  "nutify.home.arpa"
+                  "cliproxy.home.arpa"
                 ];
           };
         };
@@ -437,8 +410,8 @@
             "speedtest-tracker-secret.service"
             "podman-mariadb.service"
             "podman-nextcloud.service"
-            "podman-booklore.service"
             "podman-speedtest-tracker.service"
+            "restic-rest-server.service"
           ];
           serviceConfig = {
             Type = "oneshot";
@@ -451,14 +424,18 @@
               /mnt/media/speedtest-tracker/config
             ${pkgs.coreutils}/bin/install -d -m 0755 -o suryavamsi -g users \
               /mnt/media/media/Anime
-            ${pkgs.coreutils}/bin/install -d -m 0755 -o 33 -g 33 \
-              /mnt/media/nextcloud/html
             ${pkgs.coreutils}/bin/install -d -m 0750 -o 33 -g 33 \
               /mnt/media/nextcloud/data
+            # rest-server's dataDir. Created here, after the media mount, so a
+            # missing disk leaves it absent instead of creating an empty repo
+            # on the SD card. 0700 restic: rest-server runs under
+            # PrivateUsers=true, so a root-owned path is unreadable to it.
+            ${pkgs.coreutils}/bin/install -d -m 0700 -o restic -g restic \
+              /mnt/media/backups/restic
           '';
         };
         # Shrink MariaDB's RAM caches in the mutable custom.cnf on the media
-        # disk: a personal Nextcloud + book catalog never touches the 256M
+        # disk: a personal Nextcloud instance never touches the 256M
         # InnoDB pool or 64M query cache the stock template ships with. Only
         # the exact shipped values are rewritten, so later hand tuning is
         # respected; the container bounces once so the new sizes take effect.
@@ -501,13 +478,16 @@
             Type = "oneshot";
             RemainAfterExit = true;
           };
+          # The key handling lives in a real script: stripping the literal
+          # backslash-n suffix that an older version of this unit wrote needs
+          # more escaping levels than a Nix indented string can carry without
+          # the generated shell silently changing meaning.
           script = ''
             ${pkgs.coreutils}/bin/mkdir -p /mnt/media/speedtest-tracker
-            if ! ${pkgs.coreutils}/bin/test -s /mnt/media/speedtest-tracker/speedtest.env; then
-              printf 'APP_KEY=base64:%s\\n' "$(${pkgs.openssl}/bin/openssl rand -base64 32 | ${pkgs.coreutils}/bin/tr -d '\\n')" > /mnt/media/speedtest-tracker/speedtest.env
-            fi
-            ${pkgs.coreutils}/bin/chown root:root /mnt/media/speedtest-tracker/speedtest.env
-            ${pkgs.coreutils}/bin/chmod 600 /mnt/media/speedtest-tracker/speedtest.env
+            envFile=/mnt/media/speedtest-tracker/speedtest.env
+            ${pkgs.bash}/bin/bash ${./speedtest-app-key.sh} "$envFile"
+            ${pkgs.coreutils}/bin/chown root:root "$envFile"
+            ${pkgs.coreutils}/bin/chmod 600 "$envFile"
           '';
         };
         # On the first reboot after this change, migrate AdGuard while it is
@@ -558,7 +538,6 @@
           before = [
             "podman-mariadb.service"
             "podman-nextcloud.service"
-            "podman-booklore.service"
             "podman-speedtest-tracker.service"
           ];
           serviceConfig = {
@@ -578,10 +557,6 @@
           after = [ "media-directories.service" ];
         };
         systemd.services.podman-nextcloud = {
-          requires = [ "media-directories.service" ];
-          after = [ "media-directories.service" ];
-        };
-        systemd.services.podman-booklore = {
           requires = [ "media-directories.service" ];
           after = [ "media-directories.service" ];
         };
@@ -624,5 +599,6 @@
         system.stateVersion = "24.11";
       })
     ];
+      };
   };
 }

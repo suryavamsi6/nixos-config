@@ -4,11 +4,13 @@ NixOS (Hyprland / MangoWM) and macOS (nix-darwin) flake configuration.
 
 Flake hosts:
 
-| Attribute | Desktop | Notes |
-|-----------|---------|-------|
-| `#nixos` | Hyprland | Primary Linux host (ext4 + Limine + Windows chainload) |
-| `#mango` | MangoWM | Experimental scrolling-tags host; see `docs/mangowm.md` |
-| `#macbook-air` | nix-darwin | MacBook M4 Air |
+| Attribute | Host | Notes |
+|-----------|------|-------|
+| `#nixos` | Hyprland desktop | Primary Linux host (ext4 + Limine + Windows chainload) |
+| `#mango` | MangoWM desktop | Experimental scrolling-tags host; see `docs/mangowm.md` |
+| `#homelab` | Homelab server | Incus containers (incl. Nutify UPS monitoring), Caddy, Homepage, Gatus, restic server; see `docs/homelab.md` |
+| `#raspberry-pi` | Pi | AdGuard Home, Nextcloud, Speedtest Tracker, restic targets |
+| `#macbook-air` | MacBook M4 Air | nix-darwin |
 
 ---
 
@@ -198,17 +200,21 @@ sudo nixos-rebuild switch --flake .#nixos
 `#nixos` also installs a **Gaming Mode (Steam)** session that appears next to Hyprland in the greeter. It runs Steam's Deck UI on a gamescope compositor that owns the display, is remembered by `tuigreet --remember-session`, and changes nothing about the default Hyprland desktop. Details, tuning knobs and rollback: `docs/gaming-mode.md`.
 
 
-### Controlled gaming-kernel trial
+### Kernel
 
-The primary `.#nixos` host currently boots the default CachyOS kernel. The newest Limine generation also contains a `stock-kernel` specialisation using the stock nixpkgs kernel; older generations remain available as an additional rollback path.
+The primary `.#nixos` host boots `pkgs.linuxPackages_cachyos-bore` with the matching NVIDIA package from the same kernel set (`modules/hosts/nixos-hyprland.nix:63`). There is no kernel specialisation: roll back by picking an older Limine generation.
 
-Install kernel changes without activating them in the running session:
+Kernel changes only take effect on the next boot, so install them without touching the running session:
 
 ```bash
 sudo nixos-rebuild boot --flake .#nixos
 ```
 
-After rebooting, select either the normal `cachyos-trial` entry or `stock-kernel` by label in Limine. A runtime specialisation switch cannot replace the running kernel.
+---
+
+## Monitoring, backups, disk health
+
+`modules/monitoring/` adds SMART disk health and nightly restic backups to `#nixos`, `#homelab`, and `#raspberry-pi`; the homelab's Homepage, Gatus, and Netdata pages surface both. Setup, restore procedure, and the exclusion list: `docs/homelab.md`.
 
 ---
 

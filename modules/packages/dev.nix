@@ -57,6 +57,29 @@ let
           # so a pruned ~/.pi/agent/npm never surfaces as a load error.
           pi-host-links >/dev/null || true
 
+          # Secrets reach login shells through hm-session-vars.sh, but a pi
+          # started from a GUI app, a compositor keybind or a systemd user unit
+          # never sources that file, so the extensions that read them saw empty
+          # values (pi-supermemory answered "Supermemory is not configured").
+          # The activation already writes both keys as 0600 files, so read
+          # those here instead of duplicating any value in the flake.
+          for pair in \
+            "BIFROST_API_KEY:$HOME/.config/bifrost/api-key" \
+            "SUPERMEMORY_API_KEY:$HOME/.config/supermemory/api-key"; do
+            name=''${pair%%:*}
+            file=''${pair#*:}
+            if [ -z "''${!name:-}" ] && [ -r "$file" ]; then
+              export "$name=$(cat "$file")"
+            fi
+          done
+
+          # Point pi at the same Supermemory container as everything else
+          # (`surya`, the account's main space) instead of the extension's own
+          # empty `pi-supermemory` default, so memories written by pi are
+          # recalled later and memories saved elsewhere are visible to it.
+          # Set with := so an explicit override still wins.
+          export PI_SUPERMEMORY_CONTAINER_TAG="''${PI_SUPERMEMORY_CONTAINER_TAG:-surya}"
+
           # Do not exec: the wrapper re-runs the repair after pi exits, which
           # is what creates the links the first time after a fresh npx
           # install of pi-coding-agent.
@@ -114,6 +137,7 @@ let
         "npm:billion-context"
         "npm:pi-goal-x"
         "npm:@dietrichgebert/ponytail"
+        "npm:@ramarivera/pi-supermemory"
         "git:github.com/nagisanzenin/engram"
       ];
     in
@@ -143,18 +167,73 @@ let
         fi
         rm -f "$piSettings.new"
         install -Dm644 ${./pi-models.json} "$HOME/.pi/agent/models.json"
+        install -Dm644 ${./pi-bifrost-models.ts} "$HOME/.pi/agent/extensions/pi-bifrost-models.ts"
         # MCP servers are pi's own now (`~/.pi/agent/mcp.json`, see
         # docs/mcp.md). The `pi-mcp-adapter` extension that used to own this
         # file is gone, so write the server list where pi core reads it and
         # drop the adapter's copy.
         install -Dm644 ${./pi-mcp.json} "$HOME/.pi/agent/mcp.json"
-        rm -f "$HOME/.pi/agent/mcp-adapter.json"
+        # pi-fff walks the cwd at startup to build its index. When the cwd is
+        # $HOME (every MonoCode/Mono session started without a project, and
+        # every `pi` run from ~) that scan is the whole home directory, so pi
+        # emits no status events for ~16s. MonoCode's provider probe gives up
+        # at 45s and shows "Loading models..." in the picker while it waits,
+        # and a cold file cache pushed the scan long enough to hit that limit.
+        # Home-dir indexing buys nothing (searching ~ is not a real workflow),
+        # so disable it once here instead of passing a flag per launch.
+        install -Dm644 ${./pi-fff.json} "$HOME/.pi/agent/pi-fff.json"
+        # pi-web-access consults ~/.pi/agent/web-search.json before any other
+        # source, so this is what makes the LAN SearXNG the default search
+        # route instead of a paid provider. Routing prefers searxng and falls
+        # back to openai only on transient/quota/network/invalid-response
+        # failures. Two quirks are load-bearing:
+        #   * searxngBaseUrl is the Caddy name, not homelab:8888. SearXNG binds
+        #     127.0.0.1 only, so the port is unreachable from this host; the
+        #     name goes through Caddy. It must stay plain HTTP on a non-loopback
+        #     host, hence allowHttpBaseUrls (otherwise SearXNG silently drops
+        #     out of availability and every search quietly uses a paid provider).
+        #   * ssrf.allowRanges carries the homelab /32, because SearXNG requests
+        #     still run through the SSRF guard. Verified: without it a search
+        #     fails with "Blocked internal address for 192.168.0.160" and the
+        #     fallback silently answers instead.
         # The npmCommand shim and the host-dependency repairs it drives are
         # referenced by ~/.pi/agent/settings.json, so keep them in sync with
         # the flake rather than as hand-edited files.
         install -Dm755 ${./pi-npm} "$HOME/.pi/agent/bin/pi-npm"
         install -Dm755 ${./host-deps-patch.mjs} "$HOME/.pi/agent/bin/host-deps-patch.mjs"
         install -Dm755 ${./pi-host-links.mjs} "$HOME/.pi/agent/bin/pi-host-links.mjs"
+        # Materialise the Bifrost virtual key for anything started outside a
+        # shell (desktop entries, systemd --user). Seeded once from the Fish
+        # universal variable that was set by hand; on later activation the
+        # existing file wins so the key is never rotated underneath a
+        # running process. Nothing in the flake contains the value itself.
+        if [ ! -s "$HOME/.config/bifrost/api-key" ]; then
+          mkdir -p "$HOME/.config/bifrost"
+          key="''${BIFROST_API_KEY:-}"
+          if [ -z "$key" ] && command -v fish >/dev/null 2>&1; then
+            key=$(fish -c 'echo -n $BIFROST_API_KEY' 2>/dev/null)
+          fi
+          if [ -n "$key" ]; then
+            printf '%s\n' "$key" > "$HOME/.config/bifrost/api-key"
+            chmod 600 "$HOME/.config/bifrost/api-key"
+          fi
+          unset key
+        fi
+        # Same pattern for Supermemory: the key is a secret, so the flake
+        # only names the file. The pi-supermemory extension reads
+        # SUPERMEMORY_API_KEY from the environment.
+        if [ ! -s "$HOME/.config/supermemory/api-key" ]; then
+          mkdir -p "$HOME/.config/supermemory"
+          key="''${SUPERMEMORY_API_KEY:-}"
+          if [ -z "$key" ] && command -v fish >/dev/null 2>&1; then
+            key=$(fish -c 'echo -n $SUPERMEMORY_API_KEY' 2>/dev/null)
+          fi
+          if [ -n "$key" ]; then
+            printf '%s\n' "$key" > "$HOME/.config/supermemory/api-key"
+            chmod 600 "$HOME/.config/supermemory/api-key"
+          fi
+          unset key
+        fi
       '';
 
       home.packages = [
@@ -163,6 +242,17 @@ let
         piHostLinks
         piAgentBrowserDoctor
       ];
+
+      # The Bifrost virtual key and the Supermemory API key are secrets, so the
+      # flake only ever refers to them by name: pi's models.json (see
+      # pi-models.json) and Crush's config both interpolate $BIFROST_API_KEY at
+      # request time, and the pi-supermemory extension reads
+      # $SUPERMEMORY_API_KEY. Declaring the variables here makes them reach
+      # every GUI launch and systemd user unit, which do not inherit a Fish
+      # universal variable. The values come from the files written above,
+      # never from this repository.
+      home.sessionVariables.BIFROST_API_KEY = "$(cat $HOME/.config/bifrost/api-key 2>/dev/null)";
+      home.sessionVariables.SUPERMEMORY_API_KEY = "$(cat $HOME/.config/supermemory/api-key 2>/dev/null)";
     };
 in
 {
@@ -183,6 +273,21 @@ in
       }:
       let
         opencodeUpstream = inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.opencode;
+        # Upstream's nix/hashes.json node_modules hash is computed in their own
+        # CI and does not reproduce here: opencode pins bun@1.4.4 in
+        # package.json while nixpkgs ships 1.4.2, and bun's install output
+        # differs between them, so the build dies with
+        #   hash mismatch in fixed-output derivation opencode-node_modules
+        # (specified j261..., got +GgLX...). The value below is the hash Nix
+        # reported for bun@1.4.2's node_modules tree; it is a fixed-output
+        # derivation, so its store path is derived from the hash and the build
+        # stays reproducible. The version drift is tolerated: opencode.nix's
+        # postPatch turns bun's version check into a warning. Re-run
+        # `nix build .#nixosConfigurations.nixos.config.system.build.toplevel`
+        # and take the new 'got:' value whenever the opencode pin moves.
+        opencodeNodeModules = opencodeUpstream.node_modules.overrideAttrs (_: {
+          outputHash = "sha256-+GgLX4lq8fPOJVoDGp220uiCTLB0ZwrBkcNo36q9MZU=";
+        });
         # The nix packaging takes src from a fileset filter that omits the
         # repo-root script/ dir, but packages/cli/script/build.ts imports
         # ../../../script/native-arch. Build from the unfiltered flake source
@@ -190,112 +295,20 @@ in
         # overrides are obsolete and were removed.)
         opencodeV2 = opencodeUpstream.overrideAttrs (_: {
           src = inputs.opencode.outPath;
+          node_modules = opencodeNodeModules;
         });
         ohMyPi = pkgs.stdenvNoCC.mkDerivation {
           pname = "oh-my-pi";
-          version = "18.12.6";
+          version = "18.14.0";
           src = pkgs.fetchurl {
-            url = "https://github.com/can1357/oh-my-pi/releases/download/v18.12.6/omp-linux-x64";
-            hash = "sha256-hdna86Bfx26M1CWuGQTrV2r40hzIX89GkHQmJuB8z6Q=";
+            url = "https://github.com/can1357/oh-my-pi/releases/download/v18.14.0/omp-linux-x64";
+            hash = "sha256-590rYGxOvp0ae8+tG4gg25aM1rBUCf7RxryNsLapWo8=";
           };
           nativeBuildInputs = [ pkgs.patchelf ];
           dontUnpack = true;
           installPhase = ''
             install -Dm755 "$src" "$out/bin/omp"
             patchelf --set-interpreter ${pkgs.stdenv.cc.libc}/lib/ld-linux-x86-64.so.2 "$out/bin/omp"
-          '';
-        };
-        # Ori is intentionally rolling rather than pinned in the Nix store.
-        # The launcher bootstraps the latest stable binary into user state;
-        # Ori's own `ori update` command can then update that mutable copy.
-        ori = pkgs.writeShellApplication {
-          name = "ori";
-          runtimeInputs = [
-            pkgs.coreutils
-            pkgs.curl
-            pkgs.gnugrep
-            pkgs.patchelf
-            pkgs.util-linux
-          ];
-          text = ''
-            state_root="''${XDG_DATA_HOME:-$HOME/.local/share}/ori"
-            bin_dir="$state_root/bin"
-            binary="$bin_dir/ori"
-            expected_interpreter="${pkgs.stdenv.cc.libc}/lib/ld-linux-x86-64.so.2"
-            release_base="https://github.com/OpenRouterLabs/ori-releases/releases/latest/download"
-            tmp_dir=""
-
-            cleanup() {
-              if [[ -n "$tmp_dir" ]]; then
-                rm -rf "$tmp_dir"
-              fi
-            }
-            trap cleanup EXIT
-
-            mkdir -p "$bin_dir"
-            exec 9>"$state_root/install.lock"
-            flock 9
-
-            if [[ ! -x "$binary" ]]; then
-              tmp_dir="$(mktemp -d)"
-              curl --fail --location --silent --show-error --proto '=https' \
-                "$release_base/ori-linux-x64" -o "$tmp_dir/ori-linux-x64"
-              curl --fail --location --silent --show-error --proto '=https' \
-                "$release_base/SHA256SUMS" -o "$tmp_dir/SHA256SUMS"
-
-              checksum_line="$(grep -E '^[[:xdigit:]]{64}[[:space:]]+\*?ori-linux-x64$' "$tmp_dir/SHA256SUMS" || true)"
-              if [[ -z "$checksum_line" ]]; then
-                echo "ori: latest release has no checksum for ori-linux-x64" >&2
-                exit 1
-              fi
-              (
-                cd "$tmp_dir"
-                printf '%s\n' "$checksum_line" | sha256sum --check --status -
-              )
-
-              patchelf --set-interpreter "$expected_interpreter" "$tmp_dir/ori-linux-x64"
-              install -m755 "$tmp_dir/ori-linux-x64" "$binary"
-              rm -rf "$tmp_dir"
-              tmp_dir=""
-            fi
-
-            current_interpreter="$(patchelf --print-interpreter "$binary" 2>/dev/null || true)"
-            if [[ "$current_interpreter" != "$expected_interpreter" ]]; then
-              patched_binary="$(mktemp "$bin_dir/.ori-patched.XXXXXX")"
-              cp "$binary" "$patched_binary"
-              chmod u+w "$patched_binary"
-              patchelf --set-interpreter "$expected_interpreter" "$patched_binary"
-              chmod 755 "$patched_binary"
-              mv -f "$patched_binary" "$binary"
-            fi
-
-            flock -u 9
-            exec env PATH="$bin_dir:''${PATH:-}" "$binary" "$@"
-          '';
-        };
-        orcaProfileBin = "${config.home.profileDirectory}/bin/orca-ide";
-        orcaDesktopItem = pkgs.makeDesktopItem {
-          name = "orca-ide";
-          desktopName = "Orca IDE";
-          comment = "AI-native development environment";
-          # Use the Nix FHS wrapper directly; Orca's CLI installer otherwise
-          # creates a host-side symlink to the raw AppImage Electron binary.
-          exec = "${orcaProfileBin} %U";
-          categories = [
-            "Development"
-            "IDE"
-          ];
-          startupNotify = true;
-        };
-        orca = pkgs.appimageTools.wrapType2 {
-          pname = "orca-ide";
-          version = "1.4.237";
-          src = pkgs.fetchurl {
-            url = "https://github.com/stablyai/orca/releases/download/v1.4.237/orca-linux.AppImage";
-            hash = "sha256-waZj6I2nCh/prgIawagq2tK92ugl+dcWU57ufmnH7yk=";
-          };
-          extraInstallCommands = ''
-            install -Dm644 ${orcaDesktopItem}/share/applications/orca-ide.desktop $out/share/applications/orca-ide.desktop
           '';
         };
         # ZCode is Z.ai's agentic development environment and ships Linux
@@ -368,82 +381,6 @@ in
           ];
           startupNotify = true;
         };
-        # OpenResearch (openresearch.sh, alphaXiv) is an agentic ML research
-        # desktop whose Linux build is an AppImage wrapping an `orx` GUI
-        # (AppRun ignores argv and always launches `orx app`). The bundled
-        # binary wants /lib64/ld-linux-x86-64.so.2 — NixOS' stub-ld here — so
-        # the extracted tree runs in a buildFHSEnv, like zcode. The
-        # runScript must unset APPIMAGE: orx classifies its install from that
-        # variable, and with it set the app treats itself as a self-updating
-        # AppImage — it rewrites the desktop entry to the store AppImage path
-        # (which cannot start on NixOS) and downloads itself a new AppImage.
-        # Unset, the /nix/store path lands in InstallChannel::Nix and updates
-        # stay with this flake. Agents drive the separate static-musl `orx`
-        # CLI from the same release (below); GUI and CLI share
-        # ~/.config/openresearch. Bump: version + both fetchurl hashes.
-        openresearchVersion = "0.2.19";
-        openresearchSrc = pkgs.fetchurl {
-          url = "https://github.com/alphaXiv/OpenResearch/releases/download/v${openresearchVersion}/OpenResearch-x86_64.AppImage";
-          hash = "sha256-+mWINFT8JrLMTid8aaICEdks6VZnHdXBa+s+rXDQxDw=";
-        };
-        openresearchContents = pkgs.appimageTools.extract {
-          pname = "openresearch";
-          version = openresearchVersion;
-          src = openresearchSrc;
-        };
-        openresearchRun = pkgs.writeShellScript "openresearch-run" ''
-          # See above: APPIMAGE would flip orx into AppImage self-update mode.
-          unset APPIMAGE
-          exec appimage-exec.sh -w ${openresearchContents} -- "$@"
-        '';
-        openresearchDesktopItem = pkgs.makeDesktopItem {
-          name = "openresearch";
-          desktopName = "OpenResearch";
-          comment = "Automated ML research with your coding agents";
-          exec = "${config.home.profileDirectory}/bin/openresearch %U";
-          icon = "OpenResearch";
-          categories = [ "Development" ];
-          startupWMClass = "OpenResearch";
-        };
-        openresearch = pkgs.buildFHSEnv (
-          pkgs.appimageTools.defaultFhsEnvArgs
-          // {
-            name = "openresearch";
-            runScript = "${openresearchRun}";
-            targetPkgs =
-              p: [ pkgs.appimageTools.appimage-exec ] ++ pkgs.appimageTools.defaultFhsEnvArgs.targetPkgs p;
-            extraInstallCommands = ''
-              install -Dm644 ${openresearchDesktopItem}/share/applications/openresearch.desktop $out/share/applications/openresearch.desktop
-              install -Dm644 ${openresearchContents}/usr/share/icons/hicolor/256x256/apps/OpenResearch.png \
-                $out/share/icons/hicolor/256x256/apps/OpenResearch.png
-            '';
-            meta = {
-              description = "OpenResearch desktop for automated ML research";
-              homepage = "https://openresearch.sh/";
-              platforms = [ "x86_64-linux" ];
-            };
-          }
-        );
-        orx =
-          pkgs.runCommand "orx-${openresearchVersion}"
-            {
-              nativeBuildInputs = [ pkgs.xz ];
-              meta = {
-                description = "OpenResearch CLI (orx) for automated ML research";
-                homepage = "https://openresearch.sh/";
-                platforms = [ "x86_64-linux" ];
-              };
-            }
-            ''
-              mkdir orx
-              tar -xJf ${
-                pkgs.fetchurl {
-                  url = "https://github.com/alphaXiv/OpenResearch/releases/download/v${openresearchVersion}/openresearch-cli-x86_64-unknown-linux-musl.tar.xz";
-                  hash = "sha256-fkc8ILTJa/pDxgRG/w9l47L05XKY1isL/X2/JlfiC7Y=";
-                }
-              } -C orx
-              install -Dm755 orx/openresearch-cli-x86_64-unknown-linux-musl/orx $out/bin/orx
-            '';
         # Eigent is an open-source multi-agent workforce desktop app whose
         # Linux distribution is only an AppImage. Extract the squashfs
         # offline and run its AppRun through
@@ -553,10 +490,10 @@ in
         # app is not written to write into its resources and needs no
         # writable mirror. NixOS's chrome-sandbox is not setuid-root either,
         # so pass --no-sandbox like upstream's own desktop entry.
-        grokBotVersion = "0.71.2";
+        grokBotVersion = "0.78.1";
         grokBotDeb = pkgs.requireFile {
           name = "grok-bot_${grokBotVersion}_amd64.deb";
-          sha256 = "0j33n15b166avvl2qqs3s2l8albamb1rp207wmcyslp8ldsnslm0";
+          sha256 = "07gd7pkwbhdj31p8hzr27xh8pw3h38rb3agza4i38qppzx6a7ljm";
           message = ''
             Copy grok-bot_${grokBotVersion}_amd64.deb into ~/Downloads so it
             can be imported into the nix store.
@@ -783,22 +720,109 @@ in
           force = true;
         };
 
-        # OpenResearch only rewrites its desktop entry in AppImage mode (the
-        # unset APPIMAGE above prevents that), but an entry it wrote during a
-        # manual upstream AppImage run would shadow the profile's entry via
-        # XDG_DATA_HOME and point at the store AppImage. force = true
-        # overwrites any such stale file instead of aborting activation.
-        xdg.dataFile."applications/openresearch.desktop" = {
-          source = "${openresearchDesktopItem}/share/applications/openresearch.desktop";
-          force = true;
-        };
-
         # Searched before the profile. Keeps a file the app wrote on a
         # previous run from hiding this entry.
         xdg.dataFile."applications/com.anthropic.Claude.desktop" = {
           source = "${claudeDesktop}/share/applications/com.anthropic.Claude.desktop";
           force = true;
         };
+        # Crush (Charm's terminal coding agent) reaches every model through
+        # Bifrost instead of configuring providers individually: one
+        # OpenAI-compatible endpoint, one virtual key.
+        #
+        # Three details are load-bearing and all three cost a debugging
+        # round-trip to find, because Crush reports none of them as errors:
+        #
+        #   type = "openai-compat", not "openai". The plain "openai" type
+        #   never calls /v1/models, so discover_models silently does nothing
+        #   and Bifrost's catalog simply does not exist for Crush. Only the
+        #   "openai-compat" type discovers.
+        #
+        #   discover_models = true. Bifrost's /v1/models is the only source
+        #   for OpenRouter's 500-odd models; without discovery the config
+        #   exposes nothing but the handful of ids listed below. That call
+        #   never mentions the grok provider (Bifrost does not advertise
+        #   custom providers in its catalog, keyed or key-less), so grok/*
+        #   must stay listed by hand. Discovery merges into models[], it does
+        #   not replace it.
+        #
+        #   disable_default_providers belongs under "options", not at the top
+        #   level. At the top level it is ignored without a word and Crush
+        #   merges its ~35 built-in providers back in, so the same models
+        #   appear twice from two routes and Bifrost's get buried under
+        #   aihubmix/, zai/ and friends.
+        #
+        # The model entries carry the schema's required fields even though
+        # Crush tolerates their absence today; ids are the only part that
+        # changes in practice.
+        #
+        # The virtual key is never stored here: this file lives in the Nix
+        # store, so it holds the placeholder $BIFROST_API_KEY and Crush
+        # expands it at load time. Set it once per machine with
+        #   set -Ux BIFROST_API_KEY sk-bf-...
+        # x-bf-vk is Bifrost's native virtual-key header; api_key is set too,
+        # because Crush rejects an OpenAI-compatible provider without one.
+        #
+        # No models.large/models.small default on purpose -- pick per session
+        # with `crush -m bifrost/<provider>/<model>`.
+        xdg.configFile."crush/crush.json".text = ''
+          {
+            "$schema": "https://charm.land/crush.json",
+            "options": {
+              "disable_default_providers": true
+            },
+            "providers": {
+              "bifrost": {
+                "name": "Bifrost",
+                "type": "openai-compat",
+                "base_url": "http://bifrost.home.arpa/v1",
+                "api_key": "$BIFROST_API_KEY",
+                "extra_headers": {
+                  "x-bf-vk": "$BIFROST_API_KEY"
+                },
+                "discover_models": true,
+                "models": [
+                  {
+                    "id": "grok/grok-4",
+                    "name": "Grok 4 (SuperGrok)",
+                    "cost_per_1m_in": 0,
+                    "cost_per_1m_out": 0,
+                    "cost_per_1m_in_cached": 0,
+                    "cost_per_1m_out_cached": 0,
+                    "context_window": 256000,
+                    "default_max_tokens": 32000,
+                    "can_reason": true,
+                    "supports_attachments": true
+                  },
+                  {
+                    "id": "grok/grok-4-fast",
+                    "name": "Grok 4 Fast",
+                    "cost_per_1m_in": 0,
+                    "cost_per_1m_out": 0,
+                    "cost_per_1m_in_cached": 0,
+                    "cost_per_1m_out_cached": 0,
+                    "context_window": 2000000,
+                    "default_max_tokens": 32000,
+                    "can_reason": true,
+                    "supports_attachments": true
+                  },
+                  {
+                    "id": "grok/grok-code-fast-1",
+                    "name": "Grok Code Fast 1",
+                    "cost_per_1m_in": 0,
+                    "cost_per_1m_out": 0,
+                    "cost_per_1m_in_cached": 0,
+                    "cost_per_1m_out_cached": 0,
+                    "context_window": 256000,
+                    "default_max_tokens": 32000,
+                    "can_reason": true,
+                    "supports_attachments": false
+                  }
+                ]
+              }
+            }
+          }
+        '';
 
         home.packages = with pkgs; [
           superfile
@@ -818,7 +842,6 @@ in
           tmux
           dig
           procps
-          ori
           bun
           herdr
           deepseekHarnessCli
@@ -829,13 +852,13 @@ in
           grok
           # nixpkgs package; the command is `claude`. It tracks the flake pin.
           claude-code
+          # nixpkgs package; Charm's AI coding agent (TUI command `crush`).
+          crush
           claudeDesktop
           zcode
           eigent
-          openresearch
-          orx
           grokBot
-          t3code
+          # t3code is the nightly build, shipped by homeManager.t3codeNightly
           orca
           inputs.hunk.packages.${pkgs.stdenv.hostPlatform.system}.hunk
           opencodeV2

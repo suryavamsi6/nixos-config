@@ -24,7 +24,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     opencode = {
-      url = "github:anomalyco/opencode/v2.0.32";
+      url = "github:anomalyco/opencode/v2.2.5";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     hunk = {
@@ -60,6 +60,20 @@
     };
     gcb200-linux = {
       url = "github:suryavamsi6/gcb200-linux";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    # Clan: fleet inventory, machine evaluation, and `clan vars` secrets.
+    # Pinned onto OUR nixpkgs rather than clan-core's (the template's
+    # `nixpkgs.follows = "clan-core/nixpkgs"` would silently move our pin).
+    clan-core = {
+      url = "https://git.clan.lol/clan/clan-core/archive/main.tar.gz";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nix-darwin.follows = "nix-darwin";
+      inputs.flake-parts.follows = "flake-parts";
+    };
+    # deploy-rs: `deploy .#host` = build, copy, activate, magic rollback.
+    deploy-rs = {
+      url = "github:serokell/deploy-rs";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };

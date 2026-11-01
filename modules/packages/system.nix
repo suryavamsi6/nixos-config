@@ -39,30 +39,6 @@
                 fi
               done
             '';
-        unslothDesktop = pkgs.appimageTools.wrapType2 {
-          pname = "unsloth-desktop";
-          version = "0.1.908-beta";
-          src = pkgs.fetchurl {
-            url = "https://github.com/unslothai/unsloth/releases/download/v0.1.908-beta/Unsloth-Desktop-Linux.AppImage";
-            hash = "sha256-N7Nzb2zqm/db/zhvr7OuPhVy83Z+AHBng9PpasQVbCs=";
-          };
-          extraPkgs = pkgs: [
-            pkgs.libnotify
-            pkgs.libnghttp2
-          ];
-        };
-        unslothDesktopEntry = pkgs.makeDesktopItem {
-          name = "unsloth";
-          desktopName = "Unsloth";
-          comment = "Run and train AI models locally";
-          exec = "${unslothDesktop}/bin/unsloth-desktop";
-          icon = "applications-science";
-          terminal = false;
-          categories = [
-            "Development"
-            "Education"
-          ];
-        };
         koboldcpp = pkgs.writeShellApplication {
           name = "koboldcpp";
           runtimeInputs = [
@@ -103,21 +79,10 @@
           unzip
           cheese
           cameractrls-gtk4
-          unslothDesktop
-          unslothDesktopEntry
           koboldcpp
           nodejs
           obsidian
-          bitwarden-desktop
-          glance
           sbctl
-          (kodi-wayland.withPackages (
-            kodiPkgs: with kodiPkgs; [
-              inputstream-adaptive
-              inputstreamhelper
-              netflix
-            ]
-          ))
           qsWrapped
         ];
 

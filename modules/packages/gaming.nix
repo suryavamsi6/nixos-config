@@ -63,9 +63,8 @@
         # The official Epic Games Launcher — the Tauri-based rework ("preview");
         # the classic launcher never shipped for Linux — distributes an AppImage
         # that bundles WebKitGTK 4.1, GStreamer, gnutls (its GIO TLS module)
-        # and libsecret, so the extracted tree runs in a buildFHSEnv like
-        # openresearch (binary interpreter is
-        # /lib64/ld-linux-x86-64.so.2 = NixOS' stub-ld). Epic serves the file
+        # and libsecret, so the extracted tree runs in a buildFHSEnv with
+        # NixOS' stub dynamic linker at /lib64/ld-linux-x86-64.so.2. Epic serves the file
         # only through the Cloudflare-fronted store page with no versioned
         # URL, so requireFile pins the manually downloaded AppImage; after
         # fetching a new build from
@@ -135,7 +134,6 @@
           trigger-control
           wine
           heroic
-          bottles
           epicgameslauncher
           qbittorrent
           mangojuice
@@ -225,11 +223,17 @@
                   gst_all_1.gst-libav
                 ]
               );
-              # `MANGOHUD=1` is what the Vulkan layer's `enable_environment`
-              # (`MangoHud.x86_64.json`) gates on, so it is also what makes the
-              # per-game `MANGOHUD_CONFIGFILE` launch options take effect — in
-              # Game Mode too, where gamescope's --mangoapp reads that same
-              # config file for its own overlay.
+              # `MANGOHUD=1` is deliberately NOT exported here. MangoHud is a
+              # GLOBAL implicit Vulkan layer, so a global switch hooks every
+              # Vulkan surface on the session — including a nested gamescope's
+              # own compositor swapchain. Observed 2026-10-30: nested
+              # `gamescope ... -- %command%` ended in
+              #   traps: gamescope-wl[266772] general protection fault
+              #     error:0 in libMangoHud.so[41391,...]
+              # after the game's own `double free or corruption (out)` took the
+              # primary child down. The overlay is now per-game opt-in via
+              # launch options instead, which also keeps it out of the compositor:
+              #   MANGOHUD=1 MANGOHUD_CONFIGFILE=/home/surya/.config/MangoHud/pbz.conf %command%
               #
               # `STEAM_FORCE_DESKTOPUI_SCALING` (env form of
               # `steam -forcedesktopscaling`) pins the desktop UI's scale factor.
@@ -242,7 +246,6 @@
               # rendered size identical.
               extraProfile = ''
                 export STEAM_FORCE_DESKTOPUI_SCALING=1
-                export MANGOHUD=1
               '';
             };
           };
@@ -303,6 +306,27 @@
       # with MANGOHUD_CONFIGFILE so the shared single-player cap stays unchanged.
       home.file.".config/MangoHud/onimusha-wots.conf".text = ''
         fps_limit=150
+        fps_limit_method=early
+        no_display
+        toggle_hud=Alt_L+G
+        fps
+        frametime
+        frame_timing
+        cpu_stats
+        cpu_temp
+        gpu_stats
+        gpu_temp
+        gpu_power
+        throttling_status
+        ram
+        vram
+      '';
+      # Phantom Blade Zero (Steam app 4115450). UE5 title: the default 170 cap
+      # is useless at 3440x1440 with Lumen, so cap lower for steady pacing and
+      # keep the full frametime histogram visible. Deployed by
+      # ~/.config/pbz/run.sh, which is this game's Steam launch-option shim.
+      home.file.".config/MangoHud/pbz.conf".text = ''
+        fps_limit=163
         fps_limit_method=early
         no_display
         toggle_hud=Alt_L+G

@@ -1,14 +1,14 @@
-# 1Password MCP — exposes vault reads (item fields, passwords, TOTP) to the
-# Claude clients on this host.
+# 1Password Environments MCP — lets supported clients manage Environments
+# without returning secret values to the agent.
 #
-# Both clients are configured, because they read different files and neither
-# one picks up the other's list:
+# Clients are configured in their own user config files:
 #
 #   Claude Code CLI   ~/.claude.json
 #   Claude Desktop    ~/.config/Claude/claude_desktop_config.json
+#   Codex              ~/.codex/config.toml (via `codex mcp add`)
 #
-# Both are read at client start, so restart the app (or the CLI session) after
-# a switch for the server to appear.
+# Restart the client after a switch for the server to appear. In Codex, find it
+# under MCP servers, not the Apps list.
 #
 # Both files are owned by the applications, not by this flake: the CLI writes
 # project history and the desktop writes window/session state into them. So
@@ -17,25 +17,8 @@
 # home.activation.piConfig in dev.nix, which merges pi's app-owned keys the
 # same way.
 #
-# Server invocation
-# -----------------
-# `opMcpCmd`/`opMcpArgs` below are the single place the server is named. The
-# command runs as a stdio MCP server and needs `op` itself on PATH: the
-# desktop module enables programs._1password (the CLI) and the GUI's SSH agent
-# is what already signs git commits, so an authenticated `op` session is
-# normally present.
-#
-# IMPORTANT: confirm the package name before switching. If it is wrong the
-# server exits immediately and the client shows *no tools*, silently — there
-# is no loud failure. Verify with:
-#
-#     npx -y <pkg> --help
-#
-# then correct opMcpArgs if the real name differs.
-#
-# Credentials are never stored here. The server authenticates through `op`,
-# so access is bounded by the 1Password session and vault permissions of the
-# logged-in user — nothing in this repo grants vault access.
+# The MCP binary ships with the 1Password desktop package. Credentials are
+# never stored here; the server uses the desktop app's local authorization.
 { lib, ... }:
 {
   options.flake.modules.homeManager.onepasswordMcp = lib.mkOption {
@@ -44,25 +27,21 @@
     # no `hm`, so `lib.hm.dag` only resolves against Home Manager's lib, which
     # this shadowing binding provides (same pattern as dev.nix).
     default =
-      { pkgs, lib, ... }:
+      {
+        pkgs,
+        lib,
+        config,
+        ...
+      }:
       let
-        # Name used in both clients' mcpServers maps.
+        # Name used in each client's MCP server map.
         serverName = "onepassword";
-
-        # Absolute path on purpose: nodejs is not in this host's home.packages
-        # (only `bun` is), so a bare "npx" resolves to nothing and the server
-        # dies at spawn with no tools and no visible error.
-        opMcpCmd = "${pkgs.nodejs_22}/bin/npx";
-
-        # TODO(verify): confirm this is the real package name (see header).
-        opMcpArgs = [
-          "-y"
-          "@1password/mcp"
-        ];
+        opMcpCmd = "${pkgs._1password-gui}/share/1password/1password-mcp";
+        codexBin = "${config.home.profileDirectory}/bin/codex";
 
         serverJson = builtins.toJSON {
           command = opMcpCmd;
-          args = opMcpArgs;
+          args = [ ];
         };
 
         # Create the file if absent; add or replace only our server and leave
@@ -114,6 +93,20 @@
 
           # Claude Desktop.
           merge "$HOME/.config/Claude/claude_desktop_config.json"
+
+          # Codex owns its TOML config and exposes this entry in Settings >
+          # MCP servers. Use Codex's CLI so its other settings stay intact.
+          if [ -x ${lib.escapeShellArg codexBin} ]; then
+            current=$(${lib.escapeShellArg codexBin} mcp get "$name" 2>/dev/null || true)
+            if ! printf '%s\n' "$current" | grep -Fq ${lib.escapeShellArg "command: ${opMcpCmd}"}; then
+              if [ -n "$current" ]; then
+                ${lib.escapeShellArg codexBin} mcp remove "$name"
+              fi
+              ${lib.escapeShellArg codexBin} mcp add "$name" -- ${lib.escapeShellArg opMcpCmd}
+            fi
+          else
+            echo "onepassword-mcp: codex is not on PATH; skipped Codex configuration" >&2
+          fi
         '';
       };
   };

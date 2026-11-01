@@ -3,6 +3,7 @@
 {
   imports = [
     ./serpantinum.nix
+    ./hokum.nix
     ./wallpapers.nix
     ./greetd.nix
     ./gaming-mode.nix

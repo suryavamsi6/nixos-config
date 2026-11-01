@@ -4,9 +4,9 @@
 # and this follows it. Two details are load-bearing:
 #
 #   * The AppImage's AppRun adds --no-sandbox when the system refuses an
-#     unprivileged user namespace, and its desktop entry passes --no-sandbox
-#     too. OpenBot must keep the Electron sandbox, so the FHS environment
-#     starts the bundled Electron binary directly instead of AppRun.
+#     unprivileged user namespace. OpenBot must keep the Electron sandbox, so
+#     the FHS environment starts the bundled Electron binary directly instead
+#     of AppRun, and its desktop entry points to that wrapper.
 #   * The AppImage bundles a Sunshine-based remote-desktop runtime built
 #     against the Ubuntu libraries in upstream scripts/hosting/packages.txt.
 #     This environment was not validated against them, so the directory is
@@ -25,11 +25,11 @@
 
 let
   pname = "openbot";
-  version = "0.49.0";
+  version = "0.53.2";
 
   src = fetchurl {
-    url = "https://github.com/nightly-labs/openbot/releases/download/v0.49.0/OpenBot-0.49.0-x86_64.AppImage";
-    hash = "sha256-R66/ITBdI/BRV3UTB8e4Jsu+sFl+dRgEKvW+b4QqV5s=";
+    url = "https://github.com/nightly-labs/openbot/releases/download/v0.53.2/OpenBot-0.53.2-x86_64.AppImage";
+    hash = "sha256-6JisFl6+oL2yyOuRDtYKGqtToHLBhAfGu/iIF2vGQ/I=";
   };
 
   contents = appimageTools.extract {
@@ -53,7 +53,7 @@ buildFHSEnv (
     extraInstallCommands = ''
       install -Dm444 ${contents}/openbot.desktop $out/share/applications/openbot.desktop
       substituteInPlace $out/share/applications/openbot.desktop \
-        --replace-fail 'Exec=AppRun --no-sandbox %U' 'Exec=openbot %U'
+        --replace-fail 'Exec=AppRun %U' 'Exec=openbot %U'
 
       # The AppImage ships a single 1600x1600 icon, a size no icon theme
       # lists, so it goes in pixmaps instead of hicolor.

@@ -1,11 +1,16 @@
 {
+  "$schema": "https://pi.dev/schemas/models.schema.json",
   "providers": {
-    "openrouter": {
-      "modelOverrides": {
-        "minimax/minimax-m3:free": {
-          "contextWindow": 1048576,
-          "maxTokens": 65536
-        }
+    "bifrost": {
+      "name": "Bifrost",
+      "baseUrl": "http://bifrost.home.arpa/v1",
+      "api": "openai-completions",
+      "apiKey": "$BIFROST_API_KEY",
+      "headers": {
+        "x-bf-vk": "$BIFROST_API_KEY"
+      },
+      "compat": {
+        "sendSessionAffinityHeaders": true
       }
     }
   }

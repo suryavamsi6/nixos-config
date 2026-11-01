@@ -81,17 +81,18 @@
           serpantinum = serpantinumBluetoothPatched;
         };
         serpantinumPatched = serpantinumWorldClockPatched.overrideAttrs (old: {
-          postInstall = (old.postInstall or "") + ''
-            ${pkgs.python3}/bin/python3 ${./serpantinum-ups/patch_guide_popup.py} \
-              $out/share/serpantinum/quickshell/guide/GuidePopup.qml
-            ${pkgs.python3}/bin/python3 ${./serpantinum-ups/patch_translations.py} \
-              $out/share/serpantinum/assets/languages/en.json
-            ${pkgs.python3}/bin/python3 ${./serpantinum-ups/patch_mango.py} \
-              $out/share/serpantinum
-            ${pkgs.python3}/bin/python3 ${./serpantinum-workspaces/patch_top_bar.py} \
-              $out/share/serpantinum/quickshell/bar/modules/WorkspacesWidget.qml \
-              $out/share/serpantinum/quickshell/bar/TopBar.qml
-          '';
+          postInstall = (old.postInstall or "")
+            + ''
+              ${pkgs.python3}/bin/python3 ${./serpantinum-ups/patch_guide_popup.py} \
+                $out/share/serpantinum/quickshell/guide/GuidePopup.qml
+              ${pkgs.python3}/bin/python3 ${./serpantinum-ups/patch_translations.py} \
+                $out/share/serpantinum/assets/languages/en.json
+              ${pkgs.python3}/bin/python3 ${./serpantinum-ups/patch_mango.py} \
+                $out/share/serpantinum
+              ${pkgs.python3}/bin/python3 ${./serpantinum-workspaces/patch_top_bar.py} \
+                $out/share/serpantinum/quickshell/bar/modules/WorkspacesWidget.qml \
+                $out/share/serpantinum/quickshell/bar/TopBar.qml
+            '';
         });
       in
       {
@@ -100,21 +101,22 @@
             self = inputs.serpantinum;
           })
         ];
-        programs.serpantinum.enable = true;
-        programs.serpantinum.package = serpantinumPatched;
-        programs.serpantinum.systemd.enable = true;
-        programs.serpantinum.settings = {
-          bar.modules.left = [
-            "left"
-            "workspaces"
-          ];
-          launcher.terminalCommand = "ghostty -e";
-          ups = {
-            shutdownBatteryLevel = 50;
-            shutdownMinutes = 5;
+        config = {
+          programs.serpantinum.enable = true;
+          programs.serpantinum.package = serpantinumPatched;
+          programs.serpantinum.systemd.enable = true;
+          programs.serpantinum.settings = {
+            bar.modules.left = [
+              "left"
+              "workspaces"
+            ];
+            launcher.terminalCommand = "ghostty -e";
+            ups = {
+              shutdownBatteryLevel = 50;
+              shutdownMinutes = 5;
+            };
           };
         };
-
       };
   };
 }

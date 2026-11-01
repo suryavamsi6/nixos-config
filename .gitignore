@@ -5,3 +5,10 @@
 /.direnv
 /.pi/
 __pycache__/
+/analysis/
+/.taste-skill/
+
+# Local Caddy root CA, copied from the homelab (see modules/hosts/nixos-hyprland.nix).
+# Never commit it: its presence is what `builtins.pathExists` keys on, and tracking
+# it changes the built closure.
+modules/hosts/caddy-local-ca.crt

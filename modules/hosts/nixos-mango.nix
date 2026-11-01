@@ -1,13 +1,20 @@
 # Host: NixOS MangoWM scrolling-tags trial (x86_64-linux)
-{ config, inputs, ... }:
+#
+# Two things live here on purpose:
+#
+#   * `flake.modules.nixos.mangoHost` — the reusable host body. Clan evaluates
+#     this once the migration flips (plans/clan-deploy-rs-migration.md §4).
+#   * `flake.nixosConfigurations.mango` — the transitional wrapper. It is
+#     deleted in the flip step and exists only so the host keeps building from
+#     an unchanged drvPath in the meantime.
+{ config, inputs, lib, ... }:
 {
-  flake.nixosConfigurations.mango = inputs.nixpkgs.lib.nixosSystem {
-    system = "x86_64-linux";
-    specialArgs = {
-      inherit inputs;
-      system = "x86_64-linux";
-    };
-    modules = with config.flake.modules; [
+  options.flake.modules.nixos.mangoHost = lib.mkOption {
+    type = lib.types.deferredModule;
+    default =
+      { flakeModules, ... }:
+      {
+    imports = with flakeModules; [
       inputs.nix-flatpak.nixosModules.nix-flatpak
       # Same physical machine and hardware policy as #nixos.
       nixos.hardwareHyprland
@@ -91,7 +98,7 @@
           system = "x86_64-linux";
         };
         home-manager.users.surya = { pkgs, ... }: {
-          imports = with config.flake.modules; [
+          imports = with flakeModules; [
             homeManager.shell
             homeManager.mango
             homeManager.serpantinum
@@ -104,6 +111,7 @@
             homeManager.claudeCodeRouter
             homeManager.onepasswordMcp
             homeManager.zenBrowser
+            homeManager.t3codeNightly
           ];
 
           home.username = "surya";
@@ -120,5 +128,6 @@
         };
       }
     ];
+      };
   };
 }
