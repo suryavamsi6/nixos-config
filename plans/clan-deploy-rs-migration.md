@@ -330,9 +330,11 @@ Gate: `nix flake check`, then `deploy .#homelab --dry-activate` and `deploy .#ra
 from the workstation (no activation side effects).
 
 **Step 4 — first real remote switch (pi first).** `raspberry-pi` is the least critical.
-Gate: `deploy .#raspberry-pi` succeeds; `ssh pi head -1 /run/current-system` matches the built
-store path; then a **rollback drill** on pi only (a unit with a deliberately failing
-`ExecStart`), proving `autoRollback` + magic rollback restore the previous generation.
+Gate: `deploy .#raspberry-pi` succeeds; `ssh pi readlink -f /run/current-system` matches the
+built store path (`/run/current-system` is a directory, so `head -1` on it fails with
+`Is a directory`); then a **rollback drill** on pi only (an activation script with a
+deliberately failing `exit 1` — a failing *unit* does not reliably fail activation, so it
+does not exercise `autoRollback`), proving magic rollback restores the previous generation.
 Then `deploy .#homelab`.
 
 **Step 5 — backup/dependency order check.** `resticServer` lives on pi and homelab is a client
