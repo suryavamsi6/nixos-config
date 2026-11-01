@@ -21,5 +21,6 @@
     ./booklore.nix
     ./homelable.nix
     ./mcphub.nix
+    ./haos.nix
   ];
 }
