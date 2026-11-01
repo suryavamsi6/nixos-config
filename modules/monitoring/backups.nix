@@ -15,77 +15,77 @@
 # the 1Password agent (so a non-interactive unit would need a second on-disk key
 # anyway). rest-server needs one htpasswd file and speaks plain HTTP on the LAN.
 #
-# Secrets stay out of the flake, as everywhere in this repo:
-#   pi      /var/lib/restic-rest/htpasswd     basic-auth users (seeded once)
-#   pi      /var/lib/restic-rest/clients.env  same passwords, root-only, for
-#                                             installing on the clients
-#   client  /var/lib/restic-backups/env       RESTIC_PASSWORD +
-#                                             RESTIC_REST_USERNAME/PASSWORD
+# Secrets stay out of the flake, as everywhere in this repo. They are Clan vars
+# now (modules/clan/secrets.nix), decrypted to /run/secrets before sysinit:
+#   pi      restic-htpasswd/htpasswd      bcrypt basic-auth users; installed to
+#                                         /var/lib/restic-rest/htpasswd, which is
+#                                         what rest-server reads
+#   pi      restic-htpasswd/clients-env   same passwords, root-only, for
+#                                         installing on the clients
+#   client  restic-client/env             RESTIC_PASSWORD +
+#                                         RESTIC_REST_<HOST>_USERNAME/PASSWORD
+#
+# Both restic-client and the pi's restic-htpasswd are *adopted*, never
+# generated: a freshly minted password would not match the opposite side and
+# every push would fail 401 with an unrecoverable repo.
 { lib, ... }:
 {
   options.flake.modules.nixos.resticServer = lib.mkOption {
     type = lib.types.deferredModule;
     default =
-      { pkgs, ... }:
+      { config, pkgs, ... }:
       let
-        # Passwords are generated on first boot only. The plaintext copy in
-        # clients.env exists so the operator can scp it to each client without
-        # reading a password out of a shell history or the journal. Ownership
-        # and modes are re-applied on every start, so an install created
-        # before the fix below repairs itself instead of failing.
+        # Clan vars replace the old first-boot seeder. `htpasswd` is what
+        # rest-server reads; `clients-env` is the operator's plaintext copy for
+        # provisioning a client. Both are 0400 under /run/secrets, so the
+        # File= drop-in below copies them to the paths rest-server and the
+        # operator already expect rather than rewriting those paths.
+        vars = config.clan.core.vars.generators.restic-htpasswd;
+        htpasswdVar = vars.files.htpasswd.path;
+        clientsEnvVar = vars.files.clients-env.path;
+        # ── Migration bridge (plans/clan-deploy-rs-migration.md §6.3) ──────
+        # The htpasswd and the operator's client list now come from the
+        # `restic-htpasswd` Clan var. This unit installs the decrypted var at the
+        # path rest-server already reads, which is also what makes the migration
+        # reversible: the legacy file is never overwritten in place, so restoring
+        # it is a `cp` away (see .legacy-htpasswd below).
+        #
+        # The copy stays because rest-server runs with PrivateUsers=true: a
+        # root-owned file under /run/secrets appears as `nobody` inside that user
+        # namespace, so the file must live in a restic-owned directory.
+        # ReadOnlyPaths keeps it read-only to the server either way.
         seedAuth = pkgs.writeShellApplication {
           name = "restic-rest-seed-auth";
-          runtimeInputs = [
-            pkgs.apacheHttpd
-            pkgs.openssl
-            pkgs.coreutils
-          ];
+          runtimeInputs = [ pkgs.coreutils ];
           text = ''
             set -eu
             dir=/var/lib/restic-rest
             conf=$dir/htpasswd
             clients=$dir/clients.env
-            # rest-server runs as User=restic with PrivateUsers=true, so both
-            # the directory and the htpasswd must be owned by restic; a
-            # root-owned path is unreadable inside the service namespace.
-            # clients.env is never read by the server and stays root-only.
+
             install -d -m 0700 -o restic -g restic "$dir"
 
-            if [ ! -s "$conf" ]; then
-              umask 077
-              : > "$conf"
-              : > "$clients"
-
-              for user in nixos homelab; do
-                # 24 base64 chars: no shell metacharacters, 144 bits.
-                pw=$(openssl rand -base64 32 | tr -dc 'A-Za-z0-9' | cut -c1-24)
-                # -B: bcrypt. rest-server accepts bcrypt, SHA-1 and plaintext;
-                # bcrypt is the only one worth using.
-                printf '%s:%s\n' "$user" "$(htpasswd -nB -b "$user" "$pw" | cut -d: -f2)" >> "$conf"
-                printf 'RESTIC_REST_%s_USERNAME=%s\nRESTIC_REST_%s_PASSWORD=%s\n' \
-                  "$(echo "$user" | tr '[:lower:]' '[:upper:]')" "$user" \
-                  "$(echo "$user" | tr '[:lower:]' '[:upper:]')" "$pw" >> "$clients"
-              done
+            if [ -s ${htpasswdVar} ]; then
+              # Preserve the pre-Clan file once, before the first overwrite.
+              # `conf` is the path rest-server reads, so leaving it alone is not
+              # an option here; the preserved copy is the rollback path.
+              if [ -s "$conf" ] && [ ! -e "$dir/.legacy-htpasswd" ]; then
+                cp -p "$conf" "$dir/.legacy-htpasswd"
+                chmod 0400 "$dir/.legacy-htpasswd"
+                : > "$dir/.migrated-to-clan"
+              fi
+              install -m 0600 -o restic -g restic ${htpasswdVar} "$conf"
+            elif [ ! -s "$conf" ]; then
+              echo "restic-htpasswd did not decrypt and no legacy htpasswd exists" >&2
+              exit 1
             fi
 
-            # Applied on every start, not only on creation: an install that
-            # predates this layout has the file at 0600 root:root inside a
-            # 0700 root-owned directory, which rest-server cannot read (it
-            # fails with `permission denied` before serving).
-            #
-            # Owned by restic rather than merely group-readable because
-            # PrivateUsers=true maps that account to root *inside* the
-            # service's user namespace, where a host file owned by root
-            # appears as `nobody`. ReadOnlyPaths in the NixOS unit keeps the
-            # file read-only to the server either way.
+            if [ -s ${clientsEnvVar} ]; then
+              install -m 0600 -o root -g root ${clientsEnvVar} "$clients"
+            fi
+
             chown restic:restic "$dir"
             chmod 0700 "$dir"
-            chown restic:restic "$conf"
-            chmod 0600 "$conf"
-            if [ -e "$clients" ]; then
-              chown root:root "$clients"
-              chmod 0600 "$clients"
-            fi
           '';
         };
       in
@@ -122,7 +122,7 @@
         # to be on disk before it starts rather than rest-server failing its
         # own path assertion on a fresh machine.
         systemd.services.restic-rest-seed-auth = {
-          description = "Seed restic rest-server credentials on first boot";
+          description = "Install the restic rest-server htpasswd from Clan vars";
           wantedBy = [ "multi-user.target" ];
           before = [ "restic-rest-server.service" ];
           serviceConfig = {
@@ -137,8 +137,12 @@
         # it against the seeder. Require the seeder explicitly: without the
         # htpasswd rest-server exits instead of serving.
         systemd.services.restic-rest-server = {
-          requires = [ "restic-rest-seed-auth.service" ];
-          after = [ "restic-rest-seed-auth.service" ];
+          requires = [
+            "restic-rest-seed-auth.service"
+          ];
+          after = [
+            "restic-rest-seed-auth.service"
+          ];
         };
 
         networking.firewall.allowedTCPPorts = [ 8000 ];
@@ -151,7 +155,11 @@
       { pkgs, config, ... }:
       let
         name = "default";
-        envFile = "/var/lib/restic-backups/env";
+        # The repository password and REST credentials. `restic-client` is a
+        # per-machine Clan var, adopted from the pi's clients.env — it cannot be
+        # generated, because a fresh password would not match the htpasswd on
+        # the backup target and every push would fail with 401.
+        envFile = config.clan.core.vars.generators.restic-client.files.env.path;
 
         # Writes a small JSON status document on every run — including the
         # ExecCondition skip — so homelab_stats can report "last backup 3h ago,
@@ -240,12 +248,31 @@
           backupCleanupCommand = "${statusWriter}/bin/restic-status ${statusName}";
         };
 
-        # Without the env file the unit would fail every night with a restic
-        # usage error (no repository password). ExecCondition skips instead;
+        # The var file only exists while /run/secrets is mounted, so the unit
+        # waits for the decrypt pass. Without the file it would fail every night
+        # with a restic usage error; ExecCondition skips instead and
         # ExecStopPost still runs, so the status file records the skip and the
         # dashboard says "not configured" rather than showing a stale success.
-        systemd.services."restic-backups-${name}".serviceConfig.ExecCondition =
-          "${pkgs.bash}/bin/bash -c 'test -r ${envFile}'";
+        systemd.services."restic-backups-${name}" = {
+          serviceConfig.ExecCondition = "${pkgs.bash}/bin/bash -c 'test -r ${envFile}'";
+        };
+
+        # Migration bridge (§6.3): the old root-only env file is never read or
+        # rewritten again; it stays as the rollback path. Point `environmentFile`
+        # back at it to revert.
+        systemd.services.restic-backups-env-migrated = {
+          description = "Record that restic client credentials moved to Clan vars";
+          wantedBy = [ "multi-user.target" ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+          };
+          script = ''
+            if [ -s /var/lib/restic-backups/env ]; then
+              : > /var/lib/restic-backups/.migrated-to-clan
+            fi
+          '';
+        };
 
         systemd.tmpfiles.rules = [
           "d /var/lib/restic-backups 0700 root root -"

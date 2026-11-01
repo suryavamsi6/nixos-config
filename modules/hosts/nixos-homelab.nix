@@ -33,6 +33,7 @@
           # module here started rest-server against /mnt/media/backups/restic, a
           # path this laptop does not have, and the unit failed the switch.
           nixos.backups # nightly restic push to the pi
+          nixos.resticClientVars # the restic-client var that push reads (§6)
           nixos.cliproxyapi # Codex/Claude/Grok OAuth logins as one OpenAI-compatible API
           nixos.netdata # agent, loopback-only; extracted from this file (§7)
           nixos.gatus # uptime checks; extracted from this file (§7)
@@ -50,6 +51,7 @@
           nixos.homelable # Homelable canvas Incus OCI containers (§7)
           nixos.mcphub # MCPHub gateway Incus OCI container (§7)
           nixos.haos # Home Assistant OS Incus VM (§7)
+          nixos.homelabVars # Clan vars: the generators for every secret below (§6)
           ./hermes-bridge # services.hermesBridge: management API for the Hermes phone app
 
           # Hardware scan from the laptop (ext4 root + ESP, Intel CPU, kvm-intel)
@@ -622,10 +624,8 @@
                 };
               };
 
-              # The gatus check below interpolates GROK_ADMIN_KEY (same value as
-              # ADMIN_API_KEY) from this file at gatus runtime; the key never
-              # lands in the flake or the rendered YAML.
-              services.gatus.environmentFile = "/var/lib/grok-oauth-proxy/secrets.env";
+              # gatus reads GROK_ADMIN_KEY from the grok-oauth Clan var; the
+              # wiring lives in modules/services/gatus.nix now (§6).
 
               # The page and probe live in ~surya/homelab-board and run as a user
               # service. Caddy above is the only LAN door, so 8765 stays closed.

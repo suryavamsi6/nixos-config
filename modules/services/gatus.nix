@@ -36,10 +36,16 @@
   options.flake.modules.nixos.gatus = lib.mkOption {
     type = lib.types.deferredModule;
     default =
-      { ... }:
+      { config, ... }:
       {
         services.gatus = {
           enable = true;
+          # The grok-oauth-proxy check below authenticates with
+          # ${GROK_ADMIN_KEY}; gatus interpolates it from this file at runtime,
+          # so the key never lands in the rendered YAML. This used to be set in
+          # modules/hosts/nixos-homelab.nix against
+          # /var/lib/grok-oauth-proxy/secrets.env — it follows the secret.
+          environmentFile = config.clan.core.vars.generators.grok-oauth.files.secrets-env.path;
           settings = {
             web.address = "127.0.0.1";
             web.port = 3001;

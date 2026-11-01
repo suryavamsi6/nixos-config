@@ -19,6 +19,7 @@
         inputs.nix-flatpak.nixosModules.nix-flatpak
         nixos.diskHealth # smartd + /var/lib/disk-health/health.json
         nixos.backups # nightly restic push to the pi
+        nixos.resticClientVars # the restic-client var that push reads (§6)
         # Hardware
         nixos.hardwareHyprland
         nixos.nvidia

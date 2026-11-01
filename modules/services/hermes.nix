@@ -38,6 +38,11 @@
         ...
       }:
       let
+        vars = config.clan.core.vars.generators;
+        dashboardFile = vars.hermes-dashboard.files.dashboard-env.path;
+        apiServerFile = vars.hermes-api-server.files.api-server-env.path;
+        bifrostKeyFile = vars.hermes-bifrost-key.files.bifrost-vk-env.path;
+
         # systemd *user* unit for the dashboard inside the incus-hermes
         # container, pushed in by the provisioning unit below. Upstream does not
         # start the dashboard with its gateway service
@@ -68,7 +73,9 @@
             "network-online.target"
           ];
           wants = [ "network-online.target" ];
-          requires = [ "incus.service" ];
+          requires = [
+            "incus.service"
+          ];
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
@@ -154,15 +161,16 @@
               incus exec hermes -- chown -R hermes:hermes /home/hermes/.hermes
             fi
 
-            # Generate once, never rotate (rotation would lock out saved
-            # Hermes Desktop logins) and never print.
+            # Generated once, never rotated (rotation would lock out saved
+            # Hermes Desktop logins) and never printed. The value now lives in
+            # the `hermes-dashboard` Clan var; the old file is kept untouched as
+            # the rollback path and only marked (§6.3).
             install -d -m 700 /var/lib/incus/hermes
             auth=/var/lib/incus/hermes/dashboard.env
-            if [ ! -s "$auth" ]; then
-              umask 077
-              printf 'HERMES_DASHBOARD_BASIC_AUTH_USERNAME=surya\nHERMES_DASHBOARD_BASIC_AUTH_PASSWORD=%s\nHERMES_DASHBOARD_BASIC_AUTH_SECRET=%s\n' \
-                "$(openssl rand -hex 12)" "$(openssl rand -hex 24)" > "$auth"
+            if [ -s "$auth" ]; then
+              : > /var/lib/incus/hermes/.dashboard-migrated-to-clan
             fi
+            auth=${dashboardFile}
             incus exec hermes -- sudo -u hermes -- bash -c \
               'grep -q "^HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=" ~/.hermes/.env 2>/dev/null || { printf "\n# dashboard auth for hermes.home.arpa\n"; cat; } >> ~/.hermes/.env' < "$auth"
             incus exec hermes -- sudo -u hermes -- chmod 600 /home/hermes/.hermes/.env
@@ -212,35 +220,53 @@
             # Gatus uses); bifrost.home.arpa is Caddy on the host and is
             # not needed for container-to-container traffic.
             #
-            # The virtual key is a real secret and never enters the flake:
-            # it is generated host-side, kept in bifrost-vk.env (mode 600)
-            # and appended to ~/.hermes/.env only when that file lacks it.
-            # Reading it again later:
-            #   sudo cat /var/lib/incus/hermes/bifrost-vk.env
-            # ~/.hermes/.env is authoritative for the key the gateway
-            # actually runs with, so bifrost-vk.env is *derived* from it, not
-            # the other way round. An earlier version preferred the host file
-            # and minted a random key when .env had none -- that key existed in
-            # no Bifrost virtual-key record, so every gateway call 401'd. Only
-            # mint when neither side has a key, and say so loudly, because a
-            # minted key has to be registered in Bifrost by hand.
+            # The virtual key is a real secret and never enters the flake. Since the
+            # Clan migration its home is the `hermes-bifrost-key` var, but
+            # ~/.hermes/.env inside the container stays the *authority*: an earlier
+            # version preferred the host-side file and minted a random key when .env
+            # had none, and that key existed in no Bifrost virtual-key record, so every
+            # gateway call 401'd. So the order is: .env -> var -> legacy file, and if all
+            # three are empty the unit reports it instead of minting a key nobody can use.
+            #
+            # The legacy file is kept (never rewritten) as the rollback path and is
+            # appended to ~/.hermes/.env only when that file lacks the key.
             vk=/var/lib/incus/hermes/bifrost-vk.env
             install -d -m 700 /var/lib/incus/hermes
             live=$(incus exec hermes -- sudo -u hermes -- bash -c \
               'sed -n "s/^BIFROST_API_KEY=//p" ~/.hermes/.env 2>/dev/null | head -1' \
               | tr -d '\r\n' || true)
+            if [ -z "$live" ] && [ -s ${bifrostKeyFile} ]; then
+              live=$(sed -n 's/^BIFROST_API_KEY=//p' ${bifrostKeyFile} | head -1 | tr -d '\r\n' || true)
+            fi
             if [ -z "$live" ] && [ -s "$vk" ]; then
               live=$(sed -n 's/^BIFROST_API_KEY=//p' "$vk" | head -1 | tr -d '\r\n' || true)
             fi
+            # Last resort only: the var, the container's .env and the legacy file all
+            # came up empty, which means this container has never had a key. Minting
+            # here would create a key that exists in no Bifrost virtual-key record, so
+            # it is reported and skipped — the operator decides.
             if [ -z "$live" ]; then
-              live=$(openssl rand -hex 32)
-              echo "WARNING: minted a new BIFROST_API_KEY; register it as a" \
-                   "Bifrost virtual key or hermes calls will 401" >&2
+              echo "WARNING: no BIFROST_API_KEY in ~/.hermes/.env, hermes-bifrost-key," \
+                   "or the legacy bifrost-vk.env; leaving the gateway unconfigured." \
+                   "Give Hermes a key that is already a Bifrost virtual key." >&2
+              live=""
             fi
-            umask 077
-            printf 'BIFROST_API_KEY=%s\n' "$live" > "$vk"
+            # The var file is 0400 root:root and not writable here, so the
+            # derived value is printed for the operator once instead.
+            if [ -n "$live" ] && ! sed -n 's/^BIFROST_API_KEY=//p' ${bifrostKeyFile} 2>/dev/null | grep -qx "$live"; then
+              echo "hermes-bifrost-key differs from the live key; adopt it with:" >&2
+              echo "  incus exec hermes -- sudo -u hermes -- grep BIFROST_API_KEY ~/.hermes/.env" >&2
+              echo "  clan vars set homelab hermes-bifrost-key/bifrost-vk-env" >&2
+            fi
             unset live
-            vk_added=$(incus exec hermes -- sudo -u hermes -- bash -c '
+            # Seed ~/.hermes/.env from whichever source exists: the Clan var is the
+            # home now, the legacy file is the rollback. Both are already
+            # `BIFROST_API_KEY=<key>` shaped, and the loop only appends keys the
+            # container does not already have, so the container stays authoritative.
+            key_src=$vk
+            if [ -s ${bifrostKeyFile} ]; then key_src=${bifrostKeyFile}; fi
+            if [ -s "$key_src" ]; then
+              vk_added=$(incus exec hermes -- sudo -u hermes -- bash -c '
               env=~/.hermes/.env; touch "$env"; added=0
               while IFS= read -r line; do
                 [ -n "$line" ] || continue
@@ -249,9 +275,10 @@
                   printf "%s\n" "$line" >> "$env"; added=1
                 fi
               done
-              chmod 600 "$env"; echo "$added"' < "$vk" | tr -d '\r\n')
-            if [ "$vk_added" = 1 ]; then
-              restart_reasons="$restart_reasons bifrost_api_key"
+              chmod 600 "$env"; echo "$added"' < "$key_src" | tr -d '\r\n')
+              if [ "$vk_added" = 1 ]; then
+                restart_reasons="$restart_reasons bifrost_api_key"
+              fi
             fi
 
             # Gateway address, default model, provider transport and the
@@ -311,11 +338,10 @@
             #   sudo cat /var/lib/incus/hermes/api-server.env
             # (if ~/.hermes/.env already had API_SERVER_KEY, that one is live).
             api=/var/lib/incus/hermes/api-server.env
-            if [ ! -s "$api" ]; then
-              umask 077
-              printf 'API_SERVER_ENABLED=true\nAPI_SERVER_HOST=0.0.0.0\nAPI_SERVER_PORT=8642\nAPI_SERVER_KEY=%s\n' \
-                "$(openssl rand -hex 32)" > "$api"
+            if [ -s "$api" ]; then
+              : > /var/lib/incus/hermes/.api-server-migrated-to-clan
             fi
+            api=${apiServerFile}
             api_added=$(incus exec hermes -- sudo -u hermes -- bash -c '
               env=~/.hermes/.env; touch "$env"; added=0
               while IFS= read -r line; do

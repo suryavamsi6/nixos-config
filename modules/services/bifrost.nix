@@ -29,7 +29,18 @@
   options.flake.modules.nixos.bifrost = lib.mkOption {
     type = lib.types.deferredModule;
     default =
-      { pkgs, ... }:
+      { config, pkgs, ... }:
+      let
+        # Three separate vars instead of one /var/lib/bifrost/secrets.env: the
+        # DB password, the config-encryption key and the setup token have
+        # different rotation hazards (rotating the encryption key orphans every
+        # secret Bifrost has stored), so they no longer share a file or a unit.
+        vars = config.clan.core.vars.generators;
+        dbPasswordFile = vars.bifrost-db-password.files.db-password.path;
+        encryptionKeyFile = vars.bifrost-encryption-key.files.encryption-key.path;
+        setupTokenFile = vars.bifrost-setup-token.files.setup-token.path;
+        apiKeyFile = vars.qdrant-api-key.files.api-key.path;
+      in
       {
         systemd.services.incus-bifrost = {
           description = "Provision Bifrost gateway container";
@@ -67,15 +78,14 @@
             incus remote list --format csv | cut -d, -f1 | grep -qx docker ||
               incus remote add docker https://docker.io --protocol=oci
 
-            secrets=/var/lib/bifrost/secrets.env
-            if [ ! -s "$secrets" ]; then
-              echo "bifrost secrets are missing; postgres-secrets should have seeded them" >&2
+            dbpass=$(sed -n 's|^BIFROST_DB_PASSWORD=\(.*\)|\1|p' ${dbPasswordFile})
+            enc=$(sed -n 's|^BIFROST_ENCRYPTION_KEY=\(.*\)|\1|p' ${encryptionKeyFile})
+            setup=$(sed -n 's|^BIFROST_SETUP_TOKEN=\(.*\)|\1|p' ${setupTokenFile})
+            qk=$(sed -n 's|^QDRANT_API_KEY=\(.*\)|\1|p' ${apiKeyFile})
+            if [ -z "$dbpass" ] || [ -z "$enc" ] || [ -z "$setup" ]; then
+              echo "bifrost Clan vars did not decrypt; is /run/secrets mounted?" >&2
               exit 1
             fi
-            dbpass=$(sed -n 's|^BIFROST_DB_PASSWORD=\(.*\)|\1|p' "$secrets")
-            enc=$(sed -n 's|^BIFROST_ENCRYPTION_KEY=\(.*\)|\1|p' "$secrets")
-            setup=$(sed -n 's|^BIFROST_SETUP_TOKEN=\(.*\)|\1|p' "$secrets")
-            qk=$(sed -n 's|^QDRANT_API_KEY=\(.*\)|\1|p' /var/lib/qdrant-secrets/api-key)
             if [ -z "$qk" ]; then
               echo "qdrant api key is missing; qdrant-secrets should have seeded it" >&2
               exit 1

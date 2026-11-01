@@ -17,6 +17,7 @@
     imports = with flakeModules; [
       nixos.diskHealth # smartd + /var/lib/disk-health/health.json
       nixos.resticServer # rest-server: this host IS the backup target
+      nixos.resticServerVars # htpasswd + client list as Clan vars (§6)
       # Raspberry Pi SD-card image support
       "${inputs.nixpkgs}/nixos/modules/installer/sd-card/sd-image-aarch64.nix"
 

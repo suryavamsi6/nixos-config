@@ -23,8 +23,14 @@
   options.flake.modules.nixos.homepage = lib.mkOption {
     type = lib.types.deferredModule;
     default =
-      { pkgs, ... }:
+      { config, pkgs, ... }:
       let
+        # The one human-supplied secret in the fleet. `homepage-vars/secrets`
+        # is a persisted prompt (never generated), so filling it in once at
+        # `clan vars generate homelab` is what replaces the old "edit the file
+        # then restart" workflow below.
+        secretsFile = config.clan.core.vars.generators.homepage-vars.files.secrets-env.path;
+
         homelabStats = pkgs.writeShellApplication {
           name = "homelab-stats";
           runtimeInputs = [
@@ -56,9 +62,9 @@
           # original Host header).
           allowedHosts =
             "homelab.home.arpa,homelab.192.168.0.160.nip.io,192.168.0.160," + "localhost:8082,127.0.0.1:8082";
-          # Widget credentials come from the env file seeded by the
-          # homepage-dashboard-secrets unit below ({{HOMEPAGE_VAR_*}}).
-          environmentFiles = [ "/var/lib/homepage-dashboard-env/secrets.env" ];
+          # Widget credentials come from the `homepage-vars` Clan var
+          # ({{HOMEPAGE_VAR_*}}). See the migration bridge below.
+          environmentFiles = [ secretsFile ];
           settings = {
             title = "homelab";
             description = "LAN services";
@@ -486,15 +492,20 @@
           ];
         };
 
-        # One-time seed of widget credentials for the dashboard. Homepage
-        # reads it via environmentFiles and substitutes
-        # {{HOMEPAGE_VAR_*}} placeholders in its YAML configs. Fill it in
-        # on the homelab once, then:
+        # ── Migration bridge (plans/clan-deploy-rs-migration.md §6.3) ──────
+        # Widget credentials moved to the `homepage-vars` Clan var. The old
+        # workflow ("edit /var/lib/homepage-dashboard-env/secrets.env, then
+        # restart the dashboard") is replaced by:
+        #
+        #   clan vars set homelab homepage-vars/secrets   # paste, Ctrl-D
+        #   clan vars upload homelab
         #   systemctl restart homepage-dashboard
-        # Mode 0644 because the dashboard runs as a DynamicUser with no
-        # stable uid (only root and surya have accounts on this host).
+        #
+        # This unit keeps the 0755 directory — homelab-stats and the AdGuard
+        # hint path still reference it — and records the move. It never writes
+        # the file again; the old one stays as the rollback path.
         systemd.services.homepage-dashboard-secrets = {
-          description = "Seed Homepage dashboard widget credentials";
+          description = "Record that Homepage widget credentials moved to Clan vars";
           before = [ "homepage-dashboard.service" ];
           wantedBy = [ "multi-user.target" ];
           serviceConfig = {
@@ -505,27 +516,18 @@
           script = ''
             set -euo pipefail
             install -d -m 755 /var/lib/homepage-dashboard-env
-            secrets=/var/lib/homepage-dashboard-env/secrets.env
-            if [ ! -f "$secrets" ]; then
-              {
-                echo "# Homepage dashboard widget credentials - edit me, then:"
-                echo "#   systemctl restart homepage-dashboard"
-                echo "# AdGuard Home web login (http://adguard.home.arpa)"
-                echo "HOMEPAGE_VAR_ADGUARD_USERNAME=changeme"
-                echo "HOMEPAGE_VAR_ADGUARD_PASSWORD=changeme"
-                echo "# Home Assistant long-lived access token:"
-                echo "# profile (bottom-left) > Security > Long-lived access tokens"
-                echo "HOMEPAGE_VAR_HA_TOKEN=changeme"
-                echo "# Nextcloud NC-Token: Settings > Administration > System"
-                echo "HOMEPAGE_VAR_NEXTCLOUD_TOKEN=changeme"
-                echo "# Booklore account (same as the web login)"
-                echo "HOMEPAGE_VAR_BOOKLORE_USERNAME=changeme"
-                echo "HOMEPAGE_VAR_BOOKLORE_PASSWORD=changeme"
-              } > "$secrets"
+            if [ -s /var/lib/homepage-dashboard-env/secrets.env ]; then
+              : > /var/lib/homepage-dashboard-env/.migrated-to-clan
             fi
-            chmod 0644 "$secrets"
+            # Until the prompt is answered, say so instead of silently serving
+            # blank widget placeholders.
+            if [ ! -s ${secretsFile} ] && [ -s /var/lib/homepage-dashboard-env/secrets.env ]; then
+              echo "homepage-vars is unset; adopt the old file with:" >&2
+              echo "  clan vars set homelab homepage-vars/secrets < /var/lib/homepage-dashboard-env/secrets.env" >&2
+            fi
           '';
         };
+
         systemd.services.homepage-dashboard = {
           after = [ "homepage-dashboard-secrets.service" ];
           requires = [ "homepage-dashboard-secrets.service" ];
@@ -551,7 +553,7 @@
             RestartSec = "5s";
             # Tolerate a missing file: the AdGuard endpoints degrade to a
             # hint row and the rest of the feed works without credentials.
-            EnvironmentFile = "-/var/lib/homepage-dashboard-env/secrets.env";
+            EnvironmentFile = "-${secretsFile}";
           };
         };
       };

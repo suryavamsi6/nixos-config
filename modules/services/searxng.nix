@@ -18,7 +18,10 @@
   options.flake.modules.nixos.searxng = lib.mkOption {
     type = lib.types.deferredModule;
     default =
-      { pkgs, ... }:
+      { config, pkgs, ... }:
+      let
+        secretsFile = config.clan.core.vars.generators.searx-secret.files.secret-env.path;
+      in
       {
         systemd.services.searx-secret = {
           description = "Seed SearXNG secret key";
@@ -29,24 +32,23 @@
             Type = "oneshot";
             RemainAfterExit = true;
           };
-          path = [
-            pkgs.coreutils
-            pkgs.openssl
-          ];
+          path = [ pkgs.coreutils ];
+          # Migration bridge (§6.3): the key comes from the `searx-secret`
+          # Clan var now. Keep the directory (SearXNG's cache and settings
+          # live there) and record the move; never rewrite secret.env, which
+          # stays as the rollback path.
           script = ''
             set -euo pipefail
             install -d -m 700 /var/lib/searx
-            secrets=/var/lib/searx/secret.env
-            if [ ! -s "$secrets" ]; then
-              umask 077
-              printf 'SEARX_SECRET_KEY=%s\n' "$(openssl rand -hex 32)" > "$secrets"
+            if [ -s /var/lib/searx/secret.env ]; then
+              chmod 0600 /var/lib/searx/secret.env
+              : > /var/lib/searx/.migrated-to-clan
             fi
-            chmod 0600 "$secrets"
           '';
         };
         services.searx = {
           enable = true;
-          environmentFile = "/var/lib/searx/secret.env";
+          environmentFile = secretsFile;
           settings = {
             general.instance_name = "homelab";
             search.safe_search = 0;

@@ -89,18 +89,26 @@ plaintext copies so you can copy them to clients without scraping the journal).
    sudo cat /var/lib/restic-rest/clients.env
    ```
 
-2. On each client, create `/var/lib/restic-backups/env` (mode 0600) with that host's
-   lines plus a shared repository password:
+2. That env file is a Clan var, not a file to write by hand; adopt it with the
+   repository password supplied on the command line:
 
-   ```bash
-   RESTIC_PASSWORD=<long random string, same on every client>
-   RESTIC_REST_HOMELAB_USERNAME=homelab
-   RESTIC_REST_HOMELAB_PASSWORD=<from clients.env>
+   ```fish
+   set PW (head -c 32 /dev/urandom | base64 -w0)   # save this in 1Password first
+   env RESTIC_REPO_PASSWORD=$PW ./scripts/clan-adopt-secrets.sh homelab  # HOMELAB pair
+   env RESTIC_REPO_PASSWORD=$PW ./scripts/clan-adopt-secrets.sh nixos    # NIXOS pair
    ```
 
-   The desktop uses the `NIXOS` pair instead of `HOMELAB`.
+   (`PW=$(…) cmd` and `VAR=v cmd` are bash-isms; the user shell is fish, where they are
+   `set PW (…)` and `env VAR=v cmd`. `openssl` is not on PATH either — coreutils `base64`
+   over `/dev/urandom` is equivalent.)
 
-3. Until the file exists the unit **skips** via `ExecCondition` and records
+   It is decrypted to `/run/secrets` before sysinit, so there is nothing to create on
+   the client. Do **not** write `/var/lib/restic-backups/env` by hand any more — the
+   migration unit only records that it was migrated, and the var is the source of truth.
+   (`RESTIC_REST_<HOST>_PASSWORD` comes from the pi's `restic-htpasswd/clients-env`, which
+   is already adopted, so only the repository password is new information.)
+
+3. Until the var exists the unit **skips** via `ExecCondition` and records
    `result: "unknown"` — the dashboard says "not configured" rather than showing a stale
    success. Run one manual backup to seed the repository:
 
@@ -114,8 +122,8 @@ Restore (into a scratch directory, never over live state):
 ```bash
 sudo install -d -m 0700 /tmp/restore
 sudo systemctl stop restic-backups-default.timer
-sudo -E env $(sudo grep RESTIC_ /var/lib/restic-backups/env | xargs) \
-  restic restore latest --target /tmp/restore --include /etc
+sudo -E env $(sudo grep RESTIC_ /run/secrets/per-machine/$(hostname)/restic-client/env |
+  xargs) restic restore latest --target /tmp/restore --include /etc
 ```
 
 ## Dashboards and alerting
@@ -158,7 +166,7 @@ State that survives a unit restart or a digest bump:
 | `/var/lib/nutify/instance` | SQLite instance + web-app config |
 | `/var/lib/nutify/logs` | app logs |
 | `/var/lib/nutify/etc-nut` | NUT config written by the wizard |
-| `/var/lib/nutify/secrets.env` | `SECRET_KEY`, generated once, never rotated |
+| `/var/lib/nutify/secrets.env` | legacy copy of the `SECRET_KEY` that now lives in the Clan vars store |
 
 The image's entrypoint starts `upsd`/`upsmon` and validates `/etc/nut` *before* the
 web app, so the mount exists with an empty `ups.conf` and `MODE=none` from the first
@@ -225,3 +233,132 @@ clan machines update homelab      # the same deploy node, via Clan
 
 A failed remote activation fails the whole `deploy` run; it does not leave you
 guessing. Both frontends read the same `modules/clan/` nodes, so they cannot drift.
+
+## Secrets (Clan vars)
+
+Every credential the homelab and the pi need is a **Clan var**, not a file written by a
+first-boot `*-secrets` oneshot. `modules/clan/secrets.nix` declares one generator per
+secret; the consumer reads
+
+```nix
+config.clan.core.vars.generators.qdrant-api-key.files.api-key.path
+```
+
+which resolves to `/run/secrets/per-machine/<machine>/<generator>/<file>` — tmpfs,
+decrypted by Clan's `setupSecrets` activation script (run after `specialfs` mounts
+`/run`). Note there is **no** `age-decrypt-secrets.service`: Clan only creates such a
+unit when `systemd.sysusers.enable` or `services.userborn.enable` is on, and neither is
+here, so the activation script is the whole mechanism. Do not add
+`requires`/`after = [ "age-decrypt-secrets.service" ]` to a consumer unit — it does not
+exist, and systemd then refuses to start the consumer with
+`Unit age-decrypt-secrets.service not found`. Ordering against the *per-generator*
+`<generator>-secrets.service` (e.g. `qdrant-secrets.service`) is enough and is what the
+existing units do.
+
+The ciphertext lives **outside this repo** (`flake.clan.vars.settings.age.externalStore`,
+`$CLAN_AGE_STORE_DIR`, `~/clan-secrets` here), because the flake is public. That has one
+operational consequence:
+
+```bash
+clan vars upload homelab          # push ciphertext before a deploy that changes a secret
+clan vars upload raspberry-pi
+```
+
+`deploy .#homelab` does **not** upload vars — deploy-rs knows nothing about them, and with
+an external store the ciphertext is not in the system closure either. A deploy that
+changes a secret without an upload activates with the *old* value.
+
+`CLAN_AGE_STORE_DIR` must be exported for every `clan vars` call; unset, `clan vars check`
+fails with "vars.settings.age.externalStore is enabled, but CLAN_AGE_STORE_DIR is not set."
+
+### Every generator is adopt-only
+
+No generator mints a value. `clan vars generate` on a missing generator prints the
+adoption command and exits non-zero, because all of these credentials are live and
+entangled:
+
+| Rotating | Breaks |
+|----------|--------|
+| `qdrant-api-key` | Bifrost's vector-store config and Gatus' probe |
+| `bifrost-encryption-key` | every secret Bifrost has stored |
+| `bifrost-db-password` | Bifrost's Postgres role (needs `ALTER ROLE`, not a boot action) |
+| `reactive-resume-*` | the Postgres role, every session, or stored encrypted fields |
+| `booklore-*` | the app↔MariaDB pairing (`MYSQL_ROOT_PASSWORD` is only read at first init) |
+| `hermes-dashboard` / `hermes-api-server` | the phone app and Desktop sign-in |
+| `grok-oauth` | Caddy's `/grok` injection and Gatus' authenticated check |
+| `restic-htpasswd` / `restic-client` | every client's nightly push (401 into an unrecoverable repo) |
+| `homepage-vars` | the dashboard widgets (and the values are human-supplied) |
+
+Adoption is one script:
+
+```bash
+export CLAN_AGE_STORE_DIR=$HOME/clan-secrets
+./scripts/clan-adopt-secrets.sh --list          # what is missing, and from where
+./scripts/clan-adopt-secrets.sh raspberry-pi    # restic htpasswd + client list (root ssh, never prompts)
+./scripts/clan-adopt-secrets.sh homelab         # grok-oauth + searx (ssh + sudo, prompts once)
+./scripts/clan-adopt-secrets.sh nixos           # this workstation's restic client env
+
+# The two client targets also need the repository password, which lives nowhere on disk:
+env RESTIC_REPO_PASSWORD=$PW ./scripts/clan-adopt-secrets.sh homelab
+env RESTIC_REPO_PASSWORD=$PW ./scripts/clan-adopt-secrets.sh nixos
+```
+
+`restic-client/env` is **not** adopted from `/var/lib/restic-backups/env`. That path
+never existed on either host: the topology in `modules/monitoring/backups.nix` says each
+client pushes to `rest:http://192.168.0.105:8000/<hostname>/`, but no client env file was
+ever provisioned, and `restic` was never initialised on the pi — `/mnt/media/backups/restic/`
+contains no per-host repository. So the var is assembled from its two halves instead:
+`RESTIC_REST_<HOST>_{USERNAME,PASSWORD}` come from the pi's `restic-htpasswd/clients-env`
+(already in the store), and `RESTIC_PASSWORD` is supplied by the operator. The script
+refuses rather than minting one: a fresh password would not match what any repo was
+initialised with, and the nightly unit skips cleanly on its own
+(`ExecCondition = test -r <envFile>`) until the var exists.
+
+The two that use `sudo` ask for the password once, reading it from `/dev/tty`
+explicitly, then pipe it to `sudo -S` per host. The password goes in through a pipe and
+the file comes out through a temp file, so nothing needs a terminal on stdin — which is
+what makes the script usable from a wrapper or a command substitution.
+
+Three obvious alternatives all fail, quietly enough to look like a permissions problem:
+`sudo -v` caches its credential per login *session* and ssh shares no session between two
+connections, so "prime, then read" leaves the second connection unauthenticated;
+`ssh -t` inside `$(…)` gives sudo a pty to prompt on but a pipe to write to, and deadlocks;
+and `ssh -T` with the terminal left on stdin never reads a password at all, because inside
+`$(…)` fd 0 is the substitution's pipe. That last one hangs indefinitely while looking
+like it is working.
+
+Everything it writes is read back and compared before it reports success. It is idempotent and
+normalising: `incus config show --expanded` emits `environment.KEY: value`, which it rewrites to
+`KEY=value` — the shape the consumers grep for — and it strips CR (an ssh pty injects them, and a
+stray `\r` inside a bcrypt hash fails authentication with no useful error). It refuses to store a
+file that is missing an expected key rather than adopting a partial secret. Re-running an adopted
+target prints `already adopted, unchanged` and writes nothing.
+
+`homepage-vars` is the one generator with a prompt. The widget logins are human-supplied,
+so instead of a file to edit:
+
+```bash
+clan vars set homelab homepage-vars/secrets < /var/lib/homepage-dashboard-env/secrets.env
+clan vars generate homelab -g homepage-vars   # fills secrets-env from the persisted prompt
+```
+
+`clan vars generate` on a machine that still has missing prompts crashes with
+`termios.error: (25, 'Inappropriate ioctl for device')` in a non-TTY, so answer prompts
+with `clan vars set`, not `generate`.
+
+### The migration bridge
+
+Every old `*-secrets` unit is still installed, but its "write if absent" branch is
+inverted: it now only touches `/var/lib/<svc>/.migrated-to-clan` and never rewrites the
+file. The old file stays on disk, so reverting one line in the service module is a
+complete rollback. Delete the units in a separate commit once a week of boots has been
+clean.
+
+Two copies remain deliberately outside `/run/secrets`:
+
+- `/var/lib/restic-rest/htpasswd` — `services.restic.server` runs with
+  `PrivateUsers=true`, and a root-owned file under `/run/secrets` appears as `nobody`
+  inside that user namespace. The activation copies the var into place.
+- `/var/lib/homepage-dashboard-env/secrets.env` — Homepage runs as a `DynamicUser` with no
+  stable uid, so `EnvironmentFile` cannot come from `/run/secrets` directly. The var is
+  installed at mode 0644, which is what the old hand-managed file was.

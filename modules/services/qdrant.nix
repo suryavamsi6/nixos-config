@@ -17,7 +17,15 @@
   options.flake.modules.nixos.qdrant = lib.mkOption {
     type = lib.types.deferredModule;
     default =
-      { pkgs, ... }:
+      { config, pkgs, ... }:
+      let
+        # Clan vars, not /var/lib: the key is decrypted to /run/secrets by the
+        # `setupSecrets` activation script before units start, so the units below
+        # only need `requires` on `qdrant-secrets.service`. The path is a fresh
+        # tmpfs file every boot, so a rotation takes effect on restart with
+        # nothing stale left behind.
+        apiKeyFile = config.clan.core.vars.generators.qdrant-api-key.files.api-key.path;
+      in
       {
         systemd.services.incus-qdrant = {
           description = "Provision Qdrant vector store Incus container";
@@ -44,7 +52,7 @@
           ];
           script = ''
             set -euo pipefail
-            apiKey=$(sed -n 's|^QDRANT_API_KEY=\(.*\)|\1|p' /var/lib/qdrant-secrets/api-key)
+            apiKey=$(sed -n 's|^QDRANT_API_KEY=\(.*\)|\1|p' ${apiKeyFile})
             test -n "$apiKey"
 
             incus remote list --format csv | cut -d, -f1 | grep -qx docker ||
@@ -101,24 +109,28 @@
           '';
         };
 
-        # Qdrant's API key: generated once, read by the unit above. Not a
-        # reset -- a missing file on a later boot is a first-run seed.
+        # ── Migration bridge (plans/clan-deploy-rs-migration.md §6.3) ──────
+        # This unit used to mint the key into /var/lib/qdrant-secrets/api-key.
+        # The value now lives in a Clan var, and the unit's only remaining job
+        # is to leave the old file untouched and record that it did.
+        #
+        # The old file is the rollback path: reverting `apiKeyFile` above to
+        # /var/lib/qdrant-secrets/api-key brings the previous key back with no
+        # re-provisioning. Delete this unit (and the file) one release later,
+        # once a reboot has been observed with the vars path in place.
+        #
+        # It is a no-op by construction: no openssl, no write, no mkdir.
         systemd.services.qdrant-secrets = {
-          description = "Seed the Qdrant API key";
+          description = "Record that the Qdrant API key moved to Clan vars";
           wantedBy = [ "multi-user.target" ];
           serviceConfig.Type = "oneshot";
-          path = [
-            pkgs.openssl
-            pkgs.coreutils
-          ];
+          serviceConfig.RemainAfterExit = true;
+          path = [ pkgs.coreutils ];
           script = ''
             set -euo pipefail
             dir=/var/lib/qdrant-secrets
-            key=$dir/api-key
-            install -d -m 700 "$dir"
-            if [ ! -s "$key" ]; then
-              umask 077
-              printf 'QDRANT_API_KEY=%s\n' "$(openssl rand -hex 32)" > "$key"
+            if [ -s "$dir/api-key" ] && [ ! -e "$dir/.migrated-to-clan" ]; then
+              : > "$dir/.migrated-to-clan"
             fi
           '';
         };

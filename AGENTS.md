@@ -114,7 +114,7 @@ Do not run a rebuild, switch, reboot, container update, secret rotation, or dest
 - Core services include SSH, Tailscale, Nginx, Cockpit, AdGuard Home, Unbound, and Redis-backed DNS caching.
 - Podman is the OCI backend; Docker is disabled. Managed containers include MariaDB, Nextcloud, and Speedtest Tracker. (The Booklore/Grimmory library moved to the `#homelab` host in October 2026; the pi copy under `/mnt/media/booklore` is kept as a fallback.)
 - Persistent storage includes `/mnt/media`, `/var/lib/AdGuardHome`, and `/var/lib/redis-unbound`. Preserve mount ordering, ownership, container dependencies, network wiring, and firewall/reverse-proxy behavior.
-- Runtime secrets and credentials belong in the referenced external `.env` files or generated state, never in this repository. Do not expose secret contents in logs, diffs, prompts, or URLs.
+- Runtime secrets are **Clan vars** (`modules/clan/secrets.nix`), decrypted to `/run/secrets` before `sysinit.target`; nothing sensitive lives in this repository. Every generator is adopt-only — never mint a replacement for a live credential (a rotated Qdrant/Bifrost/Hermes key or restic password breaks its consumer silently). Adopt with `scripts/clan-adopt-secrets.sh`, and run `clan vars upload <machine>` before any deploy that changes one, because the store is external to the flake. Do not expose secret contents in logs, diffs, prompts, or URLs.
 - Do not update mutable container tags, regenerate secrets, modify DNS/firewall exposure, or restart/rebuild the Pi unless explicitly requested. Validate mounts, environment files, service dependencies, and data paths before deploying.
 
 ## Runtime/Tooling Preferences

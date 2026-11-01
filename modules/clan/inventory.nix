@@ -27,7 +27,13 @@
           "x86_64"
         ];
         deploy = {
-          targetHost = "homelab.home.arpa";
+          # Carry the login user in the address. `clan_cli`'s `_parse_ssh_uri`
+          # defaults a bare host to `root@`, and this host sets
+          # `PermitRootLogin = "no"` (nixos-homelab.nix), so a bare hostname can
+          # only ever fail with `Permission denied (publickey)`. With a user,
+          # `Remote.become_root` runs the privileged half through a sudo askpass
+          # prompt instead. Matches deploy-rs (`sshUser = "surya"` in deploy.nix).
+          targetHost = "surya@homelab.home.arpa";
           buildHost = null; # workstation builds, then `nix copy`
         };
       };
@@ -38,9 +44,13 @@
           "aarch64"
         ];
         deploy = {
-          targetHost = "pi.home.arpa";
+          # IP, not `pi.home.arpa`: that name resolves only through the Pi's own
+          # AdGuard rewrite, so resolving it would depend on the generation being
+          # deployed (deploy.nix documents the same for its `hostname`). Fresh
+          # installs have no DNS at all.
+          targetHost = "suryavamsi@192.168.0.105";
           # Never emulate aarch64 on the x86_64 workstation: build on the Pi.
-          buildHost = "pi.home.arpa";
+          buildHost = "suryavamsi@192.168.0.105";
         };
       };
 

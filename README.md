@@ -225,7 +225,10 @@ deployed by hand-editing a running system.
 | `deploy .#raspberry-pi` | Same, for the pi. Add `--remote-build` to build on the pi instead (slow, but it survives a broken local store). |
 | `clan machines update homelab` | Clan's wrapper around the same deploy nodes. |
 | `clan machines update raspberry-pi` | Same, for the pi. |
-| `clan vars list homelab` | Lists Clan-managed secrets/vars for a machine (empty until a generator is declared). |
+| `clan vars list homelab` | Lists Clan-managed secrets for a machine, and whether each is adopted. |
+| `clan vars upload homelab` | Pushes secret ciphertext to the host. **Required** before a deploy that changes a secret — the store is external, so it is not in the closure. |
+| `./scripts/clan-adopt-secrets.sh --list` | Which secrets still need adopting, and from which live file. |
+| `./scripts/clan-adopt-secrets.sh raspberry-pi` | Adopt the pi's restic credentials into the store. |
 
 `deploy` with no argument is a dry run: it builds and prints the profile it *would*
 activate, which is the safe way to check a change before touching the homelab.
@@ -242,6 +245,39 @@ repository root you do not need it at all (`clan vars list homelab`).
 Remote activation needs sudo on the target. The deploy nodes are configured for
 interactive sudo — a password prompt appears in your terminal — so run these from a
 normal shell, not from a script.
+
+### Secrets
+
+Every credential on `#homelab`, `#raspberry-pi` and `#nixos` is a **Clan var**, decrypted
+to `/run/secrets` on boot instead of being written into `/var/lib` by a first-boot
+oneshot. The ciphertext lives outside this repo (`$CLAN_AGE_STORE_DIR`, default
+`~/clan-secrets`) because the flake is public, so export it for any `clan vars` call:
+
+```bash
+export CLAN_AGE_STORE_DIR=$HOME/clan-secrets
+clan vars list homelab                    # what exists, and whether it is adopted
+clan vars upload homelab                  # push ciphertext before a deploy that changes one
+```
+
+No generator mints a value. `clan vars generate` on a missing secret prints the
+adoption command and exits non-zero, because every one of these credentials is
+entangled with a live service — rotating the Qdrant key breaks Bifrost's vector-store
+config, rotating a Booklore DB password desynchronises it from MariaDB, rotating the
+restic pair makes every client's nightly push fail 401 into an unrecoverable repo.
+Adoption is one script — idempotent, and it normalises the shapes that
+`incus config show --expanded` emits (`environment.KEY: value` → `KEY=value`):
+
+```bash
+./scripts/clan-adopt-secrets.sh --list       # what is left, and from where
+./scripts/clan-adopt-secrets.sh raspberry-pi # no sudo needed
+./scripts/clan-adopt-secrets.sh homelab      # prompts for sudo — must be a real terminal
+```
+
+The `sudo` targets cannot run from a pipe: the value is read inside `$(…)`, which is a
+pipe, so a remote `sudo` there neither prompts nor proceeds — it just waits. The script
+refuses up front rather than hanging. Full model, breakage table and the two deliberate
+exceptions (`restic-htpasswd` under `PrivateUsers`, Homepage's 0644 env file):
+`docs/homelab.md` §"Secrets (Clan vars)".
 
 ---
 

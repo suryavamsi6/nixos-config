@@ -25,8 +25,12 @@
   options.flake.modules.nixos.grokOauthProxy = lib.mkOption {
     type = lib.types.deferredModule;
     default =
-      { pkgs, ... }:
+      { config, pkgs, ... }:
       let
+        # Clan var, not /var/lib. The file stays owned by the service user and
+        # 0400 so `ProtectSystem = "strict"` below still works: /run/secrets is
+        # tmpfs and the var file is chowned to grok-oauth-proxy at decrypt time.
+        secretsFile = config.clan.core.vars.generators.grok-oauth.files.secrets-env.path;
         grokOauthProxy = pkgs.buildGoModule (finalAttrs: {
           pname = "grok-oauth-proxy";
           version = "1.0.1-unstable-2026-09-08";
@@ -53,8 +57,15 @@
           createHome = true;
         };
 
+        # ── Migration bridge (plans/clan-deploy-rs-migration.md §6.3) ──────
+        # The three keys now come from the `grok-oauth` Clan var. This unit is
+        # kept as the ordering anchor the two services below still require, and
+        # only ensures the old state directory still exists (the OAuth token
+        # cache lives there and is NOT a secret var) plus a marker file.
+        #
+        # It never writes secrets.env again: the old file is the rollback path.
         systemd.services.grok-oauth-proxy-secrets = {
-          description = "Seed grok-oauth-proxy admin key";
+          description = "Keep grok-oauth-proxy state dir; secrets moved to Clan vars";
           wantedBy = [ "multi-user.target" ];
           requiredBy = [
             "grok-oauth-proxy.service"
@@ -71,25 +82,13 @@
           };
           path = [
             pkgs.coreutils
-            pkgs.gnugrep
-            pkgs.openssl
           ];
           script = ''
+            set -euo pipefail
             install -d -m 700 -o grok-oauth-proxy -g grok-oauth-proxy /var/lib/grok-oauth-proxy
-            f=/var/lib/grok-oauth-proxy/secrets.env
-            if [ ! -f "$f" ]; then
-              key=$(openssl rand -hex 24)
-              printf 'ADMIN_API_KEY=%s\nGROK_ADMIN_KEY=%s\n' "$key" "$key" > "$f"
-              chown grok-oauth-proxy:grok-oauth-proxy "$f"
-            fi
-            # GROK_CLIENT_KEY gates the Caddy /grok route that Bifrost uses.
-            # Bifrost cannot hold the real ADMIN_API_KEY (this file is 0600
-            # and owned by the service user), so Caddy injects that key and
-            # Bifrost only ever carries this throwaway gate credential.
-            # Appended separately so pre-existing hosts pick it up on the
-            # next switch without rotating the admin key.
-            if ! grep -q '^GROK_CLIENT_KEY=' "$f"; then
-              printf 'GROK_CLIENT_KEY=%s\n' "$(openssl rand -hex 24)" >> "$f"
+            if [ -s /var/lib/grok-oauth-proxy/secrets.env ]; then
+              chown grok-oauth-proxy:grok-oauth-proxy /var/lib/grok-oauth-proxy/secrets.env
+              : > /var/lib/grok-oauth-proxy/.migrated-to-clan
             fi
           '';
         };
@@ -97,14 +96,16 @@
         systemd.services.grok-oauth-proxy = {
           description = "grok-oauth-proxy (SuperGrok -> OpenAI-compatible API)";
           wantedBy = [ "multi-user.target" ];
-          after = [ "network-online.target" ];
+          after = [
+            "network-online.target"
+          ];
           wants = [ "network-online.target" ];
           serviceConfig = {
             User = "grok-oauth-proxy";
             Group = "grok-oauth-proxy";
             ExecStart = "${grokOauthProxy}/bin/grok-oauth-proxy";
             Environment = [ "HOME=/var/lib/grok-oauth-proxy" ];
-            EnvironmentFile = "/var/lib/grok-oauth-proxy/secrets.env";
+            EnvironmentFile = secretsFile;
             Restart = "on-failure";
             RestartSec = "5";
             NoNewPrivileges = true;
@@ -138,7 +139,7 @@
             Group = "grok-oauth-proxy";
             ExecStart = "${grokOauthProxy}/bin/grok-oauth-proxy auth";
             Environment = [ "HOME=/var/lib/grok-oauth-proxy" ];
-            EnvironmentFile = "/var/lib/grok-oauth-proxy/secrets.env";
+            EnvironmentFile = secretsFile;
             NoNewPrivileges = true;
             PrivateTmp = true;
           };

@@ -25,7 +25,10 @@
   options.flake.modules.nixos.nutify = lib.mkOption {
     type = lib.types.deferredModule;
     default =
-      { pkgs, ... }:
+      { config, pkgs, ... }:
+      let
+        secretFile = config.clan.core.vars.generators.nutify-secret.files.secret-env.path;
+      in
       {
         systemd.services.incus-nutify = {
           description = "Provision Nutify UPS monitoring Incus container";
@@ -35,7 +38,9 @@
             "network-online.target"
           ];
           wants = [ "network-online.target" ];
-          requires = [ "incus.service" ];
+          requires = [
+            "incus.service"
+          ];
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
@@ -45,18 +50,18 @@
             pkgs.gnugrep
             pkgs.gnused
             pkgs.coreutils
-            pkgs.openssl
           ];
           script = ''
             set -euo pipefail
             state=/var/lib/nutify
             install -d -m 700 "$state"
-            secrets=$state/secrets.env
-            if [ ! -s "$secrets" ]; then
-              umask 077
-              printf 'SECRET_KEY=%s\n' "$(openssl rand -hex 32)" > "$secrets"
+            # Migration bridge (§6.3): the old SECRET_KEY file is left in place
+            # untouched as the rollback path; the live value now comes from the
+            # `nutify-secret` Clan var.
+            if [ -s "$state/secrets.env" ]; then
+              : > "$state/.migrated-to-clan"
             fi
-            secret=$(sed -n 's|^SECRET_KEY=\(.*\)|\1|p' "$secrets")
+            secret=$(sed -n 's|^SECRET_KEY=\(.*\)|\1|p' ${secretFile})
             test -n "$secret"
 
             incus remote list --format csv | cut -d, -f1 | grep -qx docker ||

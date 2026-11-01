@@ -19,7 +19,18 @@
   options.flake.modules.nixos.booklore = lib.mkOption {
     type = lib.types.deferredModule;
     default =
-      { pkgs, ... }:
+      { config, pkgs, ... }:
+      let
+        vars = config.clan.core.vars.generators;
+        dbPasswordFile = vars.booklore-db-password.files.db-password.path;
+        mysqlRootPasswordFile = vars.booklore-mysql-root-password.files.mysql-root-password.path;
+        # Container settings that are not secrets. They are the values the live
+        # containers carry (read with `incus config show --expanded`), hoisted
+        # here so the adopt-set below cannot overwrite them with defaults.
+        booklorePort = "6060";
+        dbName = "booklore";
+        dbUser = "booklore";
+      in
       {
         systemd.services.incus-booklore = {
           description = "Provision Grimmory library + MariaDB Incus containers";
@@ -29,7 +40,9 @@
             "network-online.target"
           ];
           wants = [ "network-online.target" ];
-          requires = [ "incus.service" ];
+          requires = [
+            "incus.service"
+          ];
           serviceConfig = {
             Type = "simple";
             Restart = "on-failure";
@@ -68,37 +81,28 @@
               install -m 600 "$staging/import.sql" "$state/db/import.sql"
             fi
 
-            # Same env-file contract as the pi: one file holding the app
-            # keys and the MariaDB keys together. Adopt the migrated file,
-            # or seed a fresh one for an empty install. Generated once,
-            # never rotated, never printed.
+            # ── Migration bridge (plans/clan-deploy-rs-migration.md §6.3) ──
+            # The old `/var/lib/incus/booklore/booklore.env` held two unrelated
+            # credentials plus container settings. They are now two Clan vars —
+            # DB_PASSWORD and MYSQL_ROOT_PASSWORD are separate so rotating one
+            # cannot silently break the other — and the settings below are
+            # module-level constants, so nothing here reads that file any more.
             env=$state/booklore.env
-            if [ ! -s "$env" ]; then
-              if [ -s "$staging/booklore.env" ]; then
-                install -m 600 "$staging/booklore.env" "$env"
-              else
-                umask 077
-                {
-                  printf 'TZ=Etc/UTC\n'
-                  printf 'BOOKLORE_PORT=6060\n'
-                  printf 'DATABASE_URL=jdbc:mariadb://10.110.0.60:3306/booklore\n'
-                  printf 'DB_USER=grimmory\n'
-                  printf 'DB_PASSWORD=%s\n' "$(openssl rand -hex 16)"
-                  printf 'MYSQL_ROOT_PASSWORD=%s\n' "$(openssl rand -hex 24)"
-                  printf 'MYSQL_DATABASE=booklore\n'
-                } > "$env"
-              fi
+            if [ -s "$env" ]; then
+              chmod 600 "$env"
+              : > "$state/.migrated-to-clan"
             fi
-            chmod 600 "$env"
-
-            set -a
-            # shellcheck disable=SC1090
-            . "$env"
-            set +a
-            # The migrated DATABASE_URL names the pi's podman alias
-            # ("mariadb"); point it at the db container's static address,
-            # keeping port, database and any query params intact.
-            appurl=$(printf '%s' "$DATABASE_URL" | sed -E 's#(://[^/:]+)#://10.110.0.60#')
+            TZ=Etc/UTC
+            BOOKLORE_PORT=${booklorePort}
+            MYSQL_DATABASE=${dbName}
+            DB_USER=${dbUser}
+            DATABASE_URL="jdbc:mariadb://10.110.0.60:3306/${dbName}"
+            DB_PASSWORD=$(sed -n 's|^DB_PASSWORD=\(.*\)|\1|p' ${dbPasswordFile})
+            MYSQL_ROOT_PASSWORD=$(sed -n 's|^MYSQL_ROOT_PASSWORD=\(.*\)|\1|p' ${mysqlRootPasswordFile})
+            if [ -z "$DB_PASSWORD" ] || [ -z "$MYSQL_ROOT_PASSWORD" ]; then
+              echo "booklore Clan vars did not decrypt; is /run/secrets mounted?" >&2
+              exit 1
+            fi
 
             if ! incus list --format csv -c n | grep -qx booklore-db; then
               incus init lscr:linuxserver/mariadb:11.4.5 booklore-db \
@@ -164,7 +168,7 @@
                 -c environment.GROUP_ID=1000 \
                 -c environment.TZ="$TZ" \
                 -c environment.SERVER_PORT="$BOOKLORE_PORT" \
-                -c environment.DATABASE_URL="$appurl" \
+                -c environment.DATABASE_URL="$DATABASE_URL" \
                 -c environment.DATABASE_USERNAME="$DB_USER" \
                 -c environment.DATABASE_PASSWORD="$DB_PASSWORD"
               incus config device add booklore data disk \

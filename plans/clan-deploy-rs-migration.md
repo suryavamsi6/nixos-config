@@ -280,6 +280,42 @@ never rewrites the file. The service then reads the vars path. If a service misb
 one line to the old path and the old file is still there. Delete the units in a separate commit
 after a week of clean boots.
 
+### 6.4 Status (done)
+
+All of the above is implemented:
+
+- `modules/clan/secrets.nix` declares the generators: 17 on `homelab` (18 files), 1 each on
+  `raspberry-pi` (`restic-htpasswd`, 2 files) and `nixos` (`restic-client`, 1 file). Bifrost and
+  Booklore split per credential so one rotation cannot orphan the other; `grok-oauth` keeps
+  three keys in one file because two of them are the same value by construction.
+- Every generator is **adopt-only**: `script` prints the adoption command and exits 1 instead
+  of minting. Rationale and the full breakage table are in `docs/homelab.md` §"Secrets".
+- Consumers in `modules/services/*.nix` and `modules/monitoring/backups.nix` read
+  `config.clan.core.vars.generators.<gen>.files.<file>.path` and depend on
+  Clan's `setupSecrets` activation script (no `age-decrypt-secrets.service` exists —
+  that unit is only created when `systemd.sysusers.enable` is on); host files import `nixos.homelabVars`,
+  `nixos.resticServerVars` or `nixos.resticClientVars` next to the consumers.
+- `scripts/clan-adopt-secrets.sh` performs the adoption (normalising, idempotent, `--list` as
+  the source of truth). Adopted so far: 15 of the 18 homelab files (every container/host secret
+  readable without sudo), both pi `restic-htpasswd` files, and `homepage-vars` via its
+  persisted prompt.
+- Deliberate exceptions, both documented in the service module: `restic-htpasswd` is copied out
+  of `/run/secrets` because `services.restic.server` uses `PrivateUsers=true` (root-owned files
+  appear as `nobody` in that user namespace), and Homepage's env file stays at 0644 because the
+  service is a `DynamicUser` with no stable uid.
+- Equivalence gate: the §7 baseline `drvPath`s necessarily moved (consumers now read vars), so
+  the gate was re-established on the new paths and all four hosts evaluate clean.
+- Two bugs the script's own first run caught, both worth remembering: `qdrant-api-key` must be
+  `QDRANT_API_KEY=` (the container's env is `QDRANT__SERVICE__API_KEY=`), and an `ssh -t` pty
+  injects CR — a `\r` inside a bcrypt hash fails restic auth with no error at all. Both are
+  fixed in the normaliser, not worked around at the call sites.
+- Remaining before this step closes (all need a password prompt, so run them yourself from a
+  terminal):
+  - `./scripts/clan-adopt-secrets.sh homelab` → `grok-oauth`, `searx-secret`, `restic-client`
+  - `./scripts/clan-adopt-secrets.sh nixos` → this workstation's `restic-client`
+  - `clan vars upload homelab` and `clan vars upload raspberry-pi` — the store is external, so
+    the ciphertext is NOT in the closure and `deploy` will not carry it.
+
 ## 7. Extracting services out of `modules/hosts/nixos-homelab.nix` (3,458 lines)
 
 One commit per service, in this order (safest → most entangled):

@@ -28,7 +28,15 @@
   options.flake.modules.nixos.caddy = lib.mkOption {
     type = lib.types.deferredModule;
     default =
-      { ... }:
+      { config, ... }:
+      let
+        # Caddy expands {$GROK_ADMIN_KEY} / {$GROK_CLIENT_KEY} from this file at
+        # request time. It is the grok-oauth Clan var now, not
+        # /var/lib/grok-oauth-proxy/secrets.env: the var file is root-owned 0400
+        # and Caddy runs as root, so the old "0600 owned by the service user"
+        # workaround is gone.
+        grokSecretsFile = config.clan.core.vars.generators.grok-oauth.files.secrets-env.path;
+      in
       {
         #   homeassistant.home.arpa -> Home Assistant
         #   mcp.home.arpa           -> MCPHub dashboard + /mcp
@@ -67,8 +75,12 @@
         # The unit also waits for that file: caddy cannot start ahead of
         # the unit that mints the key it needs to inject.
         systemd.services.caddy = {
-          requires = [ "grok-oauth-proxy-secrets.service" ];
-          after = [ "grok-oauth-proxy-secrets.service" ];
+          requires = [
+            "grok-oauth-proxy-secrets.service"
+          ];
+          after = [
+            "grok-oauth-proxy-secrets.service"
+          ];
           # The bifrost vhost pins `bind 192.168.0.160`, the Wi-Fi DHCP
           # lease on wlp5s0. During activation NetworkManager (and every
           # unit with a nixos-upgrade/switch reload trigger) is restarted,
@@ -228,7 +240,7 @@
             # Caddy expands {$GROK_ADMIN_KEY} / {$GROK_CLIENT_KEY} from this
             # file at adapt time (see the grok vhost). Read by systemd as
             # root; the file stays 0600 grok-oauth-proxy:grok-oauth-proxy.
-            environmentFile = "/var/lib/grok-oauth-proxy/secrets.env";
+            environmentFile = grokSecretsFile;
             globalConfig = ''
               auto_https disable_redirects
             '';

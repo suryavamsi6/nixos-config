@@ -25,7 +25,13 @@
   options.flake.modules.nixos.reactiveResume = lib.mkOption {
     type = lib.types.deferredModule;
     default =
-      { pkgs, ... }:
+      { config, pkgs, ... }:
+      let
+        vars = config.clan.core.vars.generators;
+        dbPasswordFile = vars.reactive-resume-db-password.files.db-password.path;
+        authSecretFile = vars.reactive-resume-auth-secret.files.auth-secret.path;
+        encryptionSecretFile = vars.reactive-resume-encryption-secret.files.encryption-secret.path;
+      in
       {
         systemd.services.incus-reactive-resume = {
           description = "Provision Reactive Resume Incus container";
@@ -52,11 +58,16 @@
           ];
           script = ''
             set -euo pipefail
-            secrets=/var/lib/reactive-resume/secrets.env
-            test -s "$secrets"
-            dbpass=$(sed -n 's|^RR_DB_PASSWORD=\(.*\)|\1|p' "$secrets")
-            auth=$(sed -n 's|^AUTH_SECRET=\(.*\)|\1|p' "$secrets")
-            enc=$(sed -n 's|^ENCRYPTION_SECRET=\(.*\)|\1|p' "$secrets")
+            # Migration bridge (§6.3): /var/lib/reactive-resume/secrets.env is
+            # no longer written or read by this unit. The three values come from
+            # their own Clan vars so rotating the DB password cannot silently
+            # change the app's session or field-encryption keys.
+            if [ -s /var/lib/reactive-resume/secrets.env ]; then
+              : > /var/lib/reactive-resume/.migrated-to-clan
+            fi
+            dbpass=$(sed -n 's|^RR_DB_PASSWORD=\(.*\)|\1|p' ${dbPasswordFile})
+            auth=$(sed -n 's|^AUTH_SECRET=\(.*\)|\1|p' ${authSecretFile})
+            enc=$(sed -n 's|^ENCRYPTION_SECRET=\(.*\)|\1|p' ${encryptionSecretFile})
             test -n "$dbpass"
             test -n "$auth"
             test -n "$enc"
