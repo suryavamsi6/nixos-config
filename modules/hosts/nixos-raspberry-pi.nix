@@ -376,6 +376,9 @@
                   enabled = true;
                 })
                 [
+                  # This host itself, so `deploy .#raspberry-pi` has a stable
+                  # name to SSH to (the default branch below answers .105).
+                  "pi.home.arpa"
                   "booklore.home.arpa"
                   "adguard.home.arpa"
                   "speedtest.home.arpa"

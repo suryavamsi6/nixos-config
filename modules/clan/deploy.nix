@@ -52,6 +52,10 @@ in
       activationTimeout = 600;
       fastConnection = false; # use the target's substituters before copying the whole closure
       remoteBuild = false; # i7 workstation builds; the laptop only runs `switch-to-configuration`
+      # Activation runs `sudo -u root activate-rs`, and neither host has passwordless
+      # sudo for its login user, so deploy must feed the password over stdin.
+      # `deploy -i` prompts for it once per node.
+      interactiveSudo = true;
     };
 
     raspberry-pi = {
@@ -71,6 +75,7 @@ in
       # Build aarch64 on the Pi itself. Emulating the whole system on x86_64 with
       # binfmt is slower than the network round trip and needs far more RAM.
       remoteBuild = true;
+      interactiveSudo = true;
     };
   };
 
