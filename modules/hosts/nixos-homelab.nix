@@ -278,11 +278,14 @@
           # MACs), so a reflector is the only viable bridge.
           services.avahi = {
             enable = true;
-            reflector = true;
+            # Avahi settings live under `settings`: the flat
+            # `reflector`/`allowInterfaces` options were renamed, and using the
+            # old names prints a deprecation warning on every evaluation.
+            settings.reflector.enable-reflector = true;
             # Opens UDP 5353 so LAN clients (phone Matter commissioning,
             # discovery queries) can reach mDNS on this host at all.
             openFirewall = true;
-            allowInterfaces = [
+            settings.server.allow-interfaces = [
               "wlp5s0"
               "incusbr0"
             ];
@@ -456,24 +459,26 @@
                   driver = "dir";
                 }
               ];
-              profiles = [
-                {
-                  name = "default";
-                  devices = {
-                    eth0 = {
-                      name = "eth0";
-                      nictype = "bridged";
-                      parent = "incusbr0";
-                      type = "nic";
-                    };
-                    root = {
-                      path = "/";
-                      pool = "default";
-                      type = "disk";
-                    };
-                  };
-                }
-              ];
+              # NOTE: the `profiles` block is deliberately ABSENT.
+              #
+              # `incus admin init --preseed` re-applies every declared entity on
+              # each activation, and re-writing the default profile forces an
+              # update operation against every instance that uses it. When an
+              # instance is still settling (it did for bifrost during the
+              # 2026-11-01 incus 7.5.1->7.6.0 deploy) Incus refuses with
+              #
+              #   Error: Failed to update profile "default": The following
+              #   instances failed to update (profile change still saved):
+              #    - Project: default, Instance: bifrost: Failed to create
+              #      instance update operation: A matching non-reusable
+              #      operation has now succeeded
+              #
+              # and the preseed unit exits 1, which `deploy` treats as a failed
+              # activation and rolls back. The profile contents themselves are
+              # static and already exist on the host, so there is nothing to
+              # gain from re-applying them on every switch -- only the race.
+              # If the default profile is ever deliberately changed, apply it
+              # once by hand with `incus profile edit default`.
             };
           };
 
