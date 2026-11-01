@@ -9,5 +9,6 @@
     ./netdata.nix
     ./gatus.nix
     ./searxng.nix
+    ./homepage.nix
   ];
 }
