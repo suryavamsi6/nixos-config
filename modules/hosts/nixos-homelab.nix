@@ -36,6 +36,7 @@
           nixos.cliproxyapi # Codex/Claude/Grok OAuth logins as one OpenAI-compatible API
           nixos.netdata # agent, loopback-only; extracted from this file (§7)
           nixos.gatus # uptime checks; extracted from this file (§7)
+      nixos.searxng # metasearch; extracted from this file (§7)
           ./hermes-bridge # services.hermesBridge: management API for the Hermes phone app
 
           # Hardware scan from the laptop (ext4 root + ESP, Intel CPU, kvm-intel)
@@ -2907,66 +2908,6 @@
                       };
                     };
                 };
-
-              # --- SearXNG (native, loopback; Caddy is the LAN door) ---
-              # pkgs.searxng via services.searx. Not an Incus container: the
-              # upstream image is unnecessary when nixpkgs already ships the
-              # service, and a container would add another image pull on a laptop.
-              # Port 8888 stays closed. secret_key is generated once on the host
-              # and substituted from the env file; it never enters the flake.
-              # First switch prints nothing secret — the file is mode 0600 under
-              # /var/lib/searx. A later switch does not rotate it.
-              systemd.services.searx-secret = {
-                description = "Seed SearXNG secret key";
-                before = [ "searx-init.service" ];
-                requiredBy = [ "searx-init.service" ];
-                wantedBy = [ "multi-user.target" ];
-                serviceConfig = {
-                  Type = "oneshot";
-                  RemainAfterExit = true;
-                };
-                path = [
-                  pkgs.coreutils
-                  pkgs.openssl
-                ];
-                script = ''
-                  set -euo pipefail
-                  install -d -m 700 /var/lib/searx
-                  secrets=/var/lib/searx/secret.env
-                  if [ ! -s "$secrets" ]; then
-                    umask 077
-                    printf 'SEARX_SECRET_KEY=%s\n' "$(openssl rand -hex 32)" > "$secrets"
-                  fi
-                  chmod 0600 "$secrets"
-                '';
-              };
-              services.searx = {
-                enable = true;
-                environmentFile = "/var/lib/searx/secret.env";
-                settings = {
-                  general.instance_name = "homelab";
-                  search.safe_search = 0;
-                  search.autocomplete = "duckduckgo";
-                  search.formats = [
-                    "html"
-                    "json"
-                  ];
-                  server = {
-                    port = 8888;
-                    bind_address = "127.0.0.1";
-                    base_url = "http://search.home.arpa/";
-                    secret_key = "$SEARX_SECRET_KEY";
-                    limiter = false;
-                    image_proxy = true;
-                    method = "GET";
-                  };
-                  ui.default_theme = "simple";
-                };
-              };
-              systemd.services.searx-init = {
-                after = [ "searx-secret.service" ];
-                requires = [ "searx-secret.service" ];
-              };
 
               # The page and probe live in ~surya/homelab-board and run as a user
               # service. Caddy above is the only LAN door, so 8765 stays closed.

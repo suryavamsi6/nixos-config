@@ -8,5 +8,6 @@
   imports = [
     ./netdata.nix
     ./gatus.nix
+    ./searxng.nix
   ];
 }
