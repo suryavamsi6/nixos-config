@@ -38,6 +38,7 @@
           nixos.gatus # uptime checks; extracted from this file (§7)
           nixos.searxng # metasearch; extracted from this file (§7)
           nixos.homepage # dashboard + homelab-stats feed (§7)
+          nixos.grokOauthProxy # SuperGrok -> OpenAI-compatible API (§7)
           ./hermes-bridge # services.hermesBridge: management API for the Hermes phone app
 
           # Hardware scan from the laptop (ext4 root + ESP, Intel CPU, kvm-intel)
@@ -155,26 +156,6 @@
                   target = config.services.hermesBridge.funnelTarget;
                 };
               };
-              # dvcrn/grok-oauth-proxy: exposes a SuperGrok subscription as an
-              # OpenAI-compatible API (/v1) plus a stateless MCP server (/mcp).
-              # No container image upstream, so this is built from source and
-              # pinned to the current main commit (bump rev + both hashes).
-              grokOauthProxy = pkgs.buildGoModule (finalAttrs: {
-                pname = "grok-oauth-proxy";
-                version = "1.0.1-unstable-2026-09-08";
-                src = pkgs.fetchFromGitHub {
-                  owner = "dvcrn";
-                  repo = "grok-oauth-proxy";
-                  rev = "041025fb786663c400471b58ffd79939752351fa";
-                  hash = "sha256-WyS0ZU80wcCqJ06v5KIZ12F7Eg0wuI2EFmGsG5wNWw8=";
-                };
-                vendorHash = "sha256-GjV/PJULV6AVTImJ5TeRKhKJypS5b2E6ElTTYP9tFfE=";
-                meta = {
-                  description = "OAuth API proxy for using a Grok subscription in other harnesses";
-                  homepage = "https://github.com/dvcrn/grok-oauth-proxy";
-                  mainProgram = "grok-oauth-proxy";
-                };
-              });
             in
             {
               imports = [ ./homelab-hardware-configuration.nix ];
@@ -1997,111 +1978,6 @@
                 timerConfig = {
                   OnBootSec = "1min";
                   OnUnitInactiveSec = "2min";
-                };
-              };
-
-              # --- Grok OAuth proxy (native, loopback; Caddy is the door) ---
-              # dvcrn/grok-oauth-proxy: SuperGrok subscription -> OpenAI-compatible
-              # /v1 API and a stateless /mcp endpoint. Loopback only; Caddy serves
-              # grok.home.arpa. OAuth tokens live under the state dir; the admin
-              # key is generated once and never enters the flake. Read it with:
-              #   sudo sed -n 's/^ADMIN_API_KEY=//p' /var/lib/grok-oauth-proxy/secrets.env
-              users.groups.grok-oauth-proxy = { };
-              users.users.grok-oauth-proxy = {
-                isSystemUser = true;
-                group = "grok-oauth-proxy";
-                home = "/var/lib/grok-oauth-proxy";
-                createHome = true;
-              };
-
-              systemd.services.grok-oauth-proxy-secrets = {
-                description = "Seed grok-oauth-proxy admin key";
-                wantedBy = [ "multi-user.target" ];
-                requiredBy = [
-                  "grok-oauth-proxy.service"
-                  "gatus.service"
-                ];
-                before = [
-                  "grok-oauth-proxy.service"
-                  "gatus.service"
-                ];
-                serviceConfig = {
-                  Type = "oneshot";
-                  RemainAfterExit = true;
-                  UMask = "0077";
-                };
-                path = [
-                  pkgs.coreutils
-                  pkgs.gnugrep
-                  pkgs.openssl
-                ];
-                script = ''
-                  install -d -m 700 -o grok-oauth-proxy -g grok-oauth-proxy /var/lib/grok-oauth-proxy
-                  f=/var/lib/grok-oauth-proxy/secrets.env
-                  if [ ! -f "$f" ]; then
-                    key=$(openssl rand -hex 24)
-                    printf 'ADMIN_API_KEY=%s\nGROK_ADMIN_KEY=%s\n' "$key" "$key" > "$f"
-                    chown grok-oauth-proxy:grok-oauth-proxy "$f"
-                  fi
-                  # GROK_CLIENT_KEY gates the Caddy /grok route that Bifrost uses.
-                  # Bifrost cannot hold the real ADMIN_API_KEY (this file is 0600
-                  # and owned by the service user), so Caddy injects that key and
-                  # Bifrost only ever carries this throwaway gate credential.
-                  # Appended separately so pre-existing hosts pick it up on the
-                  # next switch without rotating the admin key.
-                  if ! grep -q '^GROK_CLIENT_KEY=' "$f"; then
-                    printf 'GROK_CLIENT_KEY=%s\n' "$(openssl rand -hex 24)" >> "$f"
-                  fi
-                '';
-              };
-
-              systemd.services.grok-oauth-proxy = {
-                description = "grok-oauth-proxy (SuperGrok -> OpenAI-compatible API)";
-                wantedBy = [ "multi-user.target" ];
-                after = [ "network-online.target" ];
-                wants = [ "network-online.target" ];
-                serviceConfig = {
-                  User = "grok-oauth-proxy";
-                  Group = "grok-oauth-proxy";
-                  ExecStart = "${grokOauthProxy}/bin/grok-oauth-proxy";
-                  Environment = [ "HOME=/var/lib/grok-oauth-proxy" ];
-                  EnvironmentFile = "/var/lib/grok-oauth-proxy/secrets.env";
-                  Restart = "on-failure";
-                  RestartSec = "5";
-                  NoNewPrivileges = true;
-                  PrivateTmp = true;
-                  ProtectSystem = "strict";
-                  ProtectHome = true;
-                  ReadWritePaths = [ "/var/lib/grok-oauth-proxy" ];
-                  RestrictAddressFamilies = [
-                    "AF_UNIX"
-                    "AF_INET"
-                    "AF_INET6"
-                  ];
-                };
-              };
-
-              # One-time browser login. The OAuth callback always lands on
-              # 127.0.0.1:56121, so tunnel it from the machine with the browser:
-              #   ssh -L 56121:127.0.0.1:56121 surya@homelab.home.arpa
-              #   sudo systemctl stop grok-oauth-proxy
-              #   sudo systemctl start grok-oauth-proxy-login
-              # then open http://127.0.0.1:56121/login there and finish the flow.
-              # Tokens land in /var/lib/grok-oauth-proxy/.config/grok-oauth-proxy/.
-              # Start grok-oauth-proxy again once the login unit exits.
-              systemd.services.grok-oauth-proxy-login = {
-                description = "grok-oauth-proxy one-time OAuth login (needs the SSH tunnel)";
-                after = [ "grok-oauth-proxy-secrets.service" ];
-                conflicts = [ "grok-oauth-proxy.service" ];
-                serviceConfig = {
-                  Type = "oneshot";
-                  User = "grok-oauth-proxy";
-                  Group = "grok-oauth-proxy";
-                  ExecStart = "${grokOauthProxy}/bin/grok-oauth-proxy auth";
-                  Environment = [ "HOME=/var/lib/grok-oauth-proxy" ];
-                  EnvironmentFile = "/var/lib/grok-oauth-proxy/secrets.env";
-                  NoNewPrivileges = true;
-                  PrivateTmp = true;
                 };
               };
 

@@ -10,5 +10,6 @@
     ./gatus.nix
     ./searxng.nix
     ./homepage.nix
+    ./grok-oauth-proxy.nix
   ];
 }
