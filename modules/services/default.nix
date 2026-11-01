@@ -20,5 +20,6 @@
     ./hermes.nix
     ./booklore.nix
     ./homelable.nix
+    ./mcphub.nix
   ];
 }
