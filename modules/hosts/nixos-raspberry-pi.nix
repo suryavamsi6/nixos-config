@@ -329,11 +329,12 @@
 
         services.adguardhome = {
           enable = true;
-          host = "0.0.0.0";
-          port = 82;
           mutableSettings = true;
           settings = {
-            # Listen on LAN and Tailscale; firewall still controls access.
+            # The listen address now lives with the rest of the settings;
+            # `host`/`port` were deprecated in its favour. Together they used
+            # to produce exactly this string.
+            http.address = "0.0.0.0:82";
             dns.bind_hosts = [
               "192.168.0.105"
               "100.118.149.0"
