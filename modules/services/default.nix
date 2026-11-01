@@ -13,5 +13,6 @@
     ./grok-oauth-proxy.nix
     ./caddy.nix
     ./openbot.nix
+    ./reactive-resume.nix
   ];
 }
