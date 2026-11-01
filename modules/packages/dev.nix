@@ -862,6 +862,10 @@ in
           orca
           inputs.hunk.packages.${pkgs.stdenv.hostPlatform.system}.hunk
           opencodeV2
+          # Fleet deploys: `deploy .#raspberry-pi -i`. Built from the flake input
+          # (modules/clan/deploy.nix consumes the same `deploy-rs.lib`), so the CLI
+          # and the evaluated checks can never drift apart.
+          inputs.deploy-rs.packages.${pkgs.stdenv.hostPlatform.system}.default
         ];
 
         programs.git = {
