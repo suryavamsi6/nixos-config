@@ -59,7 +59,12 @@ in
     };
 
     raspberry-pi = {
-      hostname = "pi.home.arpa";
+      # Address it by IP, not `pi.home.arpa`. The hostname rewrite lives in the
+      # Pi's own AdGuard config, so resolving the name depends on the very
+      # generation this deploy is trying to activate — the first real deploy
+      # would fail with `Could not resolve hostname pi.home.arpa`. The rewrite
+      # stays for everything else; it just cannot be a bootstrap dependency.
+      hostname = "192.168.0.105";
       sshUser = "suryavamsi";
       sshOpts = [ "-T" ];
       profiles.system = {
