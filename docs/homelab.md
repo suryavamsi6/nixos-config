@@ -176,3 +176,52 @@ sudo incus list nutify
 sudo incus exec nutify -- env | grep NUT
 sudo incus exec nutify -- cat /etc/nut/ups.conf
 ```
+
+## Where the homelab services live
+
+The host file `modules/hosts/nixos-homelab.nix` is now host *plumbing*: hardware import,
+hostname, state version, firewall, Incus host setup, the Postgres instance the
+containers share, Tailscale and the Funnel job. Everything that is a service lives in
+`modules/services/` as a `flake.modules.nixos.<name>` deferred module, and the host
+enables one by listing it in its `imports`.
+
+There is no `.enable` flag on these modules. Enabling is the import; that keeps a
+single source of truth and matches how `nixos.cliproxyapi` and the rest of the registry
+already work. If a future host needs one of them, add the import — do not copy the
+block.
+
+| Module | Provides |
+|--------|----------|
+| `netdata` | Agent on `127.0.0.1:19999`, served as `netdata.home.arpa` |
+| `gatus` | Uptime checks + SQLite history, `status.home.arpa` |
+| `searxng` | Metasearch on `:8888`, `search.home.arpa` |
+| `homepage` | Dashboard + the `homelab-stats` feed (`:8793`, `:8082`) |
+| `grok-oauth-proxy` | SuperGrok as an OpenAI-compatible API (`:56121`) |
+| `caddy` | The vhost table — the LAN door for every name above |
+| `openbot` | Provisioning oneshot for the OpenBot guest |
+| `reactive-resume` | Incus OCI guest on `10.110.0.80` |
+| `nutify` | Incus OCI guest on `10.110.0.103` (see above) |
+| `qdrant` | Incus OCI guest on `10.110.0.102` |
+| `bifrost` | Incus OCI guest on `10.110.0.100` (AI gateway) |
+| `hermes` | Incus guest + the `hermesBridge` management API |
+| `booklore` | Incus guests `10.110.0.60` (MariaDB) and `10.110.0.61` (app) |
+| `homelable` | Two-guest canvas on `10.110.0.91` |
+| `mcphub` | MCP gateway guest, `mcp.home.arpa` |
+| `haos` | Home Assistant OS as an Incus *VM* |
+
+The extraction was mechanical and gated: `nix eval --raw
+.#nixosConfigurations.homelab.config.system.build.toplevel.drvPath` had to return the
+same store path before and after each move, so a changed `drvPath` meant
+"you moved something you did not mean to move", not "the refactor is fine". Live data was
+never touched: every `/var/lib/incus/*` bind mount and every guest IP is verbatim.
+
+Deploying changes to this host from the desktop, without a shell on it:
+
+```bash
+deploy .#homelab          # build locally, activate over SSH
+deploy .#homelab --dry-activate   # print the profile, touch nothing
+clan machines update homelab      # the same deploy node, via Clan
+```
+
+A failed remote activation fails the whole `deploy` run; it does not leave you
+guessing. Both frontends read the same `modules/clan/` nodes, so they cannot drift.

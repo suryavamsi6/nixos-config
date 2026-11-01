@@ -212,6 +212,39 @@ sudo nixos-rebuild boot --flake .#nixos
 
 ---
 
+## The homelab, remotely
+
+`#homelab` is a laptop that lives on the LAN, so most of its changes ship over the network
+rather than from a shell on the machine. Two frontends drive the same NixOS
+configuration (`modules/clan/`), and both are ordinary flake outputs — nothing is
+deployed by hand-editing a running system.
+
+| Command | What it does |
+| --- | --- |
+| `deploy .#homelab` | Builds locally, activates remotely over SSH. Fails the whole run if the remote activation fails. |
+| `deploy .#raspberry-pi` | Same, for the pi. Add `--remote-build` to build on the pi instead (slow, but it survives a broken local store). |
+| `clan machines update homelab` | Clan's wrapper around the same deploy nodes. |
+| `clan machines update raspberry-pi` | Same, for the pi. |
+| `clan vars list homelab` | Lists Clan-managed secrets/vars for a machine (empty until a generator is declared). |
+
+`deploy` with no argument is a dry run: it builds and prints the profile it *would*
+activate, which is the safe way to check a change before touching the homelab.
+
+The two hosts that are reachable over the network are `#homelab` and `#raspberry-pi`.
+There are no deploy nodes for `#nixos`, `#mango` or `#macbook-air`: they are the
+machines you are sitting at, and they take `nh os switch` / `darwin-rebuild switch`
+directly.
+
+Clan CLI quirk worth knowing: `--flake` is an option of the *subcommand*, not a global
+flag. `clan --flake . vars list homelab` fails with `invalid choice: '.'`; from the
+repository root you do not need it at all (`clan vars list homelab`).
+
+Remote activation needs sudo on the target. The deploy nodes are configured for
+interactive sudo — a password prompt appears in your terminal — so run these from a
+normal shell, not from a script.
+
+---
+
 ## Monitoring, backups, disk health
 
 `modules/monitoring/` adds SMART disk health and nightly restic backups to `#nixos`, `#homelab`, and `#raspberry-pi`; the homelab's Homepage, Gatus, and Netdata pages surface both. Setup, restore procedure, and the exclusion list: `docs/homelab.md`.

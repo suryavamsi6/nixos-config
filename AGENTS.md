@@ -34,6 +34,8 @@ NixOS system configuration and Home Manager/user-runtime configuration are separ
 - Shell/user programs: `modules/shell/` and `modules/users/`
 - Hardware/system services: `modules/hardware/`, `modules/audio/`, `modules/networking/`, `modules/boot/`
 - Disk health (SMART) and restic backups: `modules/monitoring/`
+- Extracted homelab services (netdata, gatus, caddy, incus workloads): `modules/services/`
+- Clan machine registry and deploy-rs nodes: `modules/clan/`
 - Packages: `modules/packages/`
 
 ## Key Directories
@@ -44,6 +46,7 @@ NixOS system configuration and Home Manager/user-runtime configuration are separ
 - `modules/packages/`: custom derivations and application wrappers, including Citrix and Zoom VDI.
 - `modules/hardware/`: GPU, disks, RGB, and device-specific configuration.
 - `modules/monitoring/`: `diskHealth`, `backups`, and `resticServer` deferred modules; see `docs/homelab.md`.
+- `modules/services/`: host-agnostic `flake.modules.nixos.<name>` definitions pulled out of `modules/hosts/nixos-homelab.nix` — netdata, gatus, searxng, homepage (+ the `homelab-stats` feed), grok-oauth-proxy, caddy, openbot, reactive-resume, nutify, qdrant, bifrost, hermes, booklore, homelable, mcphub, haos. A host enables one by importing it; there is no `.enable` flag.
 - `modules/shell/`: Fish, Ghostty, Starship, and shell abbreviations.
 - `.cursor/skills/` and `.agents/skills/`: detailed repository-specific operational guidance.
 
@@ -59,6 +62,12 @@ sudo nixos-rebuild switch --flake .#nixos
 
 # Raspberry Pi NixOS host (run on the Pi unless deliberately remote-building)
 sudo nixos-rebuild switch --flake .#raspberry-pi
+
+# Remote deploy to the homelab or the pi, from this laptop (no shell on the target)
+deploy .#homelab
+deploy .#raspberry-pi
+# Clan's wrapper over the same deploy nodes
+clan machines update homelab
 
 # nix-darwin
 nix run nix-darwin -- switch --flake .#macbook-air
