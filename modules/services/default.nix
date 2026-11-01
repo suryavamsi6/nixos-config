@@ -7,5 +7,6 @@
 {
   imports = [
     ./netdata.nix
+    ./gatus.nix
   ];
 }
