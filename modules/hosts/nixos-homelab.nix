@@ -34,6 +34,7 @@
       # path this laptop does not have, and the unit failed the switch.
       nixos.backups # nightly restic push to the pi
       nixos.cliproxyapi # Codex/Claude/Grok OAuth logins as one OpenAI-compatible API
+      nixos.netdata # agent, loopback-only; extracted from this file (§7)
       ./hermes-bridge # services.hermesBridge: management API for the Hermes phone app
 
       # Hardware scan from the laptop (ext4 root + ESP, Intel CPU, kvm-intel)
@@ -2012,43 +2013,6 @@
             timerConfig = {
               OnBootSec = "1min";
               OnUnitInactiveSec = "2min";
-            };
-          };
-
-          # --- Netdata (native, LAN dashboard + Caddy name) ---
-          # Metrics, not uptime. One agent on this laptop: CPU, memory,
-          # disk, temperatures, cgroups (so Incus guests show up as
-          # containers) and the apps plugin. It is not claimed to
-          # Netdata Cloud and does not phone home. The dashboard has no
-          # login at all, so it must not be reachable by anything that is
-          # not already trusted: it binds the loopback only (the
-          # `incusbr0` trusted interface covers containers) and Caddy is
-          # the only way in from the LAN, as netdata.home.arpa. Do not put
-          # this on the tailnet funnel.
-          services.netdata = {
-            enable = true;
-            # pkgs.netdata is built with the dashboard off (withCloudUi
-            # defaults false). The agent then answers :19999 and
-            # /api/v1/info, but every page is "File does not exist".
-            # netdataCloud is the same agent plus the local dashboard.
-            # It is not a cloud claim; enableAnalyticsReporting stays off.
-            package = pkgs.netdataCloud;
-            enableAnalyticsReporting = false;
-            config = {
-              web = {
-                # Loopback only: :19999 used to be open on the LAN with no
-                # authentication whatsoever. Caddy proxies netdata.home.arpa
-                # from 127.0.0.1:19999; containers reach it over incusbr0.
-                "bind to" = "127.0.0.1:19999";
-                "allow connections from" = "localhost 10.* 192.168.* 100.*";
-              };
-              global = {
-                "memory mode" = "dbengine";
-                "update every" = 1;
-              };
-              "plugin:cgroups" = {
-                "enable cgroup name resolving" = "yes";
-              };
             };
           };
 
