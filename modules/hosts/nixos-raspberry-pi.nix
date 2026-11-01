@@ -20,6 +20,21 @@
       # Raspberry Pi SD-card image support
       "${inputs.nixpkgs}/nixos/modules/installer/sd-card/sd-image-aarch64.nix"
 
+      # ===== TEMPORARY: deploy-rs rollback drill (remove after the drill) =====
+      # Aborts activation AFTER switch-to-configuration has started, which is
+      # what makes autoRollback engage. A failing systemd unit would not do
+      # this: switch-to-configuration reports it and carries on.
+      {
+        system.activationScripts.rollbackDrill = {
+          text = ''
+            echo 'ROLLBACK DRILL: failing activation on purpose' >&2
+            exit 1
+          '';
+          deps = [ ];
+        };
+      }
+      # ===== end rollback drill =====
+
       ({ pkgs, lib, ... }: {
         boot.loader.generic-extlinux-compatible.enable = true;
         # This Seagate bridge repeatedly wedges under UAS and takes the media
