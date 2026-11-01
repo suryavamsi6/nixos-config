@@ -18,5 +18,6 @@
     ./qdrant.nix
     ./bifrost.nix
     ./hermes.nix
+    ./booklore.nix
   ];
 }
