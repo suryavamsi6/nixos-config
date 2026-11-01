@@ -15,5 +15,6 @@
     ./openbot.nix
     ./reactive-resume.nix
     ./nutify.nix
+    ./qdrant.nix
   ];
 }
