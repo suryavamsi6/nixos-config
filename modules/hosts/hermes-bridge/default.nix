@@ -63,6 +63,9 @@ let
     Environment=HERMES_BRIDGE_KEY_FILE=%h/.config/hermes-bridge/bridge-key
     Environment=HERMES_BRIDGE_DASHBOARD_TOKEN_FILE=%h/.config/hermes-bridge/dashboard-token
     Environment=HERMES_BRIDGE_BASE_PATH=${cfg.funnelPath}
+    # Hermes home inside the container (hermes user's $HOME); the gateway control socket
+    # for slash commands lives under it. Explicit rather than relying on ~ expansion.
+    Environment=HERMES_BRIDGE_HERMES_HOME=/home/hermes/.hermes
     ExecStart=/usr/bin/python3 -m hermes_bridge serve
     Restart=on-failure
     RestartSec=5
