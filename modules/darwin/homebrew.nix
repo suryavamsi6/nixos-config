@@ -8,17 +8,15 @@
         enable = true;
         onActivation = {
           autoUpdate = true;
+          upgrade = true;
           cleanup = "zap";
         };
         casks = [
           "1password"
           "citrix-workspace"
-          "cursor"
-          "grok-build"
+          "deepseek-harness"
           "hermes-desktop"
           "tailscale-app"
-          "t3-code"
-          "visual-studio-code"
           "zoom"
         ];
       };
