@@ -51,6 +51,7 @@
           ExecStart=%h/.local/bin/hermes dashboard --host 0.0.0.0 --port 9119 --no-open
           Restart=on-failure
           RestartSec=5
+          RestartPreventExitStatus=78
 
           [Install]
           WantedBy=default.target
