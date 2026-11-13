@@ -180,6 +180,17 @@ T3CODE = "modules/packages/t3code-nightly.nix"
 
 PINS: list[Pin] = [
     Pin(
+        name="zeron",
+        file="modules/packages/zeron.nix",
+        anchor="zeronVersion = ",
+        version_re=r'zeronVersion = "(?P<v>[0-9][0-9.]*)";',
+        version_tpl='zeronVersion = "{v}";',
+        lookup={"kind": "github", "repo": "zeronsh/zeron"},
+        hash_re=r'hash = "sha256-[^"]+";',
+        hash_kind="file",
+        hash_url="https://github.com/zeronsh/zeron/releases/download/v{v}/zeron-{v}-linux-x86_64.tar.gz",
+    ),
+    Pin(
         name="orca",
         file=DEVELOP,
         anchor='pname = "orca-ide";',

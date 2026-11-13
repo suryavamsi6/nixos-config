@@ -23,7 +23,7 @@
 #   * rotating Bifrost's encryption key orphans every secret it has stored
 #   * rotating a Booklore DB password desynchronises the app from MariaDB
 #     (ALTER ROLE on a live DB is a migration step, not a boot side effect)
-#   * rotating the Hermes dashboard/API keys signs the phone app and Desktop out
+#   * rotating the Hermes dashboard credential signs Desktop and browsers out
 #   * rotating the restic pair 401s every client's nightly push
 #
 # So the default action is safe — it stops and prints the adoption command instead
@@ -195,12 +195,11 @@ in
           };
 
         # ── Hermes ──────────────────────────────────────────────────────────
-        # Three host-side env files appended into the container's ~/.hermes/.env.
+        # Host-side env files appended into the container's ~/.hermes/.env.
         # ~/.hermes/.env stays authoritative: the provisioning unit appends a
         # var only when the container lacks that key, so a migrated value wins.
         #
-        # Original recipes: username surya + hex12 password + hex24 secret;
-        # ENABLED/HOST/PORT constants + hex32 key.
+        # Original dashboard recipe: username surya + hex12 password + hex24 secret.
         hermes-dashboard =
           noDefault "hermes-dashboard" [
             "incus exec hermes -- sudo -u hermes -- sh -c 'grep HERMES_DASHBOARD ~/.hermes/.env'"
@@ -208,14 +207,6 @@ in
           ]
           // {
             files.dashboard-env = secretFile { };
-          };
-        hermes-api-server =
-          noDefault "hermes-api-server" [
-            "incus exec hermes -- sudo -u hermes -- sh -c 'grep API_SERVER ~/.hermes/.env'"
-            "  | clan vars set homelab hermes-api-server/api-server-env"
-          ]
-          // {
-            files.api-server-env = secretFile { };
           };
         # The Bifrost virtual key is *derived* from the container's
         # ~/.hermes/.env — a freshly minted key exists in no Bifrost

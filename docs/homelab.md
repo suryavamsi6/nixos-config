@@ -211,7 +211,7 @@ block.
 | `nutify` | Incus OCI guest on `10.110.0.103` (see above) |
 | `qdrant` | Incus OCI guest on `10.110.0.102` |
 | `bifrost` | Incus OCI guest on `10.110.0.100` (AI gateway) |
-| `hermes` | Incus guest + the `hermesBridge` management API |
+| `hermes` | Incus guest + authenticated dashboard over Tailscale Funnel |
 | `booklore` | Incus guests `10.110.0.60` (MariaDB) and `10.110.0.61` (app) |
 | `homelable` | Two-guest canvas on `10.110.0.91` |
 | `mcphub` | MCP gateway guest, `mcp.home.arpa` |
@@ -284,7 +284,7 @@ entangled:
 | `bifrost-db-password` | Bifrost's Postgres role (needs `ALTER ROLE`, not a boot action) |
 | `reactive-resume-*` | the Postgres role, every session, or stored encrypted fields |
 | `booklore-*` | the app↔MariaDB pairing (`MYSQL_ROOT_PASSWORD` is only read at first init) |
-| `hermes-dashboard` / `hermes-api-server` | the phone app and Desktop sign-in |
+| `hermes-dashboard` | dashboard and Desktop sign-in |
 | `grok-oauth` | Caddy's `/grok` injection and Gatus' authenticated check |
 | `restic-htpasswd` / `restic-client` | every client's nightly push (401 into an unrecoverable repo) |
 | `homepage-vars` | the dashboard widgets (and the values are human-supplied) |

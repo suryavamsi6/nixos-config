@@ -15,14 +15,9 @@
 # container-to-container traffic. Hermes still records the retired LiteLLM
 # provider name in its cleanup list; that is data, not a live dependency.
 #
-# Two companions live here because they only make sense with this container:
-#   hermesDashboardUnit — a systemd *user* unit pushed into the guest, because
-#     upstream does not start the dashboard with its gateway service
-#     (NousResearch/hermes-agent#16702). %h expands to /home/hermes.
-#   services.hermesBridge.enable — the management API for the Hermes phone app
-#     (profiles, MCP, routines, skills, plugins, memory). The module itself is
-#     ./hermes-bridge; see docs/hermes-bridge.md. The Funnel job publishes it at
-#     /bridge and reads its path from config.services.hermesBridge.
+# The dashboard is a separate systemd *user* unit pushed into the guest,
+# because upstream does not start it with the gateway service
+# (NousResearch/hermes-agent#16702). %h expands to /home/hermes.
 #
 # LIVE DATA: the container keeps ~/.hermes inside its own volume, plus a host
 # bind of /home/surya/hermes-work at /home/hermes/work. Do not move either.
@@ -40,7 +35,6 @@
       let
         vars = config.clan.core.vars.generators;
         dashboardFile = vars.hermes-dashboard.files.dashboard-env.path;
-        apiServerFile = vars.hermes-api-server.files.api-server-env.path;
         bifrostKeyFile = vars.hermes-bifrost-key.files.bifrost-vk-env.path;
 
         # systemd *user* unit for the dashboard inside the incus-hermes
@@ -63,8 +57,6 @@
         '';
       in
       {
-        services.hermesBridge.enable = true;
-
         systemd.services.incus-hermes = {
           description = "Provision Hermes agent Incus container";
           wantedBy = [ "multi-user.target" ];
@@ -203,6 +195,24 @@
             incus exec hermes -- sudo -u hermes -- \
               env XDG_RUNTIME_DIR=/run/user/$uid systemctl --user enable --now hermes-dashboard.service
 
+            # The retired phone bridge was installed as guest user units, so
+            # removing its host module alone would leave both processes running.
+            # Stop and remove only those units; retain their data and keys for
+            # rollback. Re-running this after the first migration is a no-op.
+            bridge_removed=no
+            for unit in hermes-bridge.service hermes-bridge-backend.service; do
+              if incus exec hermes -- test -e "/home/hermes/.config/systemd/user/$unit"; then
+                incus exec hermes -- sudo -u hermes -- \
+                  env XDG_RUNTIME_DIR=/run/user/$uid systemctl --user disable --now "$unit"
+                incus exec hermes -- rm -f "/home/hermes/.config/systemd/user/$unit"
+                bridge_removed=yes
+              fi
+            done
+            if [ "$bridge_removed" = yes ]; then
+              incus exec hermes -- sudo -u hermes -- \
+                env XDG_RUNTIME_DIR=/run/user/$uid systemctl --user daemon-reload
+            fi
+
             # Computer use on a chat-only bot: auto_start brings the Bot
             # Screen up on the first computer_use call instead of waiting
             # for someone to press Start in the dashboard. `hermes config
@@ -327,42 +337,19 @@
               restart_reasons="$restart_reasons bot_desktop.auto_start"
             fi
 
-            # API server for the Hermes phone app, reached through Tailscale
-            # Funnel (tailscaled on this host -> 10.110.0.50:8642).
-            # It binds 0.0.0.0 inside the container (bridge-only, like the
-            # dashboard) and always requires the bearer key. Same pattern as
-            # the dashboard auth: generated once, never rotated (rotation
-            # would sign the phone out), never printed. Each variable is
-            # appended only if ~/.hermes/.env lacks it, so a key migrated
-            # from the pi wins. Read the key the phone needs with:
-            #   sudo cat /var/lib/incus/hermes/api-server.env
-            # (if ~/.hermes/.env already had API_SERVER_KEY, that one is live).
-            api=/var/lib/incus/hermes/api-server.env
-            if [ -s "$api" ]; then
-              : > /var/lib/incus/hermes/.api-server-migrated-to-clan
+            # Retire the old phone API listener without rotating or deleting
+            # its key. A usable API_SERVER_KEY can auto-enable the adapter
+            # even when API_SERVER_ENABLED=false; the explicit platform flag
+            # prevents that fallback (upstream issue #87856).
+            api_enabled=$(hermes_cfg config get API_SERVER_ENABLED 2>/dev/null | tr -d '\r\n' || true)
+            if [ -n "$api_enabled" ] && [ "$api_enabled" != "false" ]; then
+              hermes_cfg config set API_SERVER_ENABLED false >/dev/null
+              restart_reasons="$restart_reasons api_server_disabled"
             fi
-            api=${apiServerFile}
-            api_added=$(incus exec hermes -- sudo -u hermes -- bash -c '
-              env=~/.hermes/.env; touch "$env"; added=0
-              while IFS= read -r line; do
-                [ -n "$line" ] || continue
-                if ! grep -q "^''${line%%=*}=" "$env"; then
-                  [ "$added" = 1 ] || printf "\n# API server for the Hermes phone app (Tailscale Funnel)\n" >> "$env"
-                  printf "%s\n" "$line" >> "$env"; added=1
-                fi
-              done
-              chmod 600 "$env"; echo "$added"' < "$api" | tr -d '\r\n')
-            if [ "$api_added" = 1 ]; then
-              restart_reasons="$restart_reasons api_server"
-            fi
-            # One listener serves every profile under /p/<profile>/...; each
-            # named profile then needs its own API_SERVER_KEY in
-            # ~/.hermes/profiles/<name>/.env or its prefix fails closed.
-            if [ "$(incus exec hermes -- sudo -u hermes -H /home/hermes/.local/bin/hermes \
-                      config get gateway.multiplex_profiles 2>/dev/null | tr -d '\r\n' || true)" != "true" ]; then
-              incus exec hermes -- sudo -u hermes -H /home/hermes/.local/bin/hermes \
-                config set gateway.multiplex_profiles true
-              restart_reasons="$restart_reasons gateway.multiplex_profiles"
+            api_platform=$(hermes_cfg config get platforms.api_server.enabled 2>/dev/null | tr -d '\r\n' || true)
+            if [ "$api_platform" != "false" ]; then
+              hermes_cfg config set platforms.api_server.enabled false >/dev/null
+              restart_reasons="$restart_reasons api_server_platform_disabled"
             fi
 
             # The gateway reads .env and config.yaml at startup: restart once

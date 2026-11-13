@@ -165,6 +165,7 @@
               homeManager.comfyui
               homeManager.openbot
               homeManager.monocode
+              homeManager.zeron
               homeManager.codex
               homeManager.chatgptDesktop
               homeManager.ghostex

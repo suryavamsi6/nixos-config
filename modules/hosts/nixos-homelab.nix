@@ -52,7 +52,6 @@
           nixos.mcphub # MCPHub gateway Incus OCI container (§7)
           nixos.haos # Home Assistant OS Incus VM (§7)
           nixos.homelabVars # Clan vars: the generators for every secret below (§6)
-          ./hermes-bridge # services.hermesBridge: management API for the Hermes phone app
 
           # Hardware scan from the laptop (ext4 root + ESP, Intel CPU, kvm-intel)
           (
@@ -108,24 +107,11 @@
                   printf 'cpu median freq: %s MHz\n' "$((f / 1000))"
                 '';
               };
-              # Tailscale Funnel that puts the Hermes API server (not the
-              # dashboard) on the internet for the Hermes phone app, at
-              # https://homelab.<tailnet>.ts.net. Off until this host is logged in
-              # to Tailscale and the tailnet allows Funnel (docs/hermes-funnel.md);
-              # while false only the Funnel job is absent (tailscaled itself is
-              # always on, see services.tailscale below), so this file deploys
-              # as-is.
-              # NOTE: enabling this job is what keeps Funnel to :443 only. It
-              # actively turns off any other public port every run, so do not
-              # need a separate unit to police it.
+              # The dashboard is public through Funnel and retains its own
+              # password login. The job also limits public Funnel ports to 443.
               hermesFunnel = {
-                enable = true; # TODO(surya): true once the runbook's admin-console steps are done
-                target = "http://10.110.0.50:8642"; # API server in the Incus container
-                # Extra path mounts on the same :443 Funnel; "/" (target) always comes first.
-                mounts = lib.optional config.services.hermesBridge.enable {
-                  path = config.services.hermesBridge.funnelPath;
-                  target = config.services.hermesBridge.funnelTarget;
-                };
+                enable = true;
+                target = "http://10.110.0.50:9119";
               };
             in
             {
@@ -524,87 +510,53 @@
               # nftables too instead of letting it guess between backends.
               systemd.services.tailscaled.environment.TS_DEBUG_FIREWALL_MODE = "nftables";
 
-              # --- Tailscale Funnel: Hermes API for the phone app ---
-              # Outbound-only (tailscaled dials Tailscale's relays), so no firewall
-              # port opens. Only the API server (8642, at /) and hermes-bridge (at
-              # /bridge, docs/hermes-bridge.md) are published; the dashboard
-              # (9119) stays LAN-only behind Caddy. The API still demands its
-              # bearer key. Funnel's proxy flushes text/event-stream as it is
-              # written, so chat replies stream. Setup and test steps:
-              # docs/hermes-funnel.md.
-
-              # Reconciles the Funnel: publishes hermesFunnel.target at / and each
-              # of hermesFunnel.mounts at its path on :443 when the node is logged
-              # in, and leaves mounts that already match alone. It
-              # runs on every deploy and then every 2 min, and always exits 0, so
-              # a deploy before `sudo tailscale up` (or before the tailnet policy
-              # allows Funnel) still switches cleanly; it just logs why it waited
-              # (journalctl -u hermes-funnel) and picks itself up afterwards. The
-              # enable call is wrapped in a timeout because the CLI can block
-              # waiting for an admin to approve Funnel. Setting enable = false
-              # only removes this job; tailscaled keeps the Funnel it already set
-              # up, so run `sudo tailscale funnel reset` too (docs/hermes-funnel.md).
+              # --- Tailscale Funnel: authenticated Hermes dashboard ---
+              # The reconciler configures the public URL and exact trusted
+              # proxy IP, verifies that the dashboard reports auth enabled,
+              # then publishes it. It removes the retired /bridge route and
+              # retries transient failures every two minutes. See the runbook.
               systemd.services.hermes-funnel = lib.mkIf hermesFunnel.enable {
-                description = "Tailscale Funnel for the Hermes API (phone app)";
+                description = "Tailscale Funnel for the Hermes dashboard";
                 after = [
                   "tailscaled.service"
+                  "incus-hermes.service"
                   "network-online.target"
                 ];
                 wants = [
                   "tailscaled.service"
                   "network-online.target"
                 ];
+                requires = [ "incus-hermes.service" ];
                 wantedBy = [ "multi-user.target" ];
                 path = [
                   config.services.tailscale.package
+                  pkgs.incus
+                  pkgs.curl
                   pkgs.jq
                   pkgs.coreutils
                 ];
                 serviceConfig.Type = "oneshot";
                 script = ''
+                  set -o pipefail
                   state=$(tailscale status --json 2>/dev/null | jq -r '.BackendState // "Unknown"' || true)
                   state=''${state:-unreachable}
                   if [ "$state" != Running ]; then
                     echo "tailscale is $state, not Running; run 'sudo tailscale up' (docs/hermes-funnel.md). Retrying in 2 min." >&2
                     exit 0
                   fi
-                  # One "path target" pair per line; "/" first so the API server keeps the root.
-                  while read -r mount target; do
-                    if tailscale funnel status --json | jq -e --arg m "$mount" --arg t "$target" '
-                          ([.Web // {} | to_entries[] | select(.key | endswith(":443")) | .value.Handlers[$m].Proxy] | index($t)) != null
-                          and ([.AllowFunnel // {} | to_entries[] | select(.key | endswith(":443")) | .value] | any)' >/dev/null; then
-                      echo "Funnel already serves $target at $mount on :443"
-                    elif timeout 60 tailscale funnel --bg --yes --https=443 --set-path "$mount" "$target" </dev/null; then
-                      echo "Funnel enabled for $target at $mount on :443"
-                    else
-                      echo "Funnel not enabled yet for $mount (is HTTPS on and the funnel nodeAttr in the tailnet policy? docs/hermes-funnel.md). Retrying in 2 min." >&2
-                    fi
-                  done <<'MOUNTS'
-                  ${lib.concatMapStringsSep "\n" (m: "${m.path} ${m.target}") (
-                    [
-                      {
-                        path = "/";
-                        target = hermesFunnel.target;
-                      }
-                    ]
-                    ++ hermesFunnel.mounts
-                  )}
-                  MOUNTS
-
                   # This job OWNS the Funnel set. Anything published on the
-                  # public internet besides :443 is turned back into a
-                  # tailnet-only serve. That closes the one hole this file
+                  # public internet besides :443 is removed. That closes the one hole this file
                   # cannot see: a Funnel added by hand (a bare `tailscale funnel
                   # --bg --https=8443 …` once put the MCPHub dashboard, its
                   # /oauth/register and its login form on the open internet,
                   # where dynamic client registration needed no authentication).
-                  # `off` only clears the public bit; the local serve stays, so
-                  # the service is still reachable from the tailnet.
+                  # `off` removes the affected port's Funnel handlers. Do this
+                  # even if the dashboard is temporarily unavailable.
                   while read -r port; do
                     [ -n "$port" ] || continue
                     [ "$port" = 443 ] && continue
                     if timeout 60 tailscale funnel --https="$port" off </dev/null; then
-                      echo "Funnel disabled on :$port (tailnet-only serve kept; only :443 is published)"
+                      echo "Funnel disabled on :$port (only :443 is published)"
                     else
                       echo "Could not disable Funnel on :$port; run 'tailscale funnel --https=$port off' by hand" >&2
                     fi
@@ -612,6 +564,93 @@
                   $(tailscale serve status --json 2>/dev/null |
                     jq -r '(.AllowFunnel // {}) | to_entries[] | select(.value) | .key | split(":") | .[-1]' || true)
                   PORTS
+
+                  # tailscaled persists old mounts across NixOS generations.
+                  # Remove this path explicitly before switching the root.
+                  status=$(tailscale serve status --json 2>/dev/null) || {
+                    echo "Cannot read Funnel configuration; retrying." >&2; exit 0;
+                  }
+                  has_bridge=$(printf '%s' "$status" | jq -r '
+                    [.Web // {} | to_entries[] | select(.key | endswith(":443")) | (.value.Handlers // {}) | has("/bridge")] | any
+                  ') || {
+                    echo "Invalid Tailscale Serve configuration; retrying." >&2; exit 0
+                  }
+                  if [ "$has_bridge" = true ]; then
+                    if ! timeout 60 tailscale funnel --https=443 --set-path /bridge off </dev/null; then
+                      echo "Could not remove the retired /bridge Funnel route; retrying." >&2
+                      exit 0
+                    fi
+                  fi
+
+                  dns=$(tailscale status --json | jq -r '.Self.DNSName // "" | rtrimstr(".")')
+                  case "$dns" in
+                    *.ts.net) ;;
+                    *) echo "No Tailscale DNS name yet; retrying." >&2; exit 0 ;;
+                  esac
+                  public_url="https://$dns"
+                  hermes_cfg() {
+                    incus exec hermes -- sudo -u hermes -H /home/hermes/.local/bin/hermes "$@"
+                  }
+                  uid=$(incus exec hermes -- id -u hermes | tr -d '\r\n ') || exit 0
+                  pending=/var/lib/incus/hermes/.dashboard-funnel-restart-pending
+
+                  # .env overrides config.yaml in Hermes, including a value
+                  # left there by dashboard register. Set the authoritative
+                  # env value instead of silently leaving a stale URL in force.
+                  current=$(hermes_cfg config get HERMES_DASHBOARD_PUBLIC_URL 2>/dev/null | tr -d '\r\n' || true)
+                  if [ "$current" != "$public_url" ]; then
+                    touch "$pending" || { echo "Cannot record dashboard restart; retrying." >&2; exit 0; }
+                    hermes_cfg config set HERMES_DASHBOARD_PUBLIC_URL "$public_url" >/dev/null || {
+                      echo "Could not configure the dashboard URL; retrying." >&2; exit 0;
+                    }
+                  fi
+                  # Merge the host's incusbr0 address into any existing list.
+                  # It is the peer that terminates TLS and sends X-Forwarded-*.
+                  trusted=$(hermes_cfg config get dashboard.trusted_proxies --json 2>/dev/null) || {
+                    echo "Could not read dashboard.trusted_proxies; retrying." >&2; exit 0;
+                  }
+                  merged=$(printf '%s' "$trusted" | jq -ce '
+                    if type == "array" and all(.[]; type == "string")
+                    then if index("10.110.0.1") then . else . + ["10.110.0.1"] end
+                    else error("trusted_proxies is not a list of strings") end
+                  ') || { echo "Invalid dashboard.trusted_proxies; retrying." >&2; exit 0; }
+                  if ! printf '%s' "$trusted" | jq -e 'index("10.110.0.1") != null' >/dev/null; then
+                    touch "$pending" || { echo "Cannot record dashboard restart; retrying." >&2; exit 0; }
+                    hermes_cfg config set dashboard.trusted_proxies "$merged" >/dev/null || {
+                      echo "Could not configure the trusted proxy; retrying." >&2; exit 0;
+                    }
+                  fi
+                  if [ -e "$pending" ]; then
+                    incus exec hermes -- sudo -u hermes -- \
+                      env XDG_RUNTIME_DIR=/run/user/$uid systemctl --user restart hermes-dashboard.service || {
+                        echo "Could not restart the dashboard; retrying." >&2; exit 0;
+                      }
+                    rm -f "$pending"
+                  fi
+                  # Never publish a dashboard that isn't reporting its auth
+                  # gate. The user unit may need another cycle to start.
+                  if ! curl -fsS --max-time 5 ${hermesFunnel.target}/api/health | jq -e '.ok == true and .auth_required == true' >/dev/null; then
+                    echo "Dashboard is not ready with authentication enabled; retrying." >&2
+                    # A later loss of the auth gate must close an existing
+                    # dashboard route too, without touching a different root.
+                    if tailscale serve status --json | jq -e --arg t ${lib.escapeShellArg hermesFunnel.target} '
+                      [.Web // {} | to_entries[] | select(.key | endswith(":443")) | .value.Handlers["/"].Proxy] | index($t) != null
+                    ' >/dev/null; then
+                      timeout 60 tailscale funnel --https=443 --set-path / off </dev/null ||
+                        echo "Could not remove the dashboard Funnel route; retrying." >&2
+                    fi
+                    exit 0
+                  fi
+                  if tailscale funnel status --json | jq -e --arg t ${lib.escapeShellArg hermesFunnel.target} '
+                    ([.Web // {} | to_entries[] | select(.key | endswith(":443")) | .value.Handlers["/"].Proxy] | index($t)) != null
+                    and ([.AllowFunnel // {} | to_entries[] | select(.key | endswith(":443")) | .value] | any)
+                  ' >/dev/null; then
+                    echo "Funnel already serves the authenticated dashboard at $public_url"
+                  elif timeout 60 tailscale funnel --bg --yes --https=443 --set-path / ${lib.escapeShellArg hermesFunnel.target} </dev/null; then
+                    echo "Funnel enabled for the dashboard at $public_url"
+                  else
+                    echo "Funnel not enabled yet; check HTTPS and the funnel node attribute (docs/hermes-funnel.md)." >&2
+                  fi
 
                   tailscale funnel status || true
                 '';

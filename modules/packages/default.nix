@@ -11,6 +11,7 @@
     ./hermes-desktop.nix
     ./openbot.nix
     ./monocode.nix
+    ./zeron.nix
     ./capy.nix
     ./claude-code-router.nix
     ./codex.nix
