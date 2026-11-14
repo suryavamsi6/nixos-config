@@ -1,8 +1,7 @@
 # NUT server (upsd) that re-exports the UPS apcupsd already owns.
 #
-# The UPS hangs off this host's USB bus and apcupsd owns it exclusively —
-# gridwatch's whole design depends on being the only reader. A NUT driver
-# cannot open the same device, so the bridge goes the other way: apcupsd is
+# The UPS hangs off this host's USB bus and apcupsd owns it exclusively. A NUT
+# driver cannot open the same device, so the bridge goes the other way: apcupsd is
 # itself a NUT-compatible server on its NIS port (3551), and NUT ships the
 # `apcupsd-ups` client driver for exactly that peer. Nutify's wizard expects a
 # real NUT server on 3493, so publish standard NUT and leave ownership alone:
@@ -71,6 +70,17 @@
           NUT_CONFPATH = "${confDir}";
           NUT_STATEPATH = "/run/nut";
         };
+
+        waitForApcupsd = pkgs.writeShellScript "wait-for-apcupsd" ''
+          for attempt in {1..60}; do
+            if ${pkgs.coreutils}/bin/timeout 2s ${pkgs.apcupsd}/bin/apcaccess status 127.0.0.1:3551 >/dev/null 2>&1; then
+              exit 0
+            fi
+            ${pkgs.coreutils}/bin/sleep 1
+          done
+          echo "apcupsd NIS did not become ready on 127.0.0.1:3551" >&2
+          exit 1
+        '';
       in
       {
         # `upsc` for debugging the relay from this host:
@@ -101,13 +111,17 @@
           ];
           wants = [ "apcupsd.service" ];
           # Read-only relay: retry forever rather than staying dead. apcupsd
-          # is restarted whenever gridwatch rewrites the policy, and the
-          # driver drops its socket with it.
+          # restarts when its configuration changes or the USB UPS re-enumerates, and
+          # the driver drops its socket with it.
           startLimitIntervalSec = 0;
           serviceConfig = {
             Type = "simple";
             User = "nut";
             Group = "nut";
+            # apcupsd is Type=simple, so ordering after it does not mean its
+            # NIS endpoint is ready to answer the driver's first request.
+            ExecStartPre = waitForApcupsd;
+            TimeoutStartSec = "200s";
             # Foreground directly instead of through upsdrvctl: systemd then
             # tracks the real driver process, and a driver crash is visible
             # as a unit failure rather than a stale background child.

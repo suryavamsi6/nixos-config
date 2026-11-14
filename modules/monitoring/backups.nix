@@ -161,6 +161,32 @@
         # the backup target and every push would fail with 401.
         envFile = config.clan.core.vars.generators.restic-client.files.env.path;
 
+        # The adopted client file names HTTP credentials by host, while
+        # restic itself reads RESTIC_REST_USERNAME and RESTIC_REST_PASSWORD.
+        # Translate in the restic process, never in the Nix store or logs.
+        resticWithClientAuth = pkgs.writeShellApplication {
+          name = "restic";
+          runtimeInputs = [ pkgs.restic ];
+          text = ''
+            host=${lib.escapeShellArg config.networking.hostName}
+            case "$host" in
+              homelab)
+                export RESTIC_REST_USERNAME="''${RESTIC_REST_HOMELAB_USERNAME:?missing homelab restic username}"
+                export RESTIC_REST_PASSWORD="''${RESTIC_REST_HOMELAB_PASSWORD:?missing homelab restic password}"
+                ;;
+              nixos)
+                export RESTIC_REST_USERNAME="''${RESTIC_REST_NIXOS_USERNAME:?missing nixos restic username}"
+                export RESTIC_REST_PASSWORD="''${RESTIC_REST_NIXOS_PASSWORD:?missing nixos restic password}"
+                ;;
+              *)
+                echo "No restic client authentication mapping for this host" >&2
+                exit 1
+                ;;
+            esac
+            exec ${lib.getExe pkgs.restic} "$@"
+          '';
+        };
+
         # Writes a small JSON status document on every run — including the
         # ExecCondition skip — so homelab_stats can report "last backup 3h ago,
         # ok" without anyone reading journalctl. ExecStopPost runs after a
@@ -205,6 +231,7 @@
         services.restic.backups.${name} = {
           repository = "rest:http://192.168.0.105:8000/${config.networking.hostName}/";
           environmentFile = envFile;
+          package = resticWithClientAuth;
           initialize = true;
           paths = [
             "/etc"

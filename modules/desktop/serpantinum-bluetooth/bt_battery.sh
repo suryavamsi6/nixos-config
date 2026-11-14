@@ -122,51 +122,73 @@ bt_is_audio() {
 }
 
 # Dual-mode headsets expose 0x2A19 only on the LE bearer. Take one snapshot,
-# then disconnect LE so A2DP does not share the radio. The cooldown prevents
-# repeatedly connecting LE while the popup remains open.
+# then disconnect LE so A2DP does not share the radio.
+#
+# Two things matter here, and both were wrong before:
+#  * `Bearer.LE1 Connect` returns immediately with "In Progress". It does not
+#    block until the link is up, so polling for the value straight afterwards
+#    only ever reads "Not connected". We have to wait on the bearer's own
+#    Connected property instead of guessing a sleep.
+#  * A device bonded only over BR/EDR (LE1 Bonded=false) can spend the whole
+#    timeout failing to bring LE up. Record that, back off for a while, and do
+#    NOT hold the lock for the entire attempt or every later run is skipped.
+bt_le_wait_connected() {
+  local device=$1 deadline=$((SECONDS + 20)) state
+  while [ $SECONDS -lt $deadline ]; do
+    state=$(bt_prop "$device" org.bluez.Bearer.LE1 Connected | awk '/^b / {print $2; exit}')
+    [ "$state" = "true" ] && return 0
+    sleep 0.5
+  done
+  return 1
+}
+
 bt_refresh_audio_battery() {
-  local device=$1 address dir stamp lock age level attempt
+  local device=$1 address dir stamp lock age level
   bt_is_audio "$device" || return 0
   [ -n "$(bt_prop "$device" org.bluez.Bearer.LE1 Connected)" ] || return 0
 
   address=$(bt_str "$device" org.bluez.Device1 Address)
   dir=$(bt_battery_dir)
   mkdir -p "$dir"
-  stamp="$dir/${address}.le-try"
+
+  # Back off further after a failed attempt: bringing an unbonded LE bearer up
+  # costs a full connect timeout, so retrying every minute is wasted work.
+  stamp="$dir/${address}.le-fail"
   if [ -f "$stamp" ]; then
     age=$(($(date +%s) - $(stat -c %Y "$stamp" 2>/dev/null || echo 0)))
-    [ "$age" -lt 60 ] && return 0
+    [ "$age" -lt 300 ] && return 0
   fi
 
   lock="${XDG_RUNTIME_DIR:-/tmp}/qs-bt-battery.lock"
   if [ -d "$lock" ]; then
     age=$(($(date +%s) - $(stat -c %Y "$lock" 2>/dev/null || echo 0)))
-    [ "$age" -gt 30 ] && rmdir "$lock" 2>/dev/null || true
+    [ "$age" -gt 40 ] && rmdir "$lock" 2>/dev/null || true
   fi
   mkdir "$lock" 2>/dev/null || return 0
-  touch "$stamp"
-
-  if ! bt_bool "$device" org.bluez.Bearer.LE1 Connected; then
-    busctl --system --timeout=8 call org.bluez "$device" \
-      org.bluez.Bearer.LE1 Connect >/dev/null 2>&1 || true
-  fi
 
   level=""
-  attempt=0
-  while [ "$attempt" -lt 12 ]; do
-    attempt=$((attempt + 1))
+  if bt_bool "$device" org.bluez.Bearer.LE1 Connected || bt_le_wait_connected "$device"; then
+    :
+  elif busctl --system --timeout=20 call org.bluez "$device" \
+      org.bluez.Bearer.LE1 Connect >/dev/null 2>&1 && bt_le_wait_connected "$device"; then
+    :
+  fi
+
+  if [ "$(bt_prop "$device" org.bluez.Bearer.LE1 Connected | awk '/^b / {print $2; exit}')" = "true" ]; then
     level=$(bt_byte "$device" org.bluez.Battery1 Percentage)
     [ -n "$level" ] || level=$(bt_gatt_level "$device")
-    if [ -n "$level" ]; then
-      bt_cache_set "$device" "$level"
-      break
-    fi
-    sleep 0.4
-  done
+    [ -n "$level" ] && bt_cache_set "$device" "$level"
+    busctl --system --timeout=5 call org.bluez "$device" \
+      org.bluez.Bearer.LE1 Disconnect >/dev/null 2>&1 || true
+  fi
 
-  busctl --system --timeout=3 call org.bluez "$device" \
-    org.bluez.Bearer.LE1 Disconnect >/dev/null 2>&1 || true
   rmdir "$lock" 2>/dev/null || true
+
+  if [ -n "$level" ]; then
+    rm -f "$stamp"
+  else
+    touch "$stamp"
+  fi
 }
 
 emit_batteries() {

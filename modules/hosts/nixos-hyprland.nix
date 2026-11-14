@@ -26,7 +26,7 @@
         nixos.gcb200
         nixos.openrgb
         nixos.coolercontrol
-        nixos.gridwatch
+        nixos.apcupsd
         nixos.nutServer # re-export the apcupsd UPS as a NUT server for Nutify
 
         # Core system
@@ -154,14 +154,12 @@
           home-manager.users.surya = { pkgs, ... }: {
             imports = with flakeModules; [
               homeManager.shell
-              homeManager.easyeffects
               homeManager.hyprland
               homeManager.serpantinum
               homeManager.wallpapers
               homeManager.dev
               homeManager.work
               homeManager.gaming
-              homeManager.gridwatch
               homeManager.comfyui
               homeManager.openbot
               homeManager.monocode
@@ -172,9 +170,11 @@
               homeManager.herdr
               homeManager.orbitPi
               homeManager.piDesktop
+              homeManager.pen
+              homeManager.paper
               homeManager.synara
-              homeManager.dshDesktopNext
               homeManager.onepasswordMcp
+              homeManager.factoryDesktopLinux
               homeManager.zenBrowser
               homeManager.t3codeNightly
             ];

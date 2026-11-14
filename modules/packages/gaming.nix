@@ -60,67 +60,91 @@
         protonGeBin = pkgs.proton-ge-bin.overrideAttrs (old: {
           steamDisplayName = old.version;
         });
-        # The official Epic Games Launcher — the Tauri-based rework ("preview");
-        # the classic launcher never shipped for Linux — distributes an AppImage
-        # that bundles WebKitGTK 4.1, GStreamer, gnutls (its GIO TLS module)
-        # and libsecret, so the extracted tree runs in a buildFHSEnv with
-        # NixOS' stub dynamic linker at /lib64/ld-linux-x86-64.so.2. Epic serves the file
-        # only through the Cloudflare-fronted store page with no versioned
-        # URL, so requireFile pins the manually downloaded AppImage; after
-        # fetching a new build from
-        # https://store.epicgames.com/en-US/install/ng/ (and bumping the hash),
-        # re-satisfy the build with
-        #   nix-store --add-fixed sha256 ~/Downloads/EpicGamesLauncher-x86_64.AppImage
-        # The runScript must unset APPIMAGE: the launcher keys its AppImage
-        # self-updater (rename + relaunch of the running AppImage) on that
-        # variable, and with it set it treats itself as a self-updating
-        # AppImage instead of a flake-managed build.
-        epicLauncherAppImage = pkgs.requireFile {
-          name = "EpicGamesLauncher-x86_64.AppImage";
-          url = "https://store.epicgames.com/en-US/install/ng/";
-          hash = "sha256-wp0ccwRNhmJxkTcWUhTpaWtp/QJB90JrHjHSXVp2mW8=";
-        };
-        epicLauncherContents = pkgs.appimageTools.extract {
+        # The official Epic Games Launcher for Linux, as a .deb from Epic's own
+        # installer CDN. That URL is unversioned and always serves the current
+        # build, so the hash — not the URL — is what pins the release; the
+        # version in `control` is what makes the store path self-describing.
+        #
+        # There is no nixpkgs package (the classic launcher never shipped for
+        # Linux), and the old AppImage route needed a manual `requireFile`
+        # because Epic served that file only through the Cloudflare-fronted
+        # store page. The .deb has no such gate, so this fetches unattended.
+        #
+        # It is NOT self-contained: the binary links the system WebKitGTK 4.1,
+        # GTK 3, libsoup 3, libsecret and libayatana-appindicator (the linked
+        # data lives in libEOSSDK-Linux-Shipping.so next to the binary, which
+        # its own RUNPATH covers), so autoPatchelfHook is what makes it run.
+        #
+        # GDK_BACKEND is forced to x11: the launcher (Tauri) crashes on
+        # Wayland — tauri#8541.
+        epicgameslauncher = pkgs.stdenv.mkDerivation rec {
           pname = "epicgameslauncher";
-          version = "0.95.1";
-          src = epicLauncherAppImage;
+          version = "0.115.0";
+
+          src = pkgs.fetchurl {
+            url = "https://launcher-public-service-prod06.ol.epicgames.com/launcher/api/installer/download/EpicGamesLauncher-x86_64.deb";
+            hash = "sha256-YYrcC8x3i7sfSXOBENXCGehh7Uy3rbcrJPtVAxVqbWM=";
+          };
+
+          nativeBuildInputs = with pkgs; [
+            dpkg
+            autoPatchelfHook
+            makeWrapper
+          ];
+          buildInputs =
+            (with pkgs; [
+              webkitgtk_4_1
+              gtk3
+              libsoup_3
+              gdk-pixbuf
+              glib
+              cairo
+              pango
+              harfbuzz
+              atk
+              libayatana-appindicator
+              libsecret
+              libX11
+              dbus
+              zlib
+            ])
+            ++ [ pkgs.stdenv.cc.cc.lib ];
+
+          # The .deb wraps its payload in data.tar.*; dpkg-deb is the only
+          # supported extractor, so unpack it by hand instead of letting
+          # stdenv guess an archive type.
+          unpackPhase = ''
+            runHook preUnpack
+            dpkg-deb -x $src .
+            runHook postUnpack
+          '';
+          dontConfigure = true;
+          dontBuild = true;
+          # 200MB+ electron-style binary; stripping only slows the build down.
+          dontStrip = true;
+
+          installPhase = ''
+            runHook preInstall
+            mkdir -p $out
+            cp -r usr/* $out/
+            runHook postInstall
+          '';
+
+          postFixup = ''
+            # The wrapper is what makes the store path's own lib/ visible to
+            # the loader for libEOSSDK, and forces the X11 backend.
+            wrapProgram $out/bin/EpicGamesLauncher --set GDK_BACKEND x11
+            substituteInPlace $out/share/applications/epic-games-launcher.desktop \
+              --replace "Exec=EpicGamesLauncher" "Exec=$out/bin/EpicGamesLauncher"
+          '';
+
+          meta = {
+            description = "Epic Games Launcher";
+            homepage = "https://store.epicgames.com/en-US/install/ng/";
+            platforms = [ "x86_64-linux" ];
+            license = lib.licenses.unfree;
+          };
         };
-        epicLauncherRun = pkgs.writeShellScript "epicgameslauncher-run" ''
-          # See above: APPIMAGE flips the launcher into AppImage self-update mode.
-          unset APPIMAGE
-          exec appimage-exec.sh -w ${epicLauncherContents} -- "$@"
-        '';
-        epicgameslauncher = pkgs.buildFHSEnv (
-          pkgs.appimageTools.defaultFhsEnvArgs
-          // {
-            name = "epicgameslauncher";
-            runScript = "${epicLauncherRun}";
-            targetPkgs =
-              p:
-              [ pkgs.appimageTools.appimage-exec ]
-              ++ pkgs.appimageTools.defaultFhsEnvArgs.targetPkgs p;
-            # Ship the bundled entry (it carries the com.epicgames.launcher
-            # deep-link handler) with Exec pointed at the wrapper; the
-            # AppRun GTK hook forces GDK_BACKEND=x11 (Tauri's Wayland backend
-            # crashes — tauri#8541) and wires schemas/typelibs into the bundle.
-            extraInstallCommands = ''
-              install -Dm644 ${epicLauncherContents}/usr/share/applications/epic-games-launcher.desktop \
-                $out/share/applications/epic-games-launcher.desktop
-              substituteInPlace $out/share/applications/epic-games-launcher.desktop \
-                --replace "Exec=EpicGamesLauncher" "Exec=epicgameslauncher"
-              for size in 32x32 128x128 256x256@2; do
-                install -Dm644 ${epicLauncherContents}/usr/share/icons/hicolor/$size/apps/EpicGamesLauncher.png \
-                  $out/share/icons/hicolor/$size/apps/EpicGamesLauncher.png
-              done
-            '';
-            meta = {
-              description = "Epic Games Launcher (Linux preview)";
-              homepage = "https://store.epicgames.com/en-US/install/ng/";
-              platforms = [ "x86_64-linux" ];
-              license = lib.licenses.unfree;
-            };
-          }
-        );
       in
       {
         # HTTP/2 is disabled in the Steam client through the user config below.

@@ -197,7 +197,11 @@
             general = {
               # Respect GameMode's D-Bus screensaver inhibition; keep normal idle/DPMS timeouts unchanged.
               ignore_dbus_inhibit = false;
-              lock_cmd = "serpantinum lock";
+              # Absolute path on purpose: hypridle's unit PATH is built from its
+              # own runtimeInputs (hyprland/hyprlock/procps/coreutils), so the
+              # bare name failed with "serpantinum: command not found" on every
+              # idle lock. The 180 s listener then locked nothing.
+              lock_cmd = "${config.programs.serpantinum.package}/bin/serpantinum lock";
               before_sleep_cmd = "loginctl lock-session";
               after_sleep_cmd = "hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })'";
             };

@@ -7,6 +7,6 @@
     ./gcb200.nix
     ./openrgb.nix
     ./coolercontrol.nix
-    ./gridwatch.nix
+    ./apcupsd.nix
   ];
 }

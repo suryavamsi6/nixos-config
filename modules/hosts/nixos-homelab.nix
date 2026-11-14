@@ -50,6 +50,7 @@
           nixos.booklore # Grimmory/Booklore library + MariaDB Incus containers (§7)
           nixos.homelable # Homelable canvas Incus OCI containers (§7)
           nixos.mcphub # MCPHub gateway Incus OCI container (§7)
+          nixos.incusAutoUpdate # weekly rebuild of allowlisted OCI apps
           nixos.haos # Home Assistant OS Incus VM (§7)
           nixos.homelabVars # Clan vars: the generators for every secret below (§6)
 

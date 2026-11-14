@@ -14,7 +14,6 @@
         casks = [
           "1password"
           "citrix-workspace"
-          "deepseek-harness"
           "hermes-desktop"
           "tailscale-app"
           "zoom"

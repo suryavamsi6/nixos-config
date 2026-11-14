@@ -46,7 +46,7 @@
             pkgs.curl
           ];
           text = ''
-            version="1.123.1"
+            version="1.124.2"
             state_dir="''${XDG_DATA_HOME:-$HOME/.local/share}/koboldcpp"
             binary="$state_dir/koboldcpp-linux-x64"
             tmp="$binary.tmp"
@@ -122,7 +122,24 @@
           enableUserSlices = true;
         };
 
-        qt.enable = true;
+        # GUI apps here each get their own systemd scope under app.slice
+        # (Devin, Zen, QS, 1Password, ...), so app.slice is the one place a
+        # per-session ceiling can be set without touching an individual app.
+        # Without it a single runaway renderer pushed the whole box into swap
+        # thrash (41 GiB swap full, PSI full avg300 3.7) and the resulting
+        # page-allocation failures surfacing as SIGBUS killed unrelated
+        # processes -- e.g. a Devin renderer OOMing at 3.6 GiB of V8 heap.
+        # MemoryHigh throttles and reclaims instead of OOM-killing, so the
+        # offending app degrades; MemoryMax is the last-resort backstop.
+        # Keep headroom for the ~2 GiB session.slice (QS, portals) and the
+        # root slice's own work on a 32 GiB machine.
+        systemd.slices.app = {
+          description = "User GUI applications";
+          sliceConfig = {
+            MemoryHigh = "20G";
+            MemoryMax = "26G";
+          };
+        };
 
         # 1Password (system module required for polkit + browser integration)
         programs._1password.enable = true;

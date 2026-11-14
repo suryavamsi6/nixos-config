@@ -12,12 +12,12 @@
     default =
       { pkgs, ... }:
       let
-        version = "26.1023.51421";
+        version = "26.1111.21308";
         source = pkgs.fetchurl {
           # Official OpenAI download link. Keep the hash pinned; bump it with
           # the version after validating a new package release.
           url = "https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest/chatgpt_amd64.deb";
-          hash = "sha256-RITcK1T8CXi+sjuNjXF0lOTgtPvqsKh2c5EF5QtE3lo=";
+          hash = "sha256-S0Q7xVc1ChsZO8LxuuIHyeo8n7XZT3yUpdPbqotVI1I=";
         };
         contents =
           pkgs.runCommand "chatgpt-desktop-deb-${version}"
@@ -25,6 +25,11 @@
               nativeBuildInputs = [ pkgs.dpkg ];
             }
             ''
+              actualVersion=$(dpkg-deb -f ${source} Version)
+              if [ "$actualVersion" != "${version}" ]; then
+                echo "ChatGPT package version $actualVersion does not match ${version}" >&2
+                exit 1
+              fi
               mkdir -p $out
               dpkg-deb -x ${source} $out
             '';

@@ -28,14 +28,14 @@
     default =
       { pkgs, lib, ... }:
       let
-        herdrAppVersion = "0.1.9";
+        herdrAppVersion = "0.1.15";
         herdr-app = pkgs.stdenv.mkDerivation {
           pname = "herdr-app";
           version = herdrAppVersion;
 
           src = pkgs.fetchurl {
             url = "https://releases.herdr.dev/app/${herdrAppVersion}/herdr-app-linux-x86_64.tar.gz";
-            hash = "sha256-2m97QPbEFsW03vjbz4t2Z30Cvk9LRdBqTWWHZoUOC0U=";
+            hash = "sha256-+Z4eBL6CwOELL2nudAPKNDhvSA2SUR31hlr0cD52Vd0=";
           };
 
           nativeBuildInputs = [
@@ -86,7 +86,7 @@
           };
         };
 
-        herdrCoreVersion = "0.1.14";
+        herdrCoreVersion = "0.1.21";
 
         herdr-core = pkgs.stdenv.mkDerivation {
           pname = "herdr-core";
@@ -94,7 +94,7 @@
 
           src = pkgs.fetchurl {
             url = "https://releases.herdr.dev/core/${herdrCoreVersion}/herdr-core-linux-x86_64.tar.gz";
-            hash = "sha256-6dur3q0M4M495RtvVMyVSe/tu0Gy+ESLaTKrDRRCND4=";
+            hash = "sha256-eEJHVcEKQN3jigvbVcIKwZcG6a4F7Wj8Ks8fz/DZQcE=";
           };
 
           # The tarball is the bare binary and no directory, which the default

@@ -21,7 +21,7 @@
     default =
       { pkgs, ... }:
       let
-        codexVersion = "0.165.0";
+        codexVersion = "0.169.0";
         codex = pkgs.stdenvNoCC.mkDerivation {
           pname = "codex";
           version = codexVersion;
@@ -30,7 +30,7 @@
 
           src = pkgs.fetchurl {
             url = "https://github.com/openai/codex/releases/download/rust-v${codexVersion}/codex-package-x86_64-unknown-linux-musl.tar.gz";
-            hash = "sha256-6XxEY9fxRmkqlV17DhyM9I+XzU1hbNRcXcqy6Nl0MxY=";
+            hash = "sha256-O47QkRScxjpZBGufCUvPohzbTdoV7eRBzjabzuSnG6A=";
           };
 
           sourceRoot = ".";

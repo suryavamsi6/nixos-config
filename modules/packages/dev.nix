@@ -272,21 +272,80 @@ in
         ...
       }:
       let
+        devinVersion = "3.11.238";
+        devinSrc = pkgs.fetchurl {
+          url = "https://windsurf-stable.codeiumdata.com/linux-x64-deb/stable/9e593c73d4ca24802eb3b302035f33cedad59802/Devin-linux-x64-${devinVersion}.deb";
+          hash = "sha256-djiyx7o3pVFbLfruV5emlaZMsRmG2HC6Arw9tgCK3PM=";
+        };
+        devinContents =
+          pkgs.runCommand "devin-desktop-${devinVersion}-contents"
+            {
+              nativeBuildInputs = [
+                pkgs.dpkg
+                pkgs.python3
+              ];
+            }
+            ''
+              mkdir -p $out
+              dpkg-deb --fsys-tarfile ${devinSrc} | tar --no-same-owner --no-same-permissions -xf - -C $out
+              chmod -R u+w $out
+              chmod 0755 $out/usr/share/devin-desktop/chrome-sandbox
+
+              # Bound session replay and fix the retention evict guard in both the
+              # main process and the renderer. See the script header. Fails the
+              # build if any upstream anchor moved.
+              python3 ${./devin-trim-replay.py} \
+                $out/usr/share/devin-desktop/resources/app
+            '';
+        # The webapp renderer holds its chat transcript and event log in one
+        # renderer process. Unbounded, it walked to 3.6 GiB of a 4 GiB V8 heap
+        # over ~7 h of a two-session day and then died with
+        #   v8-oom-location = CALL_AND_RETRY_LAST
+        #   Mark-Compact (reduce) 3294.1 (3332.1) -> 3294.1 (3330.1) MB ... last resort
+        # (SIGTRAP, then a follow-up SIGBUS page-in failure). A lower old-space
+        # ceiling makes V8 collect early and hard instead of riding to the cap,
+        # so the failure mode becomes a slow renderer rather than a killed one.
+        devinRun = pkgs.writeShellScript "devin-desktop-run" ''
+          exec ${devinContents}/usr/share/devin-desktop/devin-desktop \
+            --no-sandbox \
+            --js-flags="--max-old-space-size=2560" \
+            "$@"
+        '';
+        devinDesktopItem = pkgs.makeDesktopItem {
+          name = "devin-desktop";
+          desktopName = "Devin";
+          comment = "AI-powered development environment";
+          exec = "${config.home.profileDirectory}/bin/devin-desktop %F";
+          icon = "devin-desktop";
+          categories = [
+            "TextEditor"
+            "Development"
+            "IDE"
+          ];
+          startupNotify = false;
+          startupWMClass = "Devin";
+        };
+        devinDesktop = pkgs.buildFHSEnv (
+          pkgs.appimageTools.defaultFhsEnvArgs
+          // {
+            name = "devin-desktop";
+            runScript = "${devinRun}";
+            targetPkgs = p: pkgs.appimageTools.defaultFhsEnvArgs.targetPkgs p ++ [ p.libsecret ];
+            extraInstallCommands = ''
+              mkdir -p $out/share/devin-desktop $out/share/pixmaps $out/share/applications
+              cp -a ${devinContents}/usr/share/devin-desktop/. $out/share/devin-desktop/
+              install -Dm644 ${devinContents}/usr/share/pixmaps/devin-desktop.png $out/share/pixmaps/devin-desktop.png
+              install -Dm644 ${devinDesktopItem}/share/applications/devin-desktop.desktop $out/share/applications/devin-desktop.desktop
+            '';
+          }
+        );
         opencodeUpstream = inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.opencode;
-        # Upstream's nix/hashes.json node_modules hash is computed in their own
-        # CI and does not reproduce here: opencode pins bun@1.4.4 in
-        # package.json while nixpkgs ships 1.4.2, and bun's install output
-        # differs between them, so the build dies with
-        #   hash mismatch in fixed-output derivation opencode-node_modules
-        # (specified j261..., got +GgLX...). The value below is the hash Nix
-        # reported for bun@1.4.2's node_modules tree; it is a fixed-output
-        # derivation, so its store path is derived from the hash and the build
-        # stays reproducible. The version drift is tolerated: opencode.nix's
-        # postPatch turns bun's version check into a warning. Re-run
-        # `nix build .#nixosConfigurations.nixos.config.system.build.toplevel`
-        # and take the new 'got:' value whenever the opencode pin moves.
+        # Upstream's node_modules hash has not reproduced locally: the
+        # normalize-bun-binaries step rebuilds platform links. This override
+        # uses the local hash for the locked OpenCode version. Refresh it from
+        # Nix's reported hash whenever the OpenCode pin changes.
         opencodeNodeModules = opencodeUpstream.node_modules.overrideAttrs (_: {
-          outputHash = "sha256-+GgLX4lq8fPOJVoDGp220uiCTLB0ZwrBkcNo36q9MZU=";
+          outputHash = "sha256-PYcpyYP/i0e6ZIt27u1tFYbjU4Cl848w77dU1NiIEls=";
         });
         # The nix packaging takes src from a fileset filter that omits the
         # repo-root script/ dir, but packages/cli/script/build.ts imports
@@ -299,10 +358,10 @@ in
         });
         ohMyPi = pkgs.stdenvNoCC.mkDerivation {
           pname = "oh-my-pi";
-          version = "18.14.0";
+          version = "18.16.0";
           src = pkgs.fetchurl {
-            url = "https://github.com/can1357/oh-my-pi/releases/download/v18.14.0/omp-linux-x64";
-            hash = "sha256-590rYGxOvp0ae8+tG4gg25aM1rBUCf7RxryNsLapWo8=";
+            url = "https://github.com/can1357/oh-my-pi/releases/download/v18.16.0/omp-linux-x64";
+            hash = "sha256-ZJjteFurANKSbgOH4OwCNi1tRfHD0NG1fBYYt/lckmQ=";
           };
           nativeBuildInputs = [ pkgs.patchelf ];
           dontUnpack = true;
@@ -317,10 +376,10 @@ in
         # env below, because its Electron binary wants
         # /lib64/ld-linux-x86-64.so.2 — on the desktop hosts that is NixOS'
         # stub-ld, not a real loader.
-        zcodeVersion = "3.16.3";
+        zcodeVersion = "3.18.2";
         zcodeSrc = pkgs.fetchurl {
           url = "https://cdn-zcode.z.ai/zcode/electron/releases/${zcodeVersion}/linux-x64/ZCode-${zcodeVersion}-linux-x64.AppImage";
-          hash = "sha256-SdAHZHuDHuUiDuNNCX4Dj7iaLfLGhrl6o7awLn0KC6I=";
+          hash = "sha256-9rL7OUE6fv4X470IbH0Gpq3KDf2gmaF5jqizUfC3B0k=";
         };
         # Exactly the arguments wrapType2 extracts internally, so this is that
         # same derivation: the icons installed below come for free instead of
@@ -490,10 +549,10 @@ in
         # app is not written to write into its resources and needs no
         # writable mirror. NixOS's chrome-sandbox is not setuid-root either,
         # so pass --no-sandbox like upstream's own desktop entry.
-        grokBotVersion = "0.78.1";
+        grokBotVersion = "1.1.0";
         grokBotDeb = pkgs.requireFile {
           name = "grok-bot_${grokBotVersion}_amd64.deb";
-          sha256 = "07gd7pkwbhdj31p8hzr27xh8pw3h38rb3agza4i38qppzx6a7ljm";
+          sha256 = "0bapza62nvxms7nwg0bn05zp5xki1mwilf4zxjafvv83a4hzn0jv";
           message = ''
             Copy grok-bot_${grokBotVersion}_amd64.deb into ~/Downloads so it
             can be imported into the nix store.
@@ -543,110 +602,6 @@ in
             };
           }
         );
-        # DeepSeek Harness CLI. The official npm package is the scoped
-        # @deepseek-ai/dsh; the unscoped `deepseek-harness` name is a
-        # reserved 0.0.1 placeholder with no bin, which hung `pnpm dlx`.
-        # Built with buildNpmPackage instead of a runtime dlx: the registry
-        # tarball ships no lockfile, so dsh-package-lock.json is generated
-        # with `npm install --package-lock-only` and committed; regenerate it
-        # (and refresh npmDepsHash) on every version bump. --ignore-scripts:
-        # every native dep ships prebuilds (node-pty, koffi, sharp via
-        # @img/*, sherpa-onnx); the one meaningful postinstall
-        # (dsh-subprocess-local) only chmods node-pty's bundled
-        # spawn-helper, replicated in postInstall. This derivation only
-        # provides the node_modules tree; the runnable `dsh` is
-        # deepseekHarnessCli below, which runs it on the official Node.
-        deepseekHarness = pkgs.buildNpmPackage rec {
-          pname = "deepseek-harness";
-          version = "0.2.1-rc.2";
-          src = pkgs.fetchurl {
-            url = "https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-${version}.tgz";
-            hash = "sha256-QOPQJcAkDEMW/0Le6b7cdwnA+ziuoQVDtHB27Sr1Lh0=";
-          };
-          sourceRoot = "package";
-          postPatch = "cp ${./dsh-package-lock.json} package-lock.json";
-          npmFlags = [ "--ignore-scripts" ];
-          dontNpmBuild = true;
-          npmDepsHash = "sha256-njzlHReorgm1RzEwMYwzx6OegKKWGVQtV6OiN9nxriE=";
-          postInstall = ''
-            # Restore node-pty's bundled spawn-helper exec bit, as
-            # dsh-subprocess-local's skipped postinstall would have.
-            find "$out" -path "*node-pty/prebuilds*" -name spawn-helper -type f -exec chmod 755 {} +
-          '';
-          meta = {
-            description = "DeepSeek Harness CLI: profiles, plugins, and agent runtime";
-            homepage = "https://www.npmjs.com/package/@deepseek-ai/dsh";
-            license = lib.licenses.mit;
-            mainProgram = "dsh";
-            platforms = [ "x86_64-linux" ];
-          };
-        };
-        # dsh's runtime-interception addon (node-addon-require-builtin)
-        # obtains Node's internal requireBuiltin by probing private V8 state
-        # and pattern-matching the OFFICIAL nodejs.org build's machine code;
-        # on nixpkgs' gcc-built node it fails closed at boot with
-        # "Unsupported/no-getter". dsh therefore runs on the official
-        # binary through the host's nix-ld (see deepseekHarnessCli below).
-        # Keep this on a major the addon supports (20/22/24/26).
-        dshNodeVersion = "24.22.1";
-        dshNode =
-          pkgs.runCommand "nodejs-official-${dshNodeVersion}"
-            {
-              nativeBuildInputs = [ pkgs.xz ];
-            }
-            ''
-              mkdir -p $out
-              tar -xJf ${
-                pkgs.fetchurl {
-                  url = "https://nodejs.org/dist/v${dshNodeVersion}/node-v${dshNodeVersion}-linux-x64.tar.xz";
-                  hash = "sha256-bBcqmrZxj3uAH7WnvUhq8u5eMnWAhqBLhPzOKqdwleY=";
-                }
-              } --strip-components=1 -C $out
-            '';
-        # dsh-market shells out to a bare `pnpm` for plugin lookups
-        # (`pnpm view <plugin> ... --json`) and installs, but the official
-        # node tarball ships no pnpm. Pin the same pnpm dsh-market's own
-        # runtime uses (11.25.0, store v11) and run it on the official node;
-        # the pure-JS registry tarball works on any node build.
-        dshPnpmPkg = pkgs.runCommand "pnpm-11.25.0-pkg" { } ''
-          mkdir -p $out
-          tar -xzf ${
-            pkgs.fetchurl {
-              url = "https://registry.npmjs.org/pnpm/-/pnpm-11.25.0.tgz";
-              hash = "sha256-M90HSPJ+eRbE8ci2lDRhmD40U7BrvaYxKmKAEwtIgeU=";
-            }
-          } -C $out --strip-components=1
-        '';
-        dshPnpm = pkgs.writeShellScriptBin "pnpm" ''
-          exec ${dshNode}/bin/node ${dshPnpmPkg}/bin/pnpm.cjs "$@"
-        '';
-        # Official node first on PATH so child processes dsh spawns (npm,
-        # plugin tooling, re-execs) resolve the same runtime. Runs through
-        # the host's nix-ld, NOT a buildFHSEnv: inside bwrap, dsh's harness
-        # child falls back to dsh-market's standalone pnpm, whose embedded
-        # (non-official) node fails the interception addon; under nix-ld the
-        # child inherits this node and boots. See hermes-desktop.nix for the
-        # same programs.nix-ld requirement.
-        # Keep bubblewrap reachable on PATH: Codex's app-server (the
-        # dsh-openai-oauth plugin's backend) shells out to `bwrap` for its
-        # sandbox and logs an ERROR on every start when PATH lacks it, falling
-        # back to the copy vendored in the Codex binary.
-        # CloudFront in front of platform.deepseek.com (BLR edge) rejects any
-        # request whose User-Agent is not a full browser string: node, undici,
-        # curl and even a bare "Mozilla/5.0" all get a 403 "Request blocked"
-        # HTML page, which dsh-deepseek-account-platform logs as
-        # `[deepseek-account] request failed ... errorCode: 'network'`. The
-        # account client sends no User-Agent of its own, so undici's default
-        # `node` is what the edge sees. api.deepseek.com is exempt, which is
-        # why model listing still succeeds. Only set it when unset, so an
-        # explicit override in the environment still wins.
-        deepseekHarnessCli = pkgs.writeShellScriptBin "dsh" ''
-          export PATH="${dshPnpm}/bin:${dshNode}/bin:${pkgs.bubblewrap}/bin''${PATH:+:$PATH}"
-          if [ -z "''${DSH_PLATFORM_USER_AGENT:-}" ]; then
-            export DSH_PLATFORM_USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-          fi
-          exec ${dshNode}/bin/node --require ${./dsh-platform-ua.cjs} ${deepseekHarness}/lib/node_modules/@deepseek-ai/dsh/lib/bin.js "$@"
-        '';
         # Code search & document retrieval. Resolve qmd lazily through npm so it
         # is available from the Nix profile without a global mutable install.
         qmd = pkgs.writeShellApplication {
@@ -824,7 +779,12 @@ in
           }
         '';
 
+        xdg.dataFile."applications/devin-desktop.desktop" = {
+          source = "${devinDesktop}/share/applications/devin-desktop.desktop";
+          force = true;
+        };
         home.packages = with pkgs; [
+          devinDesktop
           superfile
           wget
           git
@@ -844,7 +804,6 @@ in
           procps
           bun
           herdr
-          deepseekHarnessCli
           qmd
           agentBrowser
           feynman

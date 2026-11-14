@@ -2,6 +2,7 @@
 { ... }:
 {
   imports = [
+    ./factory-desktop-linux.nix
     ./dev.nix
     ./work.nix
     ./gaming.nix
@@ -20,9 +21,10 @@
     ./cliproxyapi.nix
     ./ghostex.nix
     ./herdr.nix
-    ./dsh-desktop-next.nix
     ./orbit-pi.nix
     ./pi-desktop.nix
+    ./pen.nix
+    ./paper.nix
     ./synara.nix
     ./t3code-nightly.nix
   ];

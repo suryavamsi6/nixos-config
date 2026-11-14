@@ -136,7 +136,7 @@ Development tools provided by the configuration include `nixfmt`, `treefmt`, `ni
 
 Flake-input pins are covered too. `opencode` is pinned to a `github:anomalyco/opencode/v2.x` tag in `flake.nix`, and `nix run .#update-pins -- --only opencode --write` bumps the tag literal *and* re-resolves that one `flake.lock` node (`lock_node=` on the `Pin`), so plain `nix flake update` is never needed for it. Its resolver is `kind = "github-tags"`, matching tag refs against a glob, because GitHub's `releases/latest` for that repo still serves the retired v1 line and npm has no 2.x at all. Nothing runs this on a schedule: you run it, review the diff, then switch.
 
-Do not convert a pin to `@latest`. Nix resolves fixed-output hashes at evaluation time, so a rolling version is unrepresentable; the rolling tools (pi, agent-browser, qmd, grok, feynman, deepseek-harness) instead run through `pnpm dlx …@latest` at runtime. `zoom-vdi`, `epic-launcher`, and `capy` have no machine-readable release index and stay manual.
+Do not convert a pin to `@latest`. Nix resolves fixed-output hashes at evaluation time, so a rolling version is unrepresentable; the rolling tools (pi, agent-browser, qmd, grok, feynman) instead run through `pnpm dlx …@latest` at runtime. `zoom-vdi`, `epic-launcher`, and `capy` have no machine-readable release index and stay manual.
 
 ## Testing & QA
 

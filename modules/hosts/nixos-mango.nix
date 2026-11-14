@@ -22,7 +22,7 @@
       nixos.gcb200
       nixos.openrgb
       nixos.coolercontrol
-      nixos.gridwatch
+      nixos.apcupsd
 
       # Core system
       nixos.boot
@@ -106,7 +106,6 @@
             homeManager.dev
             homeManager.work
             homeManager.gaming
-            homeManager.gridwatch
             homeManager.capy
             homeManager.claudeCodeRouter
             homeManager.onepasswordMcp

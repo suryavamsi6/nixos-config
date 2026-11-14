@@ -54,7 +54,16 @@ Item {
 
         Text {
             Layout.fillWidth: true
-            text: "The UPS agent monitors the USB-connected battery. Changes are applied automatically to apcupsd after you press Apply. Runtime and load are estimates from the UPS and can change sharply under gaming load."
+            text: "Read-only telemetry from apcupsd. The shutdown policy is fixed in NixOS (modules/hardware/apcupsd.nix): power off at 5% battery or after 1 minute on battery, whichever comes first. Runtime and load are estimates from the UPS and can change sharply under gaming load."
+            wrapMode: Text.WordWrap
+            color: ThemeBackend.overlay1
+            font.family: ThemeBackend.fontFamily
+            font.pixelSize: rootObj.s(11)
+        }
+
+        Text {
+            Layout.fillWidth: true
+            text: "Change it by editing modules/hardware/apcupsd.nix and running nh os switch."
             wrapMode: Text.WordWrap
             color: ThemeBackend.overlay1
             font.family: ThemeBackend.fontFamily

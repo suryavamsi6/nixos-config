@@ -6,7 +6,12 @@
     default =
       { inputs, ... }:
       {
-        imports = [ (import "${inputs.serpantinum}/nix/nixos-module.nix") ];
+        # Use the upstream flake's `nixosModules.default`, not the raw
+        # `nix/nixos-module.nix`. Since 2.3.x the NixOS module calls
+        # `programs.ski.enable`, and that option only exists because upstream's
+        # default module also imports "${ski}/nix/module.nix". Importing the
+        # bare file leaves `programs.ski` undefined and evaluation fails.
+        imports = [ inputs.serpantinum.nixosModules.default ];
         programs.serpantinum.enable = true;
       };
   };
@@ -51,13 +56,6 @@
         };
         serpantinumBluetoothPatched = serpantinum.overrideAttrs (old: {
           postInstall = (old.postInstall or "") + ''
-            substituteInPlace $out/share/serpantinum/quickshell/bar/modules/system/BtWidget.qml \
-              --replace-fail 'moduleActive && !isDesktop && sysLayout.implicitWidth > 0' \
-                             'moduleActive && sysLayout.implicitWidth > 0' \
-              --replace-fail 'showLayout && moduleActive && !isDesktop' \
-                             'showLayout && moduleActive' \
-              --replace-fail 'isDesktop ? 0 : implicitWidth' 'implicitWidth'
-
             # The upstream script stops Serpantinum's graphical target before
             # asking the compositor to exit, killing itself before logout.
             ${pkgs.python3}/bin/python3 ${./serpantinum-system/patch_exit.py} \
@@ -68,6 +66,14 @@
             install -Dm755 ${btBattery}/bin/serpantinum-bt-battery \
               $out/share/serpantinum/quickshell/network/bt_battery.sh
 
+            # 2.3.x collapses the Bluetooth bar pill on machines without a
+            # battery. Drop those gates so the pill shows on this desktop.
+            ${pkgs.python3}/bin/python3 ${./serpantinum-bluetooth/patch_bt_face.py} \
+              $out/share/serpantinum/quickshell/bar/faces/bt/BtFace.qml
+
+            # Read-only telemetry panel, Loader-ed by UpsTab.qml. The policy
+            # editor that used to live here is gone: shutdown thresholds are
+            # static in modules/hardware/apcupsd.nix.
             install -Dm644 ${./serpantinum-ups/UpsSettings.qml} \
               $out/share/serpantinum/quickshell/guide/UpsSettings.qml
             install -Dm644 ${./serpantinum-ups/UpsTab.qml} \
@@ -76,21 +82,14 @@
               $out/share/serpantinum/scripts/system/ups_status.sh
           '';
         });
-        serpantinumWorldClockPatched = inputs.world-clock.lib.patchSerpantinum {
-          inherit pkgs;
-          serpantinum = serpantinumBluetoothPatched;
-        };
-        serpantinumPatched = serpantinumWorldClockPatched.overrideAttrs (old: {
+        serpantinumPatched = serpantinumBluetoothPatched.overrideAttrs (old: {
           postInstall = (old.postInstall or "")
             + ''
               ${pkgs.python3}/bin/python3 ${./serpantinum-ups/patch_guide_popup.py} \
                 $out/share/serpantinum/quickshell/guide/GuidePopup.qml
               ${pkgs.python3}/bin/python3 ${./serpantinum-ups/patch_translations.py} \
                 $out/share/serpantinum/assets/languages/en.json
-              ${pkgs.python3}/bin/python3 ${./serpantinum-ups/patch_mango.py} \
-                $out/share/serpantinum
               ${pkgs.python3}/bin/python3 ${./serpantinum-workspaces/patch_top_bar.py} \
-                $out/share/serpantinum/quickshell/bar/modules/WorkspacesWidget.qml \
                 $out/share/serpantinum/quickshell/bar/TopBar.qml
             '';
         });
@@ -111,10 +110,15 @@
               "workspaces"
             ];
             launcher.terminalCommand = "ghostty -e";
-            ups = {
-              shutdownBatteryLevel = 50;
-              shutdownMinutes = 5;
-            };
+            # Upstream's workspace face system replaced the old hand-patched
+            # pill geometry. "numbers" renders the workspace digit in a pill;
+            # "pills" (the default) is the dot style, "pacman" the variant.
+            # Typed enum in the module's nix/settings-options.nix.
+            bar.workspacesStyle = "numbers";
+            # The old patch hid unoccupied workspaces unconditionally. Upstream
+            # 2.3.x gates that behind this setting and defaults it to false, so
+            # setting it keeps the bar showing only the current + occupied ones.
+            bar.hideEmptyWorkspaces = true;
           };
         };
       };

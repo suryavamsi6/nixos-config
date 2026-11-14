@@ -5,7 +5,7 @@
 #
 # Remote NUT Only mode: Nutify runs no local driver and talks to a upsd
 # elsewhere on the LAN. Nothing here opens the host USB bus, so it cannot fight
-# apcupsd for the UPS the desktop (#nixos) already owns via gridwatch.
+# apcupsd for the UPS the desktop (#nixos) owns directly on its USB bus.
 #
 # The UPS target is configured in Nutify's own wizard at
 # http://nutify.home.arpa (Caddy -> 10.110.0.103:5050). That writes /etc/nut

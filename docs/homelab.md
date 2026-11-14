@@ -44,6 +44,98 @@ sudo jq . /var/lib/disk-health/health.json
 sudo smartctl -a /dev/nvme1n1
 ```
 
+## Incus application updates
+
+`incus-app-update.timer` runs every Sunday at 04:30 (plus up to 20 minutes) and
+rebuilds allowlisted Incus OCI instances onto newer upstream images. The allowlist
+lives in `modules/services/incus-auto-update.nix`; the updater
+(`scripts/incus-app-update.py`) touches nothing that is not described there.
+
+It skips gated units, and for an in-guest unit it skips work when the app says
+nothing is pending. Otherwise, for every instance, it verifies in this order:
+
+1. the instance is running, and its declared host-backed disks still match the
+   exact device, source and mount path the config expects;
+2. each of those paths is a live mount inside the container and its required
+   files exist;
+3. the data tree contains only plain files and directories, so a copy cannot
+   silently follow a link;
+4. every HTTP health URL answers 2xx/3xx;
+5. the upstream image resolves to a fingerprint, and — when `oci.version` is a
+   real version and the app reports its running version — it is not a downgrade.
+
+Only then does it stop the instances in a unit, create a `pre-update-<UTC>`
+snapshot (30-day expiry), copy each host data directory to
+`/var/lib/incus-auto-update/backups/<snapshot>-data/`, rebuild each instance onto
+the resolved fingerprint, start it, and re-check health and mounts. A unit is
+rebuilt as a set, so paired instances (Homelable's backend and frontend) never
+run different builds.
+
+Currently covered: MCPHub, Reactive Resume, Grimmory (Booklore application
+container), Qdrant, Bifrost, Nutify, Hermes, OpenBot, and Homelable behind a
+gate.
+
+Hermes and OpenBot are not OCI instances: their units provision an Ubuntu guest
+and the app installs itself inside it, so a rebuild would destroy the install.
+Those two are `in-guest` units. Instead of stop/snapshot/rebuild they run the
+app's own updater inside the container — `hermes update --yes`, and
+`openbot update` when `openbot status` reports a release is ready — then
+re-check health. `hermes update --check` is read-only and decides whether
+anything is pending. An in-guest unit is never stopped, so a failed run leaves
+the app running with `pending.json` for review rather than a stopped container.
+
+**Never updated by this timer:** the MariaDB containers (`booklore-db`, and the
+pi's `mariadb`), and Home Assistant OS, which is a VM: update it from inside
+Home Assistant (`ha os update` / Settings → Updates), because there is no image
+to rebuild onto. Homelable needs a migration first: its SQLite database lives
+in the instance root filesystem, so a rebuild would discard it. The updater
+skips the Homelable unit until `/var/lib/incus-auto-update/homelable-enabled`
+exists. Run `scripts/homelable-migrate-data.sh`, move the database onto a host
+disk, verify it, then create that file.
+
+Some containers are not declared in this repository and are therefore outside
+the allowlist: `litellm` (its `/app/config.yaml` lives in the container root
+filesystem, so a rebuild would erase the model config), `open-design`,
+`nanomuse` (stopped), and `lens` (a Docker host, not a pinned app). Adopting one
+means first declaring it as a module here, or at minimum moving its config onto
+a host disk, before adding it to the allowlist.
+
+Some services are pinned by digest in this repository (Qdrant, Bifrost, Nutify,
+Reactive Resume, Booklore, Homelable). The pins only seed a fresh install: the
+bootstrap units create an instance once and never recreate it, so an automatic
+rebuild leaves the pin behind the running container. Treat a pin as the
+known-good floor for reinstalls, and update it when you next touch that service.
+
+The local copies are **not** an off-host backup, and they can contain
+credentials; restic is still the backup that matters. Snapshots expire after 30
+days and the copies need manual retention management. Passing an HTTP health
+check does not prove every feature works.
+
+Before trusting the timer, run the read-only check — it prints what it would do
+and changes nothing:
+
+```bash
+sudo systemctl start incus-app-update-dryrun
+journalctl -u incus-app-update-dryrun -n 50 --no-pager
+```
+
+Then update one unit by hand: `sudo systemctl start incus-app-update` picks up
+everything pending; to test a single unit, run the service's `ExecStart` with
+`--only <unit>` instead.
+
+The unit runs with a minimal `PATH` holding only the Incus CLI and `skopeo`
+(which Incus shells out to for OCI remotes). If a future Incus feature needs
+another binary, add it to `incusPath` in the module; `command not found` inside
+the journal means exactly that, and a login shell will not reproduce it.
+
+To inspect failures, use `journalctl -u incus-app-update.service` and read
+`/var/lib/incus-auto-update/pending.json` as root. If a rebuild or health check
+failed, the unit is left stopped: assess the instance snapshot and the matching
+`*-data` copy together before restoring, because an application upgrade may have
+migrated data. Do not remove `pending.json` until the state is understood. To
+suspend scheduled runs, stop the timer or create
+`/var/lib/incus-auto-update/disabled`; deleting that file re-enables them.
+
 ## Backups (restic)
 
 Topology, chosen so no SSH key is copied between machines:
@@ -155,7 +247,7 @@ one). Until it does, a red check is only visible on the status page.
 `docker:dartsteven/nutify@sha256:dad34267…` digest on `10.110.0.103:5050`, reached
 as `http://nutify.home.arpa` through Caddy (the pi's AdGuard rewrite points that
 name at `192.168.0.160`). It runs in *Remote NUT Only* mode: no local USB driver,
-so it never competes with `apcupsd`/gridwatch on the desktop. Nothing is wired to a
+so it never competes with `apcupsd` on the desktop. Nothing is wired to a
 UPS yet — the target is entered in Nutify's own wizard, which writes
 `/etc/nut` into the container volume (`/var/lib/nutify/etc-nut`).
 
@@ -175,7 +267,7 @@ therefore accepts both, and it only proves the container serves — not that a U
 reachable.
 
 A single UPS is exposed to exactly one host. Point Nutify at a NUT server that
-already exports one; do not point it at the desktop's UPS while gridwatch owns it.
+already exports one; do not point it at the desktop's UPS, which apcupsd owns.
 
 Inspect it from the host:
 

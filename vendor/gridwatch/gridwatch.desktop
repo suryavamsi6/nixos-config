@@ -1,9 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Gridwatch
-Comment=APC UPS Electric Observatory
-Exec=gridwatch
-Icon=gridwatch
-Terminal=false
-Categories=System;Monitor;
-Keywords=UPS;APC;power;battery;

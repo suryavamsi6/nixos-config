@@ -7,8 +7,30 @@ let
     pkgs:
     let
       zoomvdi = zoomvdiFor pkgs;
+      # nixpkgs pins 26.08.0.153, whose tarball Citrix no longer serves:
+      # the linuxx64-26.08.0.153.tar.gz link now ships 26.08.0.225 content
+      # (PkgId ID_VERSION=26.08.0.225), so the pinned flat hash can never
+      # match. Re-pin to the tarball actually downloadable today.
+      citrix = pkgs.citrix-workspace.overrideAttrs (old: rec {
+        version = "26.08.0.225";
+        src = pkgs.requireFile {
+          name = "linuxx64-${version}.tar.gz";
+          sha256 = "185sbj67b12iz2s49g0q1ixby79r8c2xflsvl2fghmh6ap1d8ca2";
+          message = ''
+            Citrix no longer serves the nixpkgs-pinned 26.08.0.153 tarball.
+            Download linuxx64-26.08.0.225.tar.gz from:
+
+            https://www.citrix.com/downloads/workspace-app/
+
+            (accept the EULA; the site may still name it .153 — check PkgId
+            inside the archive), then add it to the store:
+
+            nix-prefetch-url file://$PWD/linuxx64-26.08.0.225.tar.gz
+          '';
+        };
+      });
     in
-    pkgs.citrix-workspace.overrideAttrs (old: {
+    citrix.overrideAttrs (old: {
       nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.makeWrapper ];
       postFixup = (old.postFixup or "") + ''
               xml="$out/opt/citrix-icaclient/config/AuthManConfig.xml"

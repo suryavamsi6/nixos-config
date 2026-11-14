@@ -21,6 +21,7 @@
     ./booklore.nix
     ./homelable.nix
     ./mcphub.nix
+    ./incus-auto-update.nix
     ./haos.nix
   ];
 }

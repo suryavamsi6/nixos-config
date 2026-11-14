@@ -20,10 +20,10 @@
     default =
       { pkgs, ... }:
       let
-        monocodeVersion = "0.16.0-preview.10";
+        monocodeVersion = "0.16.0-preview.14";
         monocodeSrc = pkgs.fetchurl {
           url = "https://github.com/hardbeat920/monocode/releases/download/native-v${monocodeVersion}/monocode-native_${monocodeVersion}_amd64.deb";
-          hash = "sha256-fA0MiTBFUHhxw7gGHmgplf0xJl5LrwMHtiZWXqDpblc=";
+          hash = "sha256-M6r8VTnFPxXgy7i3VtWo0+kmZP6s7c8XwcmqWkXMPNI=";
         };
         monocodeContents = pkgs.runCommand "monocode-native-deb" { } ''
           ${pkgs.dpkg}/bin/dpkg-deb -x ${monocodeSrc} $out

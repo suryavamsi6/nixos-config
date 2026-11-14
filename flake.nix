@@ -24,7 +24,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     opencode = {
-      url = "github:anomalyco/opencode/v2.2.5";
+      url = "github:anomalyco/opencode/v2.3.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     hunk = {
@@ -34,22 +34,18 @@
     nix-flatpak = {
       url = "github:gmodena/nix-flatpak/?ref=v0.6.0";
     };
-    hyprland.url = "github:hyprwm/Hyprland";
+    # Pinned to a release tag on purpose. Tracking branch HEAD let an
+    # unannounced 2026-11-01 re-lock move 0.56.0-era -> 0.57.0-master and the
+    # compositor started dying on monitor DPMS-off. v0.57.1 carries the
+    # output-removal fixes for exactly that path (session-lock removed-output
+    # protocol error, max_bpc from configured bitdepth, dmabuf feedback).
+    hyprland.url = "github:hyprwm/Hyprland/v0.57.1";
     hyprexpose = {
       url = "github:ThiagoAVicente/hyprexpose";
       flake = false;
     };
     chaotic.url = "github:chaotic-cx/nyx/nyxpkgs-unstable";
-    serpantinum.url = "github:ilyamiro/serpantinum/44d33831ab6314e7d2d7f0323c1fc023cb08804c";
-    world-clock = {
-      url = "path:./vendor/world-clock";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.serpantinum.follows = "serpantinum";
-    };
-    gridwatch = {
-      url = "path:./vendor/gridwatch";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    serpantinum.url = "github:ilyamiro/serpantinum/d282c4c018da78c87cd6d7a82f65fa01ccda354c";
     shell-wallpapers = {
       url = "github:ilyamiro/shell-wallpapers";
       flake = false;

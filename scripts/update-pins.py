@@ -351,49 +351,6 @@ PINS: list[Pin] = [
         hash_url="https://cdn-zcode.z.ai/zcode/electron/releases/{v}/linux-x64/ZCode-{v}-linux-x64.AppImage",
     ),
     Pin(
-        name="deepseek-harness",
-        file=DEVELOP,
-        anchor='pname = "deepseek-harness";',
-        version_re=r'version = "(?P<v>[0-9][0-9.]*(?:-rc\.[0-9]+)?)";',
-        version_tpl='version = "{v}";',
-        lookup={"kind": "npm", "package": "@deepseek-ai/dsh"},
-        url_re=r'url = "https://registry\.npmjs\.org/@deepseek-ai/dsh/-/dsh-[0-9.]+(?:-rc\.[0-9]+)?\.tgz";',
-        url_tpl='url = "https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-{v}.tgz";',
-        hash_re=r'hash = "sha256-[^"]+";',
-        hash_kind="file",
-        note="on bump also regenerate dsh-package-lock.json and refresh npmDepsHash",
-    ),
-    Pin(
-        name="dsh-desktop-next",
-        file="modules/packages/dsh-desktop-next.nix",
-        anchor="# DSH Desktop NEXT",
-        version_re=r'version = "(?P<v>[0-9][0-9.]*-next)";',
-        version_tpl='version = "{v}";',
-        lookup={"kind": "github", "repo": "anywhere-labs/dsh-desktop"},
-        hash_re=r'hash = "sha256-[^"]+";',
-        hash_kind="file",
-        hash_url="https://github.com/anywhere-labs/dsh-desktop/releases/download/v{v}/DSH-NEXT-{v}-x86_64.AppImage",
-        note="tracks the NEXT channel's x86_64 AppImage",
-    ),
-    Pin(
-        name="dsh-node",
-        file=DEVELOP,
-        anchor="dshNodeVersion = ",
-        version_re=r'dshNodeVersion = "(?P<v>[0-9][0-9.]*)";',
-        version_tpl='dshNodeVersion = "{v}";',
-        lookup={
-            "kind": "manual",
-            "note": "official nodejs.org runtime for dsh; its interception addon "
-            "fails closed on nixpkgs-built node, so this must stay an official "
-            "binary on a supported major (20/22/24/26); the pinned dsh-pnpm "
-            "tracks dsh-market's bundled version",
-        },
-        url_re=r'url = "https://nodejs\.org/dist/v[0-9.]+/node-v[0-9.]+-linux-x64\.tar\.xz";',
-        url_tpl='url = "https://nodejs.org/dist/v{v}/node-v{v}-linux-x64.tar.xz";',
-        hash_re=r'hash = "sha256-[^"]+";',
-        hash_kind="file",
-    ),
-    Pin(
         name="herdr-app",
         file="modules/packages/herdr.nix",
         anchor="herdrAppVersion = ",
@@ -416,6 +373,30 @@ PINS: list[Pin] = [
         hash_kind="file",
         hash_url="https://releases.herdr.dev/core/{v}/herdr-core-linux-x86_64.tar.gz",
         note="herdr-core must stay on the app's generation; the app refuses others",
+    ),
+    Pin(
+        name="pen",
+        file="modules/packages/pen.nix",
+        anchor="version = \"",
+        version_re=r'version = "(?P<v>[0-9][0-9.]*)";',
+        version_tpl='version = "{v}";',
+        lookup={"kind": "github", "repo": "highagency/pen-desktop-releases"},
+        hash_re=r'hash = "sha256-[^"]+";',
+        hash_kind="file",
+        hash_url="https://github.com/highagency/pen-desktop-releases/releases/download/v{v}/Pen-{v}-linux-x64.tar.gz",
+        note="URL interpolates ${version}, so only the hash is rewritten here",
+    ),
+    Pin(
+        name="paper-desktop",
+        file="modules/packages/paper.nix",
+        anchor="version = \"",
+        version_re=r'version = "(?P<v>[0-9][0-9.]*)";',
+        version_tpl='version = "{v}";',
+        lookup={"kind": "paper"},
+        hash_re=r'hash = "sha256-[^"]+";',
+        hash_kind="file",
+        hash_url="https://download.paper.design/linux/deb/x64",
+        note="unversioned .deb URL: a new build changes the hash, not the path",
     ),
     Pin(
         name="opencode",
@@ -546,6 +527,15 @@ def resolve(pin: Pin) -> tuple[str | None, str]:
             if minimum and version_key(minimum) > version_key(latest):
                 return None, f"app {app.get('version')} needs herdr-core >= {minimum}"
         return latest, ""
+
+    if kind == "paper":
+        # The Linux download URLs are unversioned; the release page states
+        # the current version next to them.
+        html = http_get("https://paper.design/downloads")
+        m = re.search(r"Paper Desktop.{0,400}?v\s*<?!?[^0-9]{0,20}(?P<v>[0-9]+\.[0-9]+\.[0-9]+)", html, re.S)
+        if not m:
+            return None, "no version near the Paper Desktop block"
+        return m.group("v"), ""
 
     if kind == "claude-desktop":
         text = http_get(
