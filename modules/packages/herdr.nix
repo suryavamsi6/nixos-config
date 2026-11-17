@@ -28,14 +28,14 @@
     default =
       { pkgs, lib, ... }:
       let
-        herdrAppVersion = "0.1.15";
+        herdrAppVersion = "0.1.16";
         herdr-app = pkgs.stdenv.mkDerivation {
           pname = "herdr-app";
           version = herdrAppVersion;
 
           src = pkgs.fetchurl {
             url = "https://releases.herdr.dev/app/${herdrAppVersion}/herdr-app-linux-x86_64.tar.gz";
-            hash = "sha256-+Z4eBL6CwOELL2nudAPKNDhvSA2SUR31hlr0cD52Vd0=";
+            hash = "sha256-KC0mMhlrI4IGz+Zr+2HA+vKZyhyRhDvQdlIbvjZXEhY=";
           };
 
           nativeBuildInputs = [

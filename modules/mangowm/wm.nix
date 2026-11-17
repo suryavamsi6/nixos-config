@@ -1,16 +1,16 @@
 # MangoWM — NixOS session and Home Manager configuration
 { lib, ... }:
 let
-  # Pinned 0.18.1 (newer than nixpkgs' 0.18.0). Upstream made scenefx-0.5 a
+  # Pinned 0.18.5 (newer than nixpkgs' 0.18.0). Upstream made scenefx-0.5 a
   # hard dependency in 0.18.x, so the old scenefx-stripped wl-only build is
   # gone; nixpkgs' scenefx 0.5 provides the Vulkan/HDR renderer path instead.
   mangoPinned = pkgs: pkgs.mango.overrideAttrs (_: {
-    version = "0.18.1";
+    version = "0.18.5";
     src = pkgs.fetchFromGitHub {
       owner = "mangowm";
       repo = "mango";
-      rev = "91e3f6884826ba4529c90afaff2762b5b3956bd6";
-      hash = "sha256-khk5mQE0pA+gMQXs+7Z1HD7sxHys50LzF5oleeqYwRo=";
+      rev = "faaf4a961f943692f2657eb992a8aa90022f921e";
+      hash = "sha256-B2o+D2ywW0UNE9ok0jXha6YvRXMaBfTmGOXTgtZrj8s=";
     };
   });
 in
@@ -154,7 +154,7 @@ in
             "${scripts}/quickshell/focustime/focus_daemon.py"
         '';
         configText = ''
-          # MangoWM pinned 0.18.1 — dwindle tags trial
+          # MangoWM pinned 0.18.5 — dwindle tags trial
           animations=1
           layer_animations=1
           animation_type_open=slide

@@ -8,10 +8,10 @@
     default =
       { config, pkgs, ... }:
       let
-        zeronVersion = "0.3.4";
+        zeronVersion = "0.3.7";
         zeronSrc = pkgs.fetchurl {
           url = "https://github.com/zeronsh/zeron/releases/download/v${zeronVersion}/zeron-${zeronVersion}-linux-x86_64.tar.gz";
-          hash = "sha256-60mMYIqfC0mbJg8LbbWJFUWNcuTKUaizCY/niJiz+VY=";
+          hash = "sha256-e1EHezap+zUAKW0FVZDgL54MB+Zgh6FCiMaep3U2KV4=";
         };
         zeronContents = pkgs.runCommand "zeron-${zeronVersion}-contents" { } ''
           mkdir -p "$out"

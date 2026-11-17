@@ -16,10 +16,10 @@
     default =
       { config, pkgs, ... }:
       let
-        ccrVersion = "3.1.3";
+        ccrVersion = "3.1.5";
         ccrSrc = pkgs.fetchurl {
           url = "https://github.com/musistudio/claude-code-router/releases/download/v${ccrVersion}/Claude-Code-Router_${ccrVersion}.AppImage";
-          hash = "sha256-+KCJIF5dBq+W5/q0qJxhxDP9SlZzT5Abr9FavJuFLOo=";
+          hash = "sha256-J1rCkn4ujH7aoJSUilRWsc4+YLAkBTECdOBuNx8kWXc=";
         };
         ccrContents = pkgs.appimageTools.extract {
           pname = "claude-code-router";

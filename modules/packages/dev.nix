@@ -452,13 +452,13 @@ in
         # dependency check hard-fails on EROFS (the UI then hangs on
         # "starting up"), so it must run from a writable mirror of the
         # unpacked tree (eigentRun below), never straight from the store.
-        eigentVersion = "1.0.6";
-        # v1.0.6 publishes the AppImage on GitHub releases, so a plain
+        eigentVersion = "1.0.8";
+        # Eigent publishes the AppImage on GitHub releases, so a plain
         # fetchurl replaces the old eigent.ai requireFile manual download.
         eigentAppImage = pkgs.fetchurl {
-          name = "Eigent-1.0.6.AppImage";
-          url = "https://github.com/eigent-ai/eigent/releases/download/v1.0.6/Eigent-1.0.6.AppImage";
-          hash = "sha256-+Hzwvrd3GCHlnlCyUpvBg5g8pQfHOIECKwzCMrNgkMU=";
+          name = "Eigent-1.0.8.AppImage";
+          url = "https://github.com/eigent-ai/eigent/releases/download/v1.0.8/Eigent-1.0.8.AppImage";
+          hash = "sha256-QaE31eUwhF3CldZAdwSj//nIbDlNvX/REm3zJJHizWw=";
         };
         eigentUnpacked =
           pkgs.runCommand "eigent-${eigentVersion}-unpacked"
@@ -549,10 +549,10 @@ in
         # app is not written to write into its resources and needs no
         # writable mirror. NixOS's chrome-sandbox is not setuid-root either,
         # so pass --no-sandbox like upstream's own desktop entry.
-        grokBotVersion = "1.1.0";
+        grokBotVersion = "1.2.0";
         grokBotDeb = pkgs.requireFile {
           name = "grok-bot_${grokBotVersion}_amd64.deb";
-          sha256 = "0bapza62nvxms7nwg0bn05zp5xki1mwilf4zxjafvv83a4hzn0jv";
+          sha256 = "00vay7aqfwlvzq3fir0n5lfs5w9grr9f18fcz9balwr5jsfiwm0m";
           message = ''
             Copy grok-bot_${grokBotVersion}_amd64.deb into ~/Downloads so it
             can be imported into the nix store.

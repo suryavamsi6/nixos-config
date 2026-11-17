@@ -132,7 +132,7 @@ Development tools provided by the configuration include `nixfmt`, `treefmt`, `ni
 
 ## Updating Pins
 
-`nix run .#update-pins` audits every pinned application in `modules/packages/` and `modules/mangowm/`: it resolves the newest upstream release, prefetches the hash, and reports what moved. Pass `--write` to rewrite the modules, `--build` to build `#nixos` afterwards, `--only orca,zcode` to narrow the run, and `--flake` to also run `nix flake update`. The implementation is `scripts/update-pins.py`.
+`nix run .#update-pins` audits every pinned application in `modules/packages/` and `modules/mangowm/`: it resolves the newest upstream release, prefetches the hash, and reports what moved. Pass `--write` to rewrite the modules, `--build` to build `#nixos` afterwards, `--only herdr-app,zcode` to narrow the run, and `--flake` to also run `nix flake update`. The implementation is `scripts/update-pins.py`.
 
 Flake-input pins are covered too. `opencode` is pinned to a `github:anomalyco/opencode/v2.x` tag in `flake.nix`, and `nix run .#update-pins -- --only opencode --write` bumps the tag literal *and* re-resolves that one `flake.lock` node (`lock_node=` on the `Pin`), so plain `nix flake update` is never needed for it. Its resolver is `kind = "github-tags"`, matching tag refs against a glob, because GitHub's `releases/latest` for that repo still serves the retired v1 line and npm has no 2.x at all. Nothing runs this on a schedule: you run it, review the diff, then switch.
 
