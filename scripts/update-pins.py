@@ -11,7 +11,7 @@ Usage:
   nix run .#update-pins                     # audit everything, rewrite nothing
   nix run .#update-pins -- --write          # apply bumps (hashes prefetched)
   nix run .#update-pins -- --write --build  # ...then build #nixos
-  nix run .#update-pins -- --only orca,zcode
+  nix run .#update-pins -- --only herdr-app,zcode
   nix run .#update-pins -- --write --flake  # also `nix flake update`
 
 Exit status: 0 nothing to do, 1 bumps available (dry run), 2 hard failure.
@@ -191,18 +191,6 @@ PINS: list[Pin] = [
         hash_url="https://github.com/zeronsh/zeron/releases/download/v{v}/zeron-{v}-linux-x86_64.tar.gz",
     ),
     Pin(
-        name="orca",
-        file=DEVELOP,
-        anchor='pname = "orca-ide";',
-        version_re=r'version = "(?P<v>[0-9][0-9.]*)";',
-        version_tpl='version = "{v}";',
-        lookup={"kind": "github", "repo": "stablyai/orca"},
-        url_re=r"https://github\.com/stablyai/orca/releases/download/v[0-9.]+/orca-linux\.AppImage",
-        url_tpl="https://github.com/stablyai/orca/releases/download/v{v}/orca-linux.AppImage",
-        hash_re=r'hash = "sha256-[^"]+";',
-        hash_kind="file",
-    ),
-    Pin(
         name="oh-my-pi",
         file=DEVELOP,
         anchor='pname = "oh-my-pi";',
@@ -221,6 +209,7 @@ PINS: list[Pin] = [
         version_re=r'eigentVersion = "(?P<v>[0-9][0-9.]*)";',
         version_tpl='eigentVersion = "{v}";',
         lookup={"kind": "github", "repo": "eigent-ai/eigent"},
+        hash_url="https://github.com/eigent-ai/eigent/releases/download/v{v}/Eigent-{v}.AppImage",
         url_re=r'url = "https://github\.com/eigent-ai/eigent/releases/download/v[0-9.]+/Eigent-[0-9.]+\.AppImage";',
         url_tpl='url = "https://github.com/eigent-ai/eigent/releases/download/v{v}/Eigent-{v}.AppImage";',
         hash_re=r'hash = "sha256-[^"]+";',
@@ -255,8 +244,8 @@ PINS: list[Pin] = [
         version_re=r'ccrVersion = "(?P<v>[0-9][0-9.]*)";',
         version_tpl='ccrVersion = "{v}";',
         lookup={"kind": "github", "repo": "musistudio/claude-code-router"},
-        url_re=r'url = "https://github\.com/musistudio/claude-code-router/releases/download/v[0-9.]+/Claude-Code-Router_[0-9.]+\.AppImage";',
-        url_tpl='url = "https://github.com/musistudio/claude-code-router/releases/download/v{v}/Claude-Code-Router_{v}.AppImage";',
+        hash_url="https://github.com/musistudio/claude-code-router/releases/download/v{v}/Claude-Code-Router_{v}.AppImage",
+        note="URL interpolates ${ccrVersion}, so only the hash is rewritten here",
         hash_re=r'hash = "sha256-[^"]+";',
         hash_kind="file",
     ),
@@ -612,7 +601,16 @@ def apply_bump(pin: Pin, old: str, new: str) -> list[str]:
 
     # A pinned commit rev needs to track the tag, not just the version string.
     if pin.name == "mango":
-        rev = tag_commit("mangowm/mango", f"v{new}")
+        rev = None
+        tag_errors = []
+        for tag in (new, f"v{new}"):
+            try:
+                rev = tag_commit(pin.lookup["repo"], tag)
+                break
+            except Exception as exc:
+                tag_errors.append(f"{tag}: {exc}")
+        if rev is None:
+            raise Fail("mango: " + "; ".join(tag_errors))
         text = replace_after(
             text, pin.version_tpl.format(v=new), r'rev = "[0-9a-f]{40}";', f'rev = "{rev}";', pin.name
         )
